@@ -5,9 +5,10 @@
 \title{Update plot metadata}
 \usage{
 update_plot_data(team_lead = NULL, plot_name = NULL, country = NULL,
-  method = NULL, date_y = NULL, new_team_leader = NULL,
-  new_country = NULL, new_ddlat = NULL, new_ddlon = NULL,
-  new_elevation = NULL, new_method = NULL, add_backup = TRUE)
+  method = NULL, date_y = NULL, new_plot_name = NULL,
+  new_team_leader = NULL, new_country = NULL, new_ddlat = NULL,
+  new_ddlon = NULL, new_elevation = NULL, new_method = NULL,
+  add_backup = TRUE)
 }
 \arguments{
 \item{team_lead}{string name of the team leader of the selected plot}
@@ -19,6 +20,8 @@ update_plot_data(team_lead = NULL, plot_name = NULL, country = NULL,
 \item{method}{string method of the selected plots}
 
 \item{date_y}{integer year of collect of the selected plots}
+
+\item{new_plot_name}{string new plot name}
 
 \item{new_team_leader}{string new team leader}
 
