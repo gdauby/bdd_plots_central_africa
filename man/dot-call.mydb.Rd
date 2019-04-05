@@ -4,7 +4,10 @@
 \alias{.call.mydb}
 \title{Load the database}
 \usage{
-.call.mydb()
+.call.mydb(pass = NULL)
+}
+\arguments{
+\item{pass}{string}
 }
 \value{
 The database is loaded

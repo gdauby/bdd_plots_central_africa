@@ -4,7 +4,8 @@
 \alias{add_individuals}
 \title{Add new individuals data}
 \usage{
-add_individuals(new_data, col_names_select, col_names_corresp, id_col)
+add_individuals(new_data, col_names_select, col_names_corresp, id_col,
+  launch_adding_data = FALSE)
 }
 \arguments{
 \item{new_data}{string name of the team leader of the selected plot}
@@ -14,6 +15,8 @@ add_individuals(new_data, col_names_select, col_names_corresp, id_col)
 \item{col_names_corresp}{string country of the selected plots}
 
 \item{id_col}{integer indicate which name of col_names_select is the id for matching data}
+
+\item{launch_adding_data}{logical FALSE whether adding should be done or not}
 }
 \value{
 No return value individuals updated
