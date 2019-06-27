@@ -5,8 +5,8 @@
 \title{Add new entry to taxonomic table}
 \usage{
 add_entry_dico_name(tax_gen = NULL, tax_esp = NULL, tax_fam = NULL,
-  detvalue = NULL, morphocat = NULL, full_name = NULL,
-  synonym_of = NULL)
+  tax_rank1 = NULL, tax_name1 = NULL, detvalue = NULL,
+  morphocat = NULL, full_name = NULL, synonym_of = NULL)
 }
 \arguments{
 \item{tax_gen}{string genus name}
@@ -14,6 +14,10 @@ add_entry_dico_name(tax_gen = NULL, tax_esp = NULL, tax_fam = NULL,
 \item{tax_esp}{string species name}
 
 \item{tax_fam}{string family name}
+
+\item{tax_rank1}{string tax_rank1 name}
+
+\item{tax_name1}{string tax_name1 name}
 
 \item{detvalue}{integer detvalue code}
 

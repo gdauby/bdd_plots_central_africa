@@ -4,15 +4,18 @@
 \alias{query_specimens}
 \title{Exploring specimens data}
 \usage{
-query_specimens(collector = NULL, number = NULL, number_min = NULL,
-  number_max = NULL, genus_searched = NULL, tax_esp_searched = NULL,
-  tax_fam_searched = NULL, id_search = NULL, subset_columns = TRUE,
-  show_previous_modif = TRUE, generate_labels = FALSE,
+query_specimens(collector = NULL, id_colnam = NULL, number = NULL,
+  number_min = NULL, number_max = NULL, genus_searched = NULL,
+  tax_esp_searched = NULL, tax_fam_searched = NULL, id_search = NULL,
+  subset_columns = TRUE, show_previous_modif = TRUE,
+  generate_labels = FALSE,
   project_title = "Reference specimens collected in trees inventory",
   file_labels = "labels")
 }
 \arguments{
 \item{collector}{string collector name}
+
+\item{id_colnam}{integer id of collector}
 
 \item{number}{integer specimen number}
 

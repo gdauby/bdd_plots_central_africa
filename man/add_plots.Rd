@@ -7,11 +7,11 @@
 add_plots(new_data, col_names_select, col_names_corresp)
 }
 \arguments{
-\item{new_data}{string}
+\item{new_data}{tibble}
 
-\item{col_names_select}{string}
+\item{col_names_select}{string a vector of string indicating columns names of new_data}
 
-\item{col_names_corresp}{string}
+\item{col_names_corresp}{string a vector of string indicating to which columns selected columns of new_data corresponds}
 }
 \value{
 No return value, new plots are added

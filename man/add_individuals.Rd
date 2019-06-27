@@ -8,11 +8,11 @@ add_individuals(new_data, col_names_select, col_names_corresp, id_col,
   launch_adding_data = FALSE)
 }
 \arguments{
-\item{new_data}{string name of the team leader of the selected plot}
+\item{new_data}{tibble new data to be import}
 
-\item{col_names_select}{string plot name of the selected plots}
+\item{col_names_select}{string}
 
-\item{col_names_corresp}{string country of the selected plots}
+\item{col_names_corresp}{string}
 
 \item{id_col}{integer indicate which name of col_names_select is the id for matching data}
 

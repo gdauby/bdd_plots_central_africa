@@ -6,7 +6,8 @@
 \usage{
 update_dico_name(genus_searched = NULL, tax_esp_searched = NULL,
   tax_fam_searched = NULL, new_tax_gen = NULL, new_tax_esp = NULL,
-  new_full_name_auth = NULL, new_tax_fam = NULL, new_taxook = NULL,
+  new_full_name_auth = NULL, new_tax_fam = NULL,
+  new_tax_rank1 = NULL, new_tax_name1 = NULL, new_taxook = NULL,
   new_morphocat = NULL, new_detvalue = NULL,
   new_full_name_no_auth = NULL, new_full_name_used = NULL,
   new_full_name_used2 = NULL, new_id_diconame_good = NULL,
@@ -28,7 +29,13 @@ update_dico_name(genus_searched = NULL, tax_esp_searched = NULL,
 
 \item{new_tax_fam}{string new family name}
 
+\item{new_tax_rank1}{string new rank}
+
+\item{new_tax_name1}{string new name of rank1}
+
 \item{new_taxook}{integer new tax code}
+
+\item{new_morphocat}{integer new morphocat code}
 
 \item{new_detvalue}{integer new detvalue code}
 

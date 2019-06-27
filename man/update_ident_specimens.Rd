@@ -2,7 +2,7 @@
 % Please edit documentation in R/functions_manip_db.R
 \name{update_ident_specimens}
 \alias{update_ident_specimens}
-\title{Exploring specimens data}
+\title{Update specimens table}
 \usage{
 update_ident_specimens(colnam = NULL, number = NULL, id_speci = NULL,
   new_genus = NULL, new_species = NULL, new_family = NULL,
@@ -45,7 +45,7 @@ update_ident_specimens(colnam = NULL, number = NULL, id_speci = NULL,
 A tibble
 }
 \description{
-Exploring specimens data and if necessary export labels
+Update specimens table
 }
 \author{
 Gilles Dauby, \email{gilles.dauby@ird.fr}

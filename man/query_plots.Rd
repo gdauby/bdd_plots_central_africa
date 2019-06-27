@@ -2,37 +2,47 @@
 % Please edit documentation in R/functions_manip_db.R
 \name{query_plots}
 \alias{query_plots}
-\title{List and map selected plots}
+\title{List, extract map selected plots}
 \usage{
 query_plots(team_lead = NULL, plot_name = NULL, country = NULL,
-  province = NULL, method = NULL, date_y = NULL,
-  extract_individuals = FALSE, map = FALSE, zoom = 0, label = T,
-  try_optimal_label = F, map_type = "mapview")
+  province = NULL, locality_name = NULL, method = NULL,
+  date_y = NULL, extract_individuals = FALSE, map = FALSE,
+  zoom = 0, label = T, try_optimal_label = F, map_type = "mapview",
+  id_individual = NULL, show_multiple_census = FALSE,
+  remove_ids = TRUE)
 }
 \arguments{
-\item{team_lead}{string}
+\item{team_lead}{string fuzzy person name to look for}
 
-\item{plot_name}{string}
+\item{plot_name}{string fuzzy plot name to look for}
 
-\item{country}{string}
+\item{country}{string fuzzy country name to look for}
 
-\item{province}{string}
+\item{province}{string fuzzy province name to look for}
 
-\item{method}{string}
+\item{locality_name}{string fuzzy locality_name name to look for}
 
-\item{date_y}{integer}
+\item{method}{stringfuzzy method name to look for}
 
-\item{extract_individuals}{logical}
+\item{date_y}{integer year of collect}
 
-\item{map}{logical}
+\item{extract_individuals}{logical whether individuals instead of plot list as output}
+
+\item{map}{logical whether map whould be produced}
 
 \item{zoom}{integer positive values indicating zoom level for ggplot style map}
 
 \item{label}{logical for ggplot map, whether adding label or not}
 
-\item{try_optimal_label}{logical}
+\item{try_optimal_label}{logical if map is ggplot}
 
-\item{map_type}{string mapview or ggplot}
+\item{map_type}{string mapview or ggplot, mapview by default}
+
+\item{id_individual}{numeric id of individual to be extracted}
+
+\item{show_multiple_census}{logical whether multiple census should be shown, by default FALSE}
+
+\item{remove_ids}{logical remove all ids columns, by default TRUE}
 }
 \value{
 A tibble of all method
@@ -40,7 +50,7 @@ A tibble of all method
 A tibble of plots or individuals if extract_individuals is TRUE
 }
 \description{
-Provide and map list of selected plots
+Provide and map list of selected plots, including associated traits for individuals
 }
 \author{
 Gilles Dauby, \email{gilles.dauby@ird.fr}

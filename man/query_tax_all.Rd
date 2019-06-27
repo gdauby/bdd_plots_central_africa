@@ -5,7 +5,8 @@
 \title{Query taxa}
 \usage{
 query_tax_all(genus_searched = NULL, tax_esp_searched = NULL,
-  tax_fam_searched = NULL, id_search = NULL, show_synonymies = TRUE,
+  tax_fam_searched = NULL, tax_name1_searched = NULL,
+  id_search = NULL, show_synonymies = TRUE,
   extract_individuals = FALSE)
 }
 \arguments{
@@ -14,6 +15,8 @@ query_tax_all(genus_searched = NULL, tax_esp_searched = NULL,
 \item{tax_esp_searched}{string}
 
 \item{tax_fam_searched}{string}
+
+\item{tax_name1_searched}{string}
 
 \item{id_search}{integer}
 
