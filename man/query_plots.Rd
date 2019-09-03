@@ -4,17 +4,20 @@
 \alias{query_plots}
 \title{List, extract map selected plots}
 \usage{
-query_plots(team_lead = NULL, plot_name = NULL, country = NULL,
-  province = NULL, locality_name = NULL, method = NULL,
-  date_y = NULL, extract_individuals = FALSE, map = FALSE,
-  zoom = 0, label = T, try_optimal_label = F, map_type = "mapview",
-  id_individual = NULL, show_multiple_census = FALSE,
-  remove_ids = TRUE)
+query_plots(team_lead = NULL, plot_name = NULL, tag = NULL,
+  country = NULL, province = NULL, locality_name = NULL,
+  method = NULL, date_y = NULL, extract_individuals = FALSE,
+  map = FALSE, zoom = 0, label = T, try_optimal_label = F,
+  map_type = "mapview", id_individual = NULL, id_plot = NULL,
+  show_multiple_census = FALSE, remove_ids = TRUE,
+  collapse_multiple_val = FALSE)
 }
 \arguments{
 \item{team_lead}{string fuzzy person name to look for}
 
 \item{plot_name}{string fuzzy plot name to look for}
+
+\item{tag}{numeric exact tag number of the plot}
 
 \item{country}{string fuzzy country name to look for}
 
@@ -43,6 +46,8 @@ query_plots(team_lead = NULL, plot_name = NULL, country = NULL,
 \item{show_multiple_census}{logical whether multiple census should be shown, by default FALSE}
 
 \item{remove_ids}{logical remove all ids columns, by default TRUE}
+
+\item{collapse_multiple_val}{logical whether multiple traits measures should be collapsed (resulting values as character, separated by dash)}
 }
 \value{
 A tibble of all method
