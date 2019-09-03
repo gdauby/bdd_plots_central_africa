@@ -21,6 +21,8 @@ update_plot_data(team_lead = NULL, plot_name = NULL, country = NULL,
 
 \item{date_y}{integer year of collect of the selected plots}
 
+\item{id_table_plot}{integer id of plot to be updated}
+
 \item{new_plot_name}{string new plot name}
 
 \item{new_team_leader}{string new team leader}
@@ -33,7 +35,9 @@ update_plot_data(team_lead = NULL, plot_name = NULL, country = NULL,
 
 \item{new_elevation}{integer new elevation data}
 
-\item{new_method}{integer new method data}
+\item{new_method}{string new method data}
+
+\item{new_province}{string new province data}
 
 \item{add_backup}{logical whether backup of modified data should be recorded}
 }

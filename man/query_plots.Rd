@@ -43,6 +43,8 @@ query_plots(team_lead = NULL, plot_name = NULL, tag = NULL,
 
 \item{id_individual}{numeric id of individual to be extracted}
 
+\item{id_plot}{numeric id of plot to be extracted}
+
 \item{show_multiple_census}{logical whether multiple census should be shown, by default FALSE}
 
 \item{remove_ids}{logical remove all ids columns, by default TRUE}

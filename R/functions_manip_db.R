@@ -1,6 +1,4 @@
 
-
-
 #' Launch shiny app for taxa
 #'
 #' Allow exploring the database by taxa - export individuals or taxa list and plot stem diameter and tree height
@@ -1425,6 +1423,7 @@ traits_list <- function() {
 #' @param try_optimal_label logical if map is ggplot
 #' @param map_type string mapview or ggplot, mapview by default
 #' @param id_individual numeric id of individual to be extracted
+#' @param id_plot numeric id of plot to be extracted
 #' @param show_multiple_census logical whether multiple census should be shown, by default FALSE
 #' @param remove_ids logical remove all ids columns, by default TRUE
 #' @param collapse_multiple_val logical whether multiple traits measures should be collapsed (resulting values as character, separated by dash)
@@ -2573,13 +2572,15 @@ add_plots <- function(new_data,
 #' @param country string country of the selected plots
 #' @param method string method of the selected plots
 #' @param date_y integer year of collect of the selected plots
+#' @param id_table_plot integer id of plot to be updated
 #' @param new_team_leader string new team leader
 #' @param new_plot_name string new plot name
 #' @param new_country string new country
 #' @param new_ddlat double new latitude in decimal degrees
 #' @param new_ddlon double new longitude in decimal degrees
 #' @param new_elevation integer new elevation data
-#' @param new_method integer new method data
+#' @param new_method string new method data
+#' @param new_province string new province data
 #' @param add_backup logical whether backup of modified data should be recorded
 #'
 #'
@@ -3059,7 +3060,7 @@ update_ident_specimens <- function(colnam=NULL,
   }else{
 
     cat("\n SPECIMEN NOT FOUND")
-    return(tibble(collector = dplyr::tbl(mydb, "table_colnam") %>% dplyr::filter(id_table_colnam==new_data_renamed$id_colnam) %>% dplyr::select(colnam) %>% collect(),
+    return(dplyr::tibble(collector = dplyr::tbl(mydb, "table_colnam") %>% dplyr::filter(id_table_colnam==new_data_renamed$id_colnam) %>% dplyr::select(colnam) %>% dplyr::collect(),
                   number = number))
 
   }
@@ -3348,13 +3349,15 @@ update_dico_name <- function(genus_searched=NULL, tax_esp_searched=NULL, tax_fam
 #'
 #' @param trait_searched string genus name searched
 #' @param trait_id string genus name searched
-#' @param tax_esp_searched string species name searched
-#' @param tax_fam_searched string family name searched
-#' @param new_tax_gen string new genus name
+#' @param new_trait_name string new trait name
+#' @param new_relatedterm string new relatedterm name
+#' @param new_maxallowedvalue numeric new maxallowedvalue
+#' @param new_minallowedvalue numeric new minallowedvalue
+#' @param new_traitdescription string new traitdescription
+#' @param new_expectedunit string new expectedunit
 #' @param ask_before_update logical TRUE by default, ask for confirmation before updating
 #' @param add_backup logical TRUE by default, add backup of modified data
 #' @param show_results logical TRUE by default, show the data that has been modified
-#'
 #'
 #' @return No return value individuals updated
 #' @export
@@ -3543,13 +3546,14 @@ update_trait_list_table <- function(trait_searched = NULL,
 #'
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
 #'
-#' @param trait_searched string genus name searched
-#' @param trait_id string genus name searched
-#' @param tax_esp_searched string species name searched
-#' @param tax_fam_searched string family name searched
-#' @param new_tax_gen string new genus name
+#' @param subplots_id integer id of subplot to update
+#' @param new_id_type_sub_plot id of new type subplot
+#' @param new_typevalue numeric new value of type subplot
+#' @param new_year integer new year of subplot
+#' @param new_month integer new month of subplot
+#' @param new_day integer new day of subplot
 #' @param ask_before_update logical TRUE by default, ask for confirmation before updating
-#' @param add_backup logical TRUE by default, add backup of modified data
+#' @param add_backup logical TRUE by default, add backup
 #' @param show_results logical TRUE by default, show the data that has been modified
 #'
 #'
@@ -3836,7 +3840,7 @@ update_traits_measures <- function(new_data,
 
         matches <-
           matches %>%
-          mutate(id = dplyr::pull(ids_traits_measures))
+          dplyr::mutate(id = dplyr::pull(ids_traits_measures))
       }
 
       if(dplyr::tbl(mydb, "data_traits_measures") %>%
@@ -4108,7 +4112,7 @@ add_individuals <- function(new_data ,
     ## checking strate info
     miss_strate <-
       new_data_renamed %>%
-      filter(!strate_cat %in% c("Ad", "Ado"))
+      dplyr::filter(!strate_cat %in% c("Ad", "Ado"))
 
     if(nrow(miss_strate)>0) {
       warning(paste("strate_cat missing or not equal to Ad or Ado for", nrow(miss_strate), "individuals"))
@@ -5125,9 +5129,9 @@ add_subplot_features <- function(new_data,
                          dplyr::select(plot_name, id_liste_plots) %>% dplyr::collect(),
                        by=c("id_table_liste_plots_n"="id_liste_plots"))
 
-    if(filter(link_plot, is.na(plot_name)) %>%
+    if(dplyr::filter(link_plot, is.na(plot_name)) %>%
        nrow()>0) {
-      print(filter(link_plot, is.na(plot_name)))
+      print(dplyr::filter(link_plot, is.na(plot_name)))
       warning("provided id plot not found in plot metadata")
     }
 
@@ -5155,7 +5159,7 @@ add_subplot_features <- function(new_data,
 
     data_subplottype <-
       data_subplottype %>%
-      filter(!is.na(subplottype))
+      dplyr::filter(!is.na(subplottype))
 
     ### adding trait id and adding potential issues based on trait
     data_subplottype <-
@@ -5167,7 +5171,7 @@ add_subplot_features <- function(new_data,
 
     print("data_to_add")
     data_to_add <-
-      tibble(id_table_liste_plots = data_subplottype$id_liste_plots,
+      dplyr::tibble(id_table_liste_plots = data_subplottype$id_liste_plots,
              id_colnam = data_subplottype$id_colnam,
              year = data_subplottype$year,
              month = data_subplottype$month,
@@ -5278,7 +5282,7 @@ add_traits_measures <- function(new_data,
   ## removing entries with NA values for traits
   new_data_renamed <-
     new_data_renamed %>%
-    filter_at(vars(!!traits_field), any_vars(!is.na(.)))
+    dplyr::filter_at(vars(!!traits_field), any_vars(!is.na(.)))
 
   if(nrow(new_data_renamed)==0)
     stop("no values for selected trait(s)")
@@ -5392,9 +5396,9 @@ add_traits_measures <- function(new_data,
                   dplyr::select(plot_name, id_liste_plots) %>% dplyr::collect(),
                 by=c("id_table_liste_plots_n"="id_liste_plots"))
 
-    if(filter(link_plot, is.na(plot_name)) %>%
+    if(dplyr::filter(link_plot, is.na(plot_name)) %>%
        nrow()>0) {
-      print(filter(link_plot, is.na(plot_name)))
+      print(dplyr::filter(link_plot, is.na(plot_name)))
       warning("provided id plot not found in plot metadata")
     }
 
@@ -5492,9 +5496,9 @@ add_traits_measures <- function(new_data,
                   dplyr::select(id_diconame_n, id_n) %>% dplyr::collect(),
                 by=c("id_n"="id_n"))
 
-    if(filter(link_individuals, is.na(id_diconame_n)) %>%
+    if(dplyr::filter(link_individuals, is.na(id_diconame_n)) %>%
        nrow()>0) {
-      print(filter(link_individuals, is.na(id_diconame_n)))
+      print(dplyr::filter(link_individuals, is.na(id_diconame_n)))
       stop("provided id individuals not found in data_individuals")
     }
 
@@ -5520,14 +5524,14 @@ add_traits_measures <- function(new_data,
 
     link_specimen <-
       new_data_renamed %>%
-      filter(!is.na(id_specimen)) %>%
+      dplyr::filter(!is.na(id_specimen)) %>%
       dplyr::left_join(dplyr::tbl(mydb, "specimens") %>%
                   dplyr::select(id_diconame_n, id_specimen) %>% dplyr::collect(),
                 by=c("id_specimen"="id_specimen"))
 
-    if(filter(link_specimen, is.na(id_diconame_n)) %>%
+    if(dplyr::filter(link_specimen, is.na(id_diconame_n)) %>%
        nrow()>0) {
-      print(filter(link_specimen, is.na(id_diconame_n)))
+      print(dplyr::filter(link_specimen, is.na(id_diconame_n)))
       stop("provided id specimens not found in specimens table")
     }
   }else{
@@ -5786,12 +5790,12 @@ add_traits_measures <- function(new_data,
         if(any(colnames(data_trait)=="id_data_individuals")) {
           data_no_specimen_no_individual <-
             data_no_specimen_no_individual %>%
-            filter(is.na(id_data_individuals))
+            dplyr::filter(is.na(id_data_individuals))
         }
         if(any(colnames(data_trait)=="id_specimen")) {
           data_no_specimen_no_individual <-
             data_no_specimen_no_individual %>%
-            filter(is.na(id_specimen))
+            dplyr::filter(is.na(id_specimen))
         }
 
         data_trait <-
@@ -6020,7 +6024,7 @@ add_traits_measures <- function(new_data,
       # %>% #
       #   dplyr::filter(!grepl("more than one observation", issue))
       duplicated_rows <-
-        bind_rows(duplicated_rows, duplicated_rows_with_issue_no_double,
+        dplyr::bind_rows(duplicated_rows, duplicated_rows_with_issue_no_double,
                   duplicated_rows_with_issue_double)
 
       # duplicated_rows %>%
@@ -6336,10 +6340,10 @@ add_traits_measures <- function(new_data,
 
           traits_linked_subset <-
             traits_linked_subset %>%
-            group_by_at(vars(-traitvalue, -id_trait_measures)) %>%
-            summarise(traitvalue = paste(traitvalue, collapse = "-"),
+            dplyr::group_by_at(dplyr::vars(-traitvalue, -id_trait_measures)) %>%
+            dplyr::summarise(traitvalue = paste(traitvalue, collapse = "-"),
                       id_trait_measures = paste(id_trait_measures, collapse = "-")) %>%
-            ungroup()
+            dplyr::ungroup()
 
           multiple_census <- FALSE
         }
@@ -7436,7 +7440,7 @@ add_specimens <- function(new_data ,
 #'
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
 #'
-#' @param path string path to trimble data
+#' @param PATH string path to trimble data
 #' @param plot_name string plot name to give to plot
 #'
 #' @return A list with two tibbles
@@ -7607,9 +7611,9 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
 
     duplicates_quadrat <-
       all_quadrat %>%
-      group_by(quadrat) %>%
-      count() %>%
-      filter(n>1)
+      dplyr::group_by(quadrat) %>%
+      dplyr::count() %>%
+      dplyr::filter(n>1)
 
     if(nrow(duplicates_quadrat)>0) {
       all_quadrat %>%
@@ -7764,7 +7768,7 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
 
     if(any(is.na(occ_data$dbh_height))) {
       print(occ_data %>%
-              filter(is.na(dbh_height)))
+              dplyr::filter(is.na(dbh_height)))
       message("missing dbh_height value")
 
       ids <-
@@ -7775,7 +7779,7 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
 
       logs_tb <-
         logs_tb %>%
-        dplyr::bind_rows(tibble(plot_name = paste0(plot_name,ifelse(j<10, "00", "0") ,j),
+        dplyr::bind_rows(dplyr::tibble(plot_name = paste0(plot_name,ifelse(j<10, "00", "0") ,j),
                          field = "dbh_height",
                          issue = "missing values",
                          id = ids))
@@ -7847,7 +7851,7 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
 
                   logs_tb <-
                     logs_tb %>%
-                    dplyr::bind_rows(tibble(plot_name = paste0(plot_name,ifelse(j<10, "00", "0") ,j),
+                    dplyr::bind_rows(dplyr::tibble(plot_name = paste0(plot_name,ifelse(j<10, "00", "0") ,j),
                                      field = "multistem",
                                      issue = "different identification",
                                      id = ids))
@@ -7862,7 +7866,7 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
                 ## check if following Tag is same identification and has not been put into multiple stem
                 next_tag <-
                   occ_data %>%
-                  filter(ID == multi_stem_ind$ID[k]+1) %>%
+                  dplyr::filter(ID == multi_stem_ind$ID[k]+1) %>%
                   dplyr::select(ID, Rainfor_Tr, original_tax_name)
 
                 dist. <-
@@ -7888,7 +7892,7 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
 
                   logs_tb <-
                     logs_tb %>%
-                    dplyr::bind_rows(tibble(plot_name = paste0(plot_name,ifelse(j<10, "00", "0") ,j),
+                    dplyr::bind_rows(dplyr::tibble(plot_name = paste0(plot_name,ifelse(j<10, "00", "0") ,j),
                                      field = "multistem",
                                      issue = "expected following tag in multiple stem and next individual of different taxa",
                                      id = as.character(ids)))
@@ -7956,15 +7960,15 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
     ## collection date
     missing_coll_date <-
       occ_data %>%
-      filter(is.na(Date))
+      dplyr::filter(is.na(Date))
 
     if(nrow(missing_coll_date) > 0) {
       message(paste("missing collection date for", missing_coll_date$id))
       for (i in 1:nrow(missing_coll_date)) {
         date_for_miss <-
           occ_data %>%
-          filter(id == missing_coll_date$id[i]-1) %>%
-          pull(Date)
+          dplyr::filter(id == missing_coll_date$id[i]-1) %>%
+          dplyr::pull(Date)
         occ_data[occ_data$id==missing_coll_date$id[i],"Date"] <-
           date_for_miss
       }
@@ -8003,7 +8007,7 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
     dplyr::bind_rows(all_traits_list)
 
   final_logs <-
-    bind_rows(logs_process)
+    dplyr::bind_rows(logs_process)
 
   final_gps <-
     dplyr::bind_rows(gps_plot_list)
@@ -8040,9 +8044,9 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
   for (i in 1:nrow(meta)) {
     select_census <-
       dataset %>%
-      select(contains(paste0("census_", i)),
-             contains(paste0("date_census_", i)),
-             contains(paste0("date_census_julian_", i)),
+      dplyr::select(dplyr::contains(paste0("census_", i)),
+                    dplyr::contains(paste0("date_census_", i)),
+                    dplyr::contains(paste0("date_census_julian_", i)),
              id_n)
 
     stem_census <- paste0("stem_diameter_census_", i)
@@ -8051,7 +8055,7 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
 
     select_census <-
       select_census %>%
-      filter(!is.na(!!stem_census_enquo),
+      dplyr::filter(!is.na(!!stem_census_enquo),
              !!stem_census_enquo>0)
 
     split_census[[i]] <- select_census
@@ -8081,7 +8085,7 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
   ## renaming first and second census to 1 and 2
   select_census_1 <-
     census1 %>%
-    select(contains("date_census_julian")) %>%
+    dplyr::select(contains("date_census_julian")) %>%
     colnames() %>%
     strsplit(split = "_") %>%
     unlist()
@@ -8089,12 +8093,12 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
 
   census1 <-
     census1 %>%
-    dplyr::rename_at(vars(ends_with(paste0("_", select_census_1))),
+    dplyr::rename_at(dplyr::vars(ends_with(paste0("_", select_census_1))),
                           funs(stringr::str_replace(., paste0("_", select_census_1), "_1")))
 
   select_census_2 <-
     census2 %>%
-    select(contains("date_census_julian")) %>%
+    dplyr::select(contains("date_census_julian")) %>%
     colnames() %>%
     strsplit(split = "_") %>%
     unlist()
@@ -8102,17 +8106,17 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
 
   census2 <-
     census2 %>%
-    dplyr::rename_at(vars(ends_with(paste0("_", select_census_2))),
+    dplyr::rename_at(dplyr::vars(ends_with(paste0("_", select_census_2))),
                           funs(stringr::str_replace(., paste0("_", select_census_2), "_2")))
 
   ## excluding NA stem diameter (new recruits and dead stems)
   joined_census <-
-    left_join(census1, census2, by=c("id_n"="id_n")) %>%
-    filter(!is.na(stem_diameter_census_1), !is.na(stem_diameter_census_2))
+    dplyr::left_join(census1, census2, by=c("id_n"="id_n")) %>%
+    dplyr::filter(!is.na(stem_diameter_census_1), !is.na(stem_diameter_census_2))
 
   joined_census <-
     joined_census %>%
-    mutate(time_diff =  (date_census_julian_2 - date_census_julian_1 )/365.25)
+    dplyr::mutate(time_diff =  (date_census_julian_2 - date_census_julian_1 )/365.25)
 
   joined_census
 }
@@ -8251,7 +8255,7 @@ growth_computing <- function(dataset,
       selected_metadata_census %>%
       dplyr::select(date_julian, id_sub_plots) %>%
       dplyr::arrange(date_julian) %>%
-      pull(id_sub_plots)
+      dplyr::pull(id_sub_plots)
 
     if(!paste(arranged_sub_plots, collapse = "_")==
        paste(selected_metadata_census$id_sub_plots, collapse = "_")) {
@@ -8274,7 +8278,7 @@ growth_computing <- function(dataset,
         ## renaming first and second census to 1 and 2
         select_census_1 <-
           splitted_census[[i]] %>%
-          select(contains('stem_diameter_census')) %>%
+          dplyr::select(dplyr::contains('stem_diameter_census')) %>%
           colnames() %>%
           strsplit(split = "_") %>%
           unlist()
@@ -8282,12 +8286,12 @@ growth_computing <- function(dataset,
 
         splitted_census[[i]] <-
           splitted_census[[i]] %>%
-          dplyr::rename_at(vars(ends_with(paste0("_", select_census_1))),
+          dplyr::rename_at(dplyr::vars(ends_with(paste0("_", select_census_1))),
                            funs(stringr::str_replace(., paste0("_", select_census_1), "_1")))
 
         select_census_2 <-
           splitted_census[[i+1]] %>%
-          select(contains('stem_diameter_census')) %>%
+          dplyr::select(dplyr::contains('stem_diameter_census')) %>%
           colnames() %>%
           strsplit(split = "_") %>%
           unlist()
@@ -8295,24 +8299,24 @@ growth_computing <- function(dataset,
 
         splitted_census[[i+1]] <-
           splitted_census[[i+1]] %>%
-          dplyr::rename_at(vars(ends_with(paste0("_", select_census_2))),
+          dplyr::rename_at(dplyr::vars(ends_with(paste0("_", select_census_2))),
                            funs(stringr::str_replace(., paste0("_", select_census_2), "_2")))
 
         deads <-
           splitted_census[[i]] %>%
           dplyr::select(id_n, stem_diameter_census_1) %>%
-          left_join(splitted_census[[i+1]] %>%
+          dplyr::left_join(splitted_census[[i+1]] %>%
                       dplyr::select(id_n, stem_diameter_census_2),
                     by=c("id_n"="id_n")) %>%
-          filter(is.na(stem_diameter_census_2) | stem_diameter_census_2==0)
+          dplyr::filter(is.na(stem_diameter_census_2) | stem_diameter_census_2==0)
 
         recruits <-
           splitted_census[[i+1]] %>%
           dplyr::select(id_n, stem_diameter_census_2) %>%
-          left_join(splitted_census[[i]] %>%
+          dplyr::left_join(splitted_census[[i]] %>%
                       dplyr::select(id_n, stem_diameter_census_1),
                     by=c("id_n"="id_n")) %>%
-          filter(is.na(stem_diameter_census_1) | stem_diameter_census_1==0)
+          dplyr::filter(is.na(stem_diameter_census_1) | stem_diameter_census_1==0)
 
         censuses <- .time_diff(splitted_census[[i]], splitted_census[[i+1]])
 
