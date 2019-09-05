@@ -1253,6 +1253,7 @@ launch_stand_tax_app <- function() {
 #' Load the database and ask for password
 #'
 #' @param pass string
+#' @param user string
 #'
 #' @return The database is loaded
 #'
