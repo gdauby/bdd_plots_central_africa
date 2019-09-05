@@ -4,7 +4,7 @@
 \alias{.call.mydb}
 \title{Load the database}
 \usage{
-.call.mydb(pass = NULL)
+.call.mydb(pass = NULL, user = NULL)
 }
 \arguments{
 \item{pass}{string}

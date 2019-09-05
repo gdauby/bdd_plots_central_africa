@@ -97,7 +97,8 @@ launch_query_tax_app <- function() {
                     renderPlot({
 
                       ids_selected$df <-
-                        query_tax_all(genus_searched = input$genus, tax_esp_searched = input$species, tax_fam_searched = input$family) %>%
+                        query_tax_all(genus_searched = input$genus, tax_esp_searched = input$species,
+                                      tax_fam_searched = input$family) %>%
                         dplyr::select(id_n) %>%
                         dplyr::pull()
 
@@ -1256,11 +1257,15 @@ launch_stand_tax_app <- function() {
 #' @return The database is loaded
 #'
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
-.call.mydb <- function(pass=NULL) {
+.call.mydb <- function(pass=NULL, user=NULL) {
 
   if(!exists("mydb")) {
     if(is.null(pass))
       pass <- rstudioapi::askForPassword("Please enter your password")
+
+    if(is.null(user))
+      use_name <- rstudioapi::askForPassword("Please enter your user name")
+
 
     # mydb <- DBI::dbConnect(RPostgres::Postgres(),dbname = 'plots_transects',
     #                   host = 'localhost',
@@ -1271,7 +1276,7 @@ launch_stand_tax_app <- function() {
     mydb <- DBI::dbConnect(RPostgres::Postgres(),dbname = 'plots_transects',
                            host = 'dg474899-001.dbaas.ovh.net',
                            port = 35699, # or any other port specified by your DBA
-                           user = 'dauby',
+                           user = use_name,
                            password = pass)
 
 
@@ -1889,7 +1894,7 @@ query_tax_all <- function(genus_searched = NULL,
 
     taxa_syn <-
       dplyr::tbl(mydb, "diconame") %>%
-      dplyr::filter(id_good_n==res$id_n, id_n!=res$id_n) %>%
+      dplyr::filter(id_good_n==!!res$id_n, id_n!=!!res$id_n) %>%
       dplyr::collect()
 
     if(nrow(taxa_syn)>0) {
@@ -1951,7 +1956,7 @@ query_tax_all <- function(genus_searched = NULL,
       dplyr::left_join(dplyr::tbl(mydb, "diconame") %>%
                          dplyr::select(-data_modif_d, -data_modif_m, -data_modif_y),
                        by=c("id_diconame_final"="id_n")) %>% ## getting taxa information based on id_diconame_final
-        dplyr::filter(id_diconame_final %in% res$id_n) ## filtering selected taxa
+        dplyr::filter(id_diconame_final %in% !!res$id_n) ## filtering selected taxa
 
     all_traits <- traits_list()
 
@@ -2039,8 +2044,8 @@ explore_allometric_taxa <- function(genus_searched = NULL,
 
     data_allo1 <-
       tax_data %>%
-      # dplyr::select(crown_height, stem_diameter) %>%
-      dplyr::filter(!is.na(crown_height), crown_height>0, stem_diameter>0) %>%
+      # dplyr::select(tree_height, stem_diameter) %>%
+      dplyr::filter(!is.na(tree_height), tree_height>0, stem_diameter>0) %>%
       dplyr::collect()
 
     cat(paste0("\n The number of individuals with both tree height and stem_diameter values is ", nrow(data_allo1)))
@@ -2049,7 +2054,7 @@ explore_allometric_taxa <- function(genus_searched = NULL,
       gg_plot1 <-
         ggplot2::ggplot() +
         ggplot2::geom_point(data = data_allo1,
-                            mapping = ggplot2::aes(x = stem_diameter, y = crown_height)) +
+                            mapping = ggplot2::aes(x = stem_diameter, y = tree_height)) +
         ggplot2::xlab("Stem diameter (cm)") +
         ggplot2::ylab("Tree height (m)")
 
