@@ -8,6 +8,8 @@
 }
 \arguments{
 \item{pass}{string}
+
+\item{user}{string}
 }
 \value{
 The database is loaded
