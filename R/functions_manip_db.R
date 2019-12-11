@@ -1777,7 +1777,7 @@ query_plots <- function(team_lead = NULL,
     res_individuals_full <-
       res_individuals_full %>%
       dplyr::select(-id_specimen) %>%
-      left_join(links_specimens,
+      dplyr::left_join(links_specimens,
                 by=c("id_n"="id_n"))
 
     res_individuals_full <-
@@ -1804,7 +1804,7 @@ query_plots <- function(team_lead = NULL,
     res_individuals_full <-
       res_individuals_full %>%
       dplyr::collect() %>%
-      mutate(original_tax_name = stringr::str_trim(original_tax_name))
+      dplyr::mutate(original_tax_name = stringr::str_trim(original_tax_name))
 
     #adding metada information
     res_individuals_full <-
@@ -1869,6 +1869,7 @@ query_plots <- function(team_lead = NULL,
 #' @param province string fuzzy province name to look for
 #' @param locality_name string fuzzy locality_name name to look for
 #' @param method stringfuzzy method name to look for
+#' @param subtype string subtype to select
 query_subplots <- function(team_lead = NULL,
                         plot_name = NULL,
                         tag = NULL,
@@ -1893,7 +1894,10 @@ query_subplots <- function(team_lead = NULL,
     dplyr::tbl(mydb, "data_liste_sub_plots") %>%
     dplyr::filter(id_table_liste_plots %in% !!queried_plots$id_liste_plots)
 
-  message("subplot_features found for ", nrow(distinct(sub_plot_data %>% collect(), id_table_liste_plots)), " plots")
+  message("subplot_features found for ", nrow(dplyr::distinct(sub_plot_data %>%
+                                                         dplyr::collect(),
+                                                       id_table_liste_plots)),
+          " plots")
 
   all_sub_type <-
     sub_plot_data %>%
@@ -1906,18 +1910,19 @@ query_subplots <- function(team_lead = NULL,
   if(!is.null(subtype)) {
     all_sub_type <-
       all_sub_type %>%
-      filter(grepl(subtype, type))
+      dplyr::filter(grepl(subtype, type))
     message("Selected subplot features:")
     print(all_sub_type)
   }
 
   extracted_data <-
     sub_plot_data %>%
-    filter(id_type_sub_plot %in% !!(all_sub_type %>% pull(id_type_sub_plot))) %>%
-    left_join(all_sub_type,
+    dplyr::filter(id_type_sub_plot %in% !!(all_sub_type %>%
+                                             dplyr::pull(id_type_sub_plot))) %>%
+    dplyr::left_join(all_sub_type,
               by=c("id_type_sub_plot"="id_type_sub_plot")) %>%
-    collect() %>%
-    left_join(queried_plots %>%
+    dplyr::collect() %>%
+    dplyr::left_join(queried_plots %>%
                 dplyr::select(plot_name, id_liste_plots),
               by=c("id_table_liste_plots"="id_liste_plots")) %>%
     dplyr::select(plot_name, id_table_liste_plots, year, month, year,
@@ -2653,7 +2658,7 @@ add_plots <- function(new_data,
                data_modif_y=lubridate::year(Sys.Date()))
 
   print(new_data_renamed)
-  add <- askYesNo(msg = "Add these data to the table of plot data?")
+  add <- utils::askYesNo(msg = "Add these data to the table of plot data?")
 
   if(add)
     DBI::dbWriteTable(mydb, "data_liste_plots", new_data_renamed, append = TRUE, row.names = FALSE)
@@ -2772,7 +2777,7 @@ add_subplot_features <- function(new_data,
 
     new_data_renamed <-
       new_data_renamed %>%
-      rename(id_liste_plots=id_table_liste_plots_n)
+      dplyr::rename(id_liste_plots=id_table_liste_plots_n)
   }
 
   ### preparing dataset to add for each trait
@@ -2833,21 +2838,21 @@ add_subplot_features <- function(new_data,
     all_existing_data <-
       dplyr::tbl(mydb, "data_liste_sub_plots") %>%
       dplyr::select(id_table_liste_plots, id_type_sub_plot) %>%
-      collect() %>%
+      dplyr::collect() %>%
       tibble::add_column(old = "old")
 
     crossing_data <-
       selected_new_data %>%
-      left_join(all_existing_data,
+      dplyr::left_join(all_existing_data,
                 by = c("id_table_liste_plots"="id_table_liste_plots",
                        "id_type_sub_plot"="id_type_sub_plot")) %>%
-      filter(new == "new", old == "old")
+      dplyr::filter(new == "new", old == "old")
 
     continue <- TRUE
     if(nrow(crossing_data)>0) {
       message("Data to be imported already exist in the database")
       print(crossing_data)
-      continue <- askYesNo(msg = "Continue importing?")
+      continue <- utils::askYesNo(msg = "Continue importing?")
     }
 
     print(data_to_add)
@@ -4956,7 +4961,8 @@ delete_entry_dico_name <- function(id) {
 #'
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
 #'
-#' @param id integer
+#' @param id_ind integer
+#' @param id_specimen integer
 #'
 #' @return No values
 #' @export
@@ -4969,11 +4975,11 @@ delete_entry_dico_name <- function(id) {
     selected_link <-
       dplyr::tbl(mydb, "data_link_specimens") %>%
       dplyr::filter(id_n %in% id_ind) %>%
-      collect() %>%
+      dplyr::collect() %>%
       as.data.frame()
     print(selected_link)
     confirm <-
-      askYesNo(msg = "Confirm removing these links?")
+      utils::askYesNo(msg = "Confirm removing these links?")
 
     if(confirm)
       for (i in 1:nrow(selected_link))
@@ -4988,7 +4994,7 @@ delete_entry_dico_name <- function(id) {
       dplyr::filter(id_specimen %in% id_specimen)
     print(selected_link)
     confirm <-
-      askYesNo(msg = "Confirm removing these links?")
+      utils::askYesNo(msg = "Confirm removing these links?")
 
     if(confirm)
       for (i in 1:nrow(selected_link))
@@ -5045,6 +5051,7 @@ delete_entry_dico_name <- function(id) {
 #' @param generate_labels logical if labels should be produced
 #' @param project_title string if labels are produced title of the label
 #' @param file_labels string if labels are produced name of the rtf file
+#' @param extract_linked_individuals logical extract individuals linked to selected specimens
 #'
 #' @return A tibble
 #' @export
@@ -5511,7 +5518,7 @@ add_traits_measures <- function(new_data,
   ## removing entries with NA values for traits
   new_data_renamed <-
     new_data_renamed %>%
-    dplyr::filter_at(vars(!!traits_field), any_vars(!is.na(.)))
+    dplyr::filter_at(dplyr::vars(!!traits_field), dplyr::any_vars(!is.na(.)))
 
   if(nrow(new_data_renamed)==0)
     stop("no values for selected trait(s)")
@@ -5733,7 +5740,7 @@ add_traits_measures <- function(new_data,
 
     new_data_renamed <-
       new_data_renamed %>%
-      rename(id_data_individuals=id_n)
+      dplyr::rename(id_data_individuals=id_n)
   }else{
     new_data_renamed <-
       new_data_renamed %>%
@@ -5795,7 +5802,7 @@ add_traits_measures <- function(new_data,
       dplyr::filter(!is.na(trait))
 
     if(any(data_trait$trait==0)) {
-      add_0 <- askYesNo("Some value are equal to 0. Do you want to add these values anyway ??")
+      add_0 <- utils::askYesNo("Some value are equal to 0. Do you want to add these values anyway ??")
 
       if(!add_0)
         data_trait <-
@@ -6129,7 +6136,7 @@ add_traits_measures <- function(new_data,
       print("basis")
       if(!any(colnames(data_trait)=="basisofrecord")) {
         choices <-
-          tibble(basis =
+          dplyr::tibble(basis =
                    c('LivingSpecimen', 'PreservedSpecimen', 'FossilSpecimen', 'literatureData', 'traitDatabase', 'expertKnowledge'))
 
         print(choices)
@@ -6405,8 +6412,8 @@ add_traits_measures <- function(new_data,
 #' @param new_data tibble new data to be imported
 #' @param col_names_select string plot name of the selected plots
 #' @param col_names_corresp string country of the selected plots
-#' @param id_col integer indicate which name of col_names_select is the id for colnam table
 #' @param plot_name_field integer indicate which name of col_names_select is the id for matching liste plots table
+#' @param collector_field integer indicate which name of col_names_select is the id for matching collector
 #'
 #' @param launch_adding_data logical FALSE whether adding should be done or not
 #'
@@ -6667,7 +6674,7 @@ add_specimens <- function(new_data ,
     dplyr::select(colnbr, id_colnam, id_specimen) %>%
     dplyr::filter(!is.na(id_colnam)) %>%
     dplyr::collect() %>%
-    left_join(new_data_renamed %>%
+    dplyr::left_join(new_data_renamed %>%
                 dplyr::select(colnbr, id_colnam, id_new_data),
               by=c("colnbr"="colnbr", "id_colnam"="id_colnam")) %>%
     dplyr::filter(!is.na(id_new_data))
@@ -7840,7 +7847,8 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
       for (m in 1:nrow(occ_data)) corrected_id[m] <- occ_data$ID[m]-occ_data$ID[1]+1
 
       logs_tb <- dplyr::bind_rows(logs_tb,
-                                  dplyr::tibble(plot_name = paste0(plot_name,ifelse(j<10, "00", "0") ,j),
+                                  dplyr::tibble(plot_name =
+                                                  paste0(plot_name, ifelse(j<10, "00", "0") ,j),
                                   field = "ID",
                                   issue = "ID not starting at 1",
                                   id = "all"))
@@ -8365,7 +8373,7 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
   ## renaming first and second census to 1 and 2
   select_census_1 <-
     census1 %>%
-    dplyr::select(contains("date_census_julian")) %>%
+    dplyr::select(dplyr::contains("date_census_julian")) %>%
     colnames() %>%
     strsplit(split = "_") %>%
     unlist()
@@ -8373,12 +8381,12 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
 
   census1 <-
     census1 %>%
-    dplyr::rename_at(dplyr::vars(ends_with(paste0("_", select_census_1))),
+    dplyr::rename_at(dplyr::vars(dplyr::ends_with(paste0("_", select_census_1))),
                           funs(stringr::str_replace(., paste0("_", select_census_1), "_1")))
 
   select_census_2 <-
     census2 %>%
-    dplyr::select(contains("date_census_julian")) %>%
+    dplyr::select(dplyr::contains("date_census_julian")) %>%
     colnames() %>%
     strsplit(split = "_") %>%
     unlist()
@@ -8386,7 +8394,7 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
 
   census2 <-
     census2 %>%
-    dplyr::rename_at(dplyr::vars(ends_with(paste0("_", select_census_2))),
+    dplyr::rename_at(dplyr::vars(dplyr::ends_with(paste0("_", select_census_2))),
                           funs(stringr::str_replace(., paste0("_", select_census_2), "_2")))
 
   ## excluding NA stem diameter (new recruits and dead stems)
@@ -8566,7 +8574,7 @@ growth_computing <- function(dataset,
 
         splitted_census[[i]] <-
           splitted_census[[i]] %>%
-          dplyr::rename_at(dplyr::vars(ends_with(paste0("_", select_census_1))),
+          dplyr::rename_at(dplyr::vars(dplyr::ends_with(paste0("_", select_census_1))),
                            funs(stringr::str_replace(., paste0("_", select_census_1), "_1")))
 
         select_census_2 <-
@@ -8579,7 +8587,7 @@ growth_computing <- function(dataset,
 
         splitted_census[[i+1]] <-
           splitted_census[[i+1]] %>%
-          dplyr::rename_at(dplyr::vars(ends_with(paste0("_", select_census_2))),
+          dplyr::rename_at(dplyr::vars(dplyr::ends_with(paste0("_", select_census_2))),
                            funs(stringr::str_replace(., paste0("_", select_census_2), "_2")))
 
         deads <-
