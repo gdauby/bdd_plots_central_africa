@@ -4,10 +4,15 @@
 \alias{query_tax_all}
 \title{Query taxa}
 \usage{
-query_tax_all(genus_searched = NULL, tax_esp_searched = NULL,
-  tax_fam_searched = NULL, tax_name1_searched = NULL,
-  id_search = NULL, show_synonymies = TRUE,
-  extract_individuals = FALSE)
+query_tax_all(
+  genus_searched = NULL,
+  tax_esp_searched = NULL,
+  tax_fam_searched = NULL,
+  tax_name1_searched = NULL,
+  id_search = NULL,
+  show_synonymies = TRUE,
+  extract_individuals = FALSE
+)
 }
 \arguments{
 \item{genus_searched}{string}

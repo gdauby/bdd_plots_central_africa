@@ -4,11 +4,23 @@
 \alias{update_ident_specimens}
 \title{Update specimens table}
 \usage{
-update_ident_specimens(colnam = NULL, number = NULL, id_speci = NULL,
-  new_genus = NULL, new_species = NULL, new_family = NULL,
-  id_new_taxa = NULL, new_detd = NULL, new_detm = NULL,
-  new_dety = NULL, new_detby = NULL, new_detvalue = NULL,
-  add_backup = TRUE, show_results = TRUE, only_new_ident = T)
+update_ident_specimens(
+  colnam = NULL,
+  number = NULL,
+  id_speci = NULL,
+  new_genus = NULL,
+  new_species = NULL,
+  new_family = NULL,
+  id_new_taxa = NULL,
+  new_detd = NULL,
+  new_detm = NULL,
+  new_dety = NULL,
+  new_detby = NULL,
+  new_detvalue = NULL,
+  add_backup = TRUE,
+  show_results = TRUE,
+  only_new_ident = T
+)
 }
 \arguments{
 \item{colnam}{string collector name}

@@ -4,13 +4,27 @@
 \alias{query_plots}
 \title{List, extract map selected plots}
 \usage{
-query_plots(team_lead = NULL, plot_name = NULL, tag = NULL,
-  country = NULL, province = NULL, locality_name = NULL,
-  method = NULL, date_y = NULL, extract_individuals = FALSE,
-  map = FALSE, zoom = 0, label = T, try_optimal_label = F,
-  map_type = "mapview", id_individual = NULL, id_plot = NULL,
-  show_multiple_census = FALSE, remove_ids = TRUE,
-  collapse_multiple_val = FALSE)
+query_plots(
+  team_lead = NULL,
+  plot_name = NULL,
+  tag = NULL,
+  country = NULL,
+  province = NULL,
+  locality_name = NULL,
+  method = NULL,
+  date_y = NULL,
+  extract_individuals = FALSE,
+  map = FALSE,
+  zoom = 0,
+  label = T,
+  try_optimal_label = F,
+  map_type = "mapview",
+  id_individual = NULL,
+  id_plot = NULL,
+  show_multiple_census = FALSE,
+  remove_ids = TRUE,
+  collapse_multiple_val = FALSE
+)
 }
 \arguments{
 \item{team_lead}{string fuzzy person name to look for}
@@ -52,7 +66,7 @@ query_plots(team_lead = NULL, plot_name = NULL, tag = NULL,
 \item{collapse_multiple_val}{logical whether multiple traits measures should be collapsed (resulting values as character, separated by dash)}
 }
 \value{
-A tibble of all method
+A tibble of all plots or individuals
 
 A tibble of plots or individuals if extract_individuals is TRUE
 }

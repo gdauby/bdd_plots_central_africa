@@ -4,9 +4,13 @@
 \alias{herbarium_label}
 \title{Herbarium labels}
 \usage{
-herbarium_label(dat = NULL, theme = c("GILLES"),
-  outfile = "herblabel.rtf", font = c("Roman", "Arial"),
-  font_size = 1)
+herbarium_label(
+  dat = NULL,
+  theme = c("GILLES"),
+  outfile = "herblabel.rtf",
+  font = c("Roman", "Arial"),
+  font_size = 1
+)
 }
 \arguments{
 \item{dat}{data.frame}

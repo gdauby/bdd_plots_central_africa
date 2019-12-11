@@ -4,8 +4,12 @@
 \alias{get_updates_diconame}
 \title{Get backups of modified taxonomic data}
 \usage{
-get_updates_diconame(id = NULL, last_months = NULL,
-  last_10_entry = TRUE, last = NULL)
+get_updates_diconame(
+  id = NULL,
+  last_months = NULL,
+  last_10_entry = TRUE,
+  last = NULL
+)
 }
 \arguments{
 \item{id}{look backups for a specific id (of taxonomic table)}

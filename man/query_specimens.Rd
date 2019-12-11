@@ -4,13 +4,23 @@
 \alias{query_specimens}
 \title{Exploring specimens data}
 \usage{
-query_specimens(collector = NULL, id_colnam = NULL, number = NULL,
-  number_min = NULL, number_max = NULL, genus_searched = NULL,
-  tax_esp_searched = NULL, tax_fam_searched = NULL, id_search = NULL,
-  subset_columns = TRUE, show_previous_modif = TRUE,
+query_specimens(
+  collector = NULL,
+  id_colnam = NULL,
+  number = NULL,
+  number_min = NULL,
+  number_max = NULL,
+  genus_searched = NULL,
+  tax_esp_searched = NULL,
+  tax_fam_searched = NULL,
+  id_search = NULL,
+  subset_columns = TRUE,
+  show_previous_modif = TRUE,
   generate_labels = FALSE,
   project_title = "Reference specimens collected in trees inventory",
-  file_labels = "labels")
+  file_labels = "labels",
+  extract_linked_individuals = FALSE
+)
 }
 \arguments{
 \item{collector}{string collector name}
@@ -40,6 +50,8 @@ query_specimens(collector = NULL, id_colnam = NULL, number = NULL,
 \item{project_title}{string if labels are produced title of the label}
 
 \item{file_labels}{string if labels are produced name of the rtf file}
+
+\item{extract_linked_individuals}{logical extract individuals linked to selected specimens}
 }
 \value{
 A tibble

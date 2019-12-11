@@ -4,15 +4,30 @@
 \alias{update_dico_name}
 \title{Update taxonomic data}
 \usage{
-update_dico_name(genus_searched = NULL, tax_esp_searched = NULL,
-  tax_fam_searched = NULL, new_tax_gen = NULL, new_tax_esp = NULL,
-  new_full_name_auth = NULL, new_tax_fam = NULL,
-  new_tax_rank1 = NULL, new_tax_name1 = NULL, new_taxook = NULL,
-  new_morphocat = NULL, new_detvalue = NULL,
-  new_full_name_no_auth = NULL, new_full_name_used = NULL,
-  new_full_name_used2 = NULL, new_id_diconame_good = NULL,
-  id_search = NULL, ask_before_update = TRUE, add_backup = TRUE,
-  show_results = TRUE, no_synonym_modif = FALSE, synonym_of = NULL)
+update_dico_name(
+  genus_searched = NULL,
+  tax_esp_searched = NULL,
+  tax_fam_searched = NULL,
+  new_tax_gen = NULL,
+  new_tax_esp = NULL,
+  new_full_name_auth = NULL,
+  new_tax_fam = NULL,
+  new_tax_rank1 = NULL,
+  new_tax_name1 = NULL,
+  new_taxook = NULL,
+  new_morphocat = NULL,
+  new_detvalue = NULL,
+  new_full_name_no_auth = NULL,
+  new_full_name_used = NULL,
+  new_full_name_used2 = NULL,
+  new_id_diconame_good = NULL,
+  id_search = NULL,
+  ask_before_update = TRUE,
+  add_backup = TRUE,
+  show_results = TRUE,
+  no_synonym_modif = FALSE,
+  synonym_of = NULL
+)
 }
 \arguments{
 \item{genus_searched}{string genus name searched}

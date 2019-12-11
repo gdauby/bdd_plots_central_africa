@@ -4,8 +4,12 @@
 \alias{explore_allometric_taxa}
 \title{Explore allometric relation}
 \usage{
-explore_allometric_taxa(genus_searched = NULL, tax_esp_searched = NULL,
-  tax_fam_searched = NULL, id_search = NULL)
+explore_allometric_taxa(
+  genus_searched = NULL,
+  tax_esp_searched = NULL,
+  tax_fam_searched = NULL,
+  id_search = NULL
+)
 }
 \arguments{
 \item{genus_searched}{string}

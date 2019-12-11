@@ -4,8 +4,13 @@
 \alias{add_individuals}
 \title{Add new individuals data}
 \usage{
-add_individuals(new_data, col_names_select, col_names_corresp, id_col,
-  launch_adding_data = FALSE)
+add_individuals(
+  new_data,
+  col_names_select,
+  col_names_corresp,
+  id_col,
+  launch_adding_data = FALSE
+)
 }
 \arguments{
 \item{new_data}{tibble new data to be import}

@@ -4,8 +4,14 @@
 \alias{update_individuals}
 \title{Update individuals data}
 \usage{
-update_individuals(new_data, col_names_select, col_names_corresp, id_col,
-  launch_update = FALSE, add_backup = TRUE)
+update_individuals(
+  new_data,
+  col_names_select,
+  col_names_corresp,
+  id_col,
+  launch_update = FALSE,
+  add_backup = TRUE
+)
 }
 \arguments{
 \item{new_data}{string name of the team leader of the selected plot}
