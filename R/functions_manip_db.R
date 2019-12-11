@@ -1769,10 +1769,10 @@ query_plots <- function(team_lead = NULL,
     ## TO BE UPDATED POTENTIALLY IF MORE THAN ONE SPECIMEN IS LINKED TO ONE INDIVIDUAL
     ## CODE TO EXTRACT THE "BEST" IDENTIFICATION IF DIFFERENT TO BE IMPLEMENETED
     links_specimens <-
-      tbl(mydb, "data_link_specimens") %>%
+      dplyr::tbl(mydb, "data_link_specimens") %>%
       dplyr::select(id_n, id_specimen) %>%
-      group_by(id_n) %>%
-      summarise(id_specimen = max(id_specimen, na.rm = T))
+      dplyr::group_by(id_n) %>%
+      dplyr::summarise(id_specimen = max(id_specimen, na.rm = T))
 
     res_individuals_full <-
       res_individuals_full %>%
