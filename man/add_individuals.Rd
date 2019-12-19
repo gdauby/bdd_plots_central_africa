@@ -19,7 +19,7 @@ add_individuals(
 
 \item{col_names_corresp}{string}
 
-\item{id_col}{integer indicate which name of col_names_select is the id for matching data}
+\item{id_col}{integer indicate which name of col_names_select is the id for matching plot in metadata}
 
 \item{launch_adding_data}{logical FALSE whether adding should be done or not}
 }

@@ -1086,7 +1086,7 @@ launch_stand_tax_app <- function() {
         # complete found.name based on found_taxa
         data.to.standardize.reac$df <-
           data.to.standardize.reac$df %>%
-          dplyr::mutate(found.name=replace(found.name, id_tax_search==Name1, Name2))
+          dplyr::mutate(found.name = replace(found.name, id_tax_search==Name1, Name2))
 
         Encoding(Name2) <- "UTF-8"
 
@@ -1382,6 +1382,26 @@ method_list <- function() {
     dplyr::group_by(method) %>%
     dplyr::count() %>%
     dplyr::mutate(n=as.integer(n)) %>%
+    dplyr::collect()
+
+  # dbDisconnect(mydb)
+  return(nn)
+}
+
+
+#' List of subplot feature
+#'
+#' Provide list of subplot features of plot
+#'
+#' @return A tibble of all subplot features
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @export
+subplot_list <- function() {
+  if(!exists("mydb")) call.mydb()
+
+  nn <-
+    dplyr::tbl(mydb, "subplotype_list") %>%
     dplyr::collect()
 
   # dbDisconnect(mydb)
@@ -1766,7 +1786,7 @@ query_plots <- function(team_lead = NULL,
     }
 
     ### getting links to specimens -
-    ## TO BE UPDATED POTENTIALLY IF MORE THAN ONE SPECIMEN IS LINKED TO ONE INDIVIDUAL
+    ## TO BE e_dED POTENTIALLY IF MORE THAN ONE SPECIMEN IS LINKED TO ONE INDIVIDUAL
     ## CODE TO EXTRACT THE "BEST" IDENTIFICATION IF DIFFERENT TO BE IMPLEMENETED
     links_specimens <-
       dplyr::tbl(mydb, "data_link_specimens") %>%
@@ -2634,7 +2654,7 @@ add_plots <- function(new_data,
   if(any(colnames(new_data_renamed)=="plot_name")) {
     found_plot <-
       dplyr::tbl(mydb, "data_liste_plots") %>%
-      dplyr::filter(plot_name %in% new_data_renamed$plot_name) %>%
+      dplyr::filter(plot_name %in% !!new_data_renamed$plot_name) %>%
       dplyr::collect()
 
     if(nrow(found_plot)>0) {
@@ -3070,7 +3090,7 @@ update_plot_data <- function(team_lead = NULL,
 #'
 #'
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
-#' @param new_data string name of the team leader of the selected plot
+#' @param new_data data frame data containing id and new values
 #' @param col_names_select string plot name of the selected plots
 #' @param col_names_corresp string country of the selected plots
 #' @param id_col integer indicate which name of col_names_select is the id for matching data
@@ -4069,8 +4089,8 @@ update_subplots_table <- function(subplots_id = NULL,
 #' @param trait_values_new_data string vector with columns names of new_data that contain traits measures
 #' @param col_names_trait_corresp string vector with trait names corresponding to trait_values_new_data
 #' @param measures_property_new_data string vector with columns names new_data others than traits measures values
-#' @param col_names_property_corresp string vector with corresponding columns names for  measures_property_new_data
-#' @param id_new_data integer which column of new_data contain the id to match dataset
+#' @param col_names_property_corresp string vector with corresponding columns names for measures_property_new_data
+#' @param id_new_data integer which column of new_data contain the trait measure id to match dataset
 #' @param col_name_id_corresp integer which column of new_data contain the id to match dataset
 #' @param launch_update logical if TRUE updates are performed
 #' @param add_backup logical whether backup of modified data should be recorded
@@ -4192,11 +4212,10 @@ update_traits_measures <- function(new_data,
       }
 
       if(dplyr::tbl(mydb, "data_traits_measures") %>%
-        dplyr::filter(id_trait_measures %in% matches$id) %>%
+        dplyr::filter(id_trait_measures %in% !!matches$id) %>%
         dplyr::distinct(traitid) %>%
         dplyr::collect() %>%
         nrow()>2) stop("more than one trait to be updated whereas only one expected")
-
 
       if(!is.null(trait_values_new_data) & !is.null(col_names_trait_corresp))
         field <- "traitvalue"
@@ -4206,8 +4225,13 @@ update_traits_measures <- function(new_data,
       ## create a temporary table with new data
       DBI::dbWriteTable(mydb, "temp_table", matches,
                         overwrite=T, fileEncoding = "UTF-8", row.names=F)
+
+      var_new <- matches %>%
+        dplyr::select(dplyr::contains("_new")) %>%
+        colnames()
+
       query_up <-
-        paste0("UPDATE data_traits_measures t1 SET (",field ,", date_modif_d, date_modif_m, date_modif_y) = (t2.",var_new, ", t2.date_modif_d, t2.date_modif_m, t2.date_modif_y) FROM temp_table t2 WHERE t1.id_trait_measures = t2.id")
+        paste0("UPDATE data_traits_measures t1 SET (", field ,", date_modif_d, date_modif_m, date_modif_y) = (t2.", var_new, ", t2.date_modif_d, t2.date_modif_m, t2.date_modif_y) FROM temp_table t2 WHERE t1.id_trait_measures = t2.id")
 
       rs <-
         DBI::dbSendStatement(mydb, query_up)
@@ -4271,7 +4295,7 @@ update_traits_measures <- function(new_data,
 #' @param new_data tibble new data to be import
 #' @param col_names_select string
 #' @param col_names_corresp string
-#' @param id_col integer indicate which name of col_names_select is the id for matching data
+#' @param id_col integer indicate which name of col_names_select is the id for matching plot in metadata
 #' @param launch_adding_data logical FALSE whether adding should be done or not
 #'
 #' @return No return value individuals updated
@@ -4330,10 +4354,9 @@ add_individuals <- function(new_data ,
                      ))
   }
 
-
   plots_already_in_db <-
     dplyr::tbl(mydb, "data_individuals") %>%
-    dplyr::filter(id_table_liste_plots_n %in% ids_plot$id_liste_plots) %>%
+    dplyr::filter(id_table_liste_plots_n %in% !!ids_plot$id_liste_plots) %>%
     dplyr::distinct(id_table_liste_plots_n) %>%
     dplyr::collect()
 
@@ -4362,7 +4385,9 @@ add_individuals <- function(new_data ,
     col_names_corresp[-id_col]
 
   new_data_renamed <-
-    .rename_data(dataset = new_data_renamed, col_old = col_names_select, col_new = col_names_corresp)
+    .rename_data(dataset = new_data_renamed,
+                 col_old = col_names_select,
+                 col_new = col_names_corresp)
 
   col_names_corresp <-
     c(col_names_corresp, "id_table_liste_plots_n")
@@ -4406,7 +4431,12 @@ add_individuals <- function(new_data ,
 
   ## checking DBH
   # if(!any(colnames(new_data_renamed)=="dbh")) stop("dbh column missing")
-  # if(any(is.na(new_data_renamed$dbh))) {
+  if(any(is.na(new_data_renamed$dbh))) {
+
+    message("\n dbh and others traits measure should be added independantly using add_traits_measures function")
+
+  }
+
   #   warning(paste(sum(is.na(new_data_renamed$dbh)), "missing dbh values"))
   #
   #   logs <-
@@ -4508,6 +4538,48 @@ add_individuals <- function(new_data ,
 
     }
 
+  }
+
+  if(dplyr::pull(method)=="1ha-IRD") {
+    if(!any(colnames(new_data_renamed)=="ind_num_sous_plot"))
+      stop("ind_num_sous_plot column missing - Tag individual")
+
+
+    ### checking duplicated tags within plots
+    duplicated_tags <-
+      new_data_renamed %>%
+      group_by(id_table_liste_plots_n, ind_num_sous_plot) %>%
+      count() %>%
+      filter(n > 1)
+
+    duplicated_tags <-
+      new_data_renamed %>%
+      dplyr::left_join(duplicated_tags , by=c("id_table_liste_plots_n"="id_table_liste_plots_n",
+                                       "ind_num_sous_plot"="ind_num_sous_plot")) %>%
+      dplyr::filter(!is.na(n)) %>%
+      dplyr::left_join(tbl(mydb, "data_liste_plots") %>%
+                  dplyr::select(id_liste_plots, plot_name) %>%
+                    dplyr::collect(),
+                by=c("id_table_liste_plots_n"="id_liste_plots"))
+
+    warning("\n Duplicated tags in some plots")
+    print(duplicated_tags)
+
+    write_excel_csv(duplicated_tags, "duplicated_tags.csv")
+  }
+
+  ## checking ind_num_sous_plot
+
+  if(!is.numeric(new_data_renamed$ind_num_sous_plot)) {
+    new_data_renamed <-
+      new_data_renamed %>%
+      dplyr::mutate(ind_num_sous_plot = as.numeric(ind_num_sous_plot))
+
+    if(any(is.na(new_data_renamed$ind_num_sous_plot)))
+      new_data_renamed %>%
+      filter(is.na(ind_num_sous_plot)) %>%
+      print()
+      stop("ind_num_sous_plot missing after converting to numeric")
   }
 
   # check herbarium specimen coherence
@@ -5643,6 +5715,15 @@ add_traits_measures <- function(new_data,
       dplyr::rename(id_liste_plots=id_table_liste_plots_n)
   }
 
+  if(is.null(id_plot_name) & is.null(plot_name_field)) {
+
+    new_data_renamed <-
+      new_data_renamed %>%
+      tibble::add_column(id_liste_plots = NA) %>%
+      dplyr::mutate(id_liste_plots = as.integer(id_liste_plots))
+
+  }
+
 ### check for different census for concerned plots
   multiple_census <- FALSE
   census_check <- utils::askYesNo(msg = "Link trait measures to census ?")
@@ -5862,7 +5943,7 @@ add_traits_measures <- function(new_data,
           ### getting all individuals of selected plot
           all_individual_selected_plot_subset <-
             all_individual_selected_plot %>%
-            dplyr::filter(id_table_liste_plots_n==ids_plots_represented[j])
+            dplyr::filter(id_table_liste_plots_n == ids_plots_represented[j])
 
           new_data_renamed_subset <-
             data_trait %>%
@@ -5877,7 +5958,7 @@ add_traits_measures <- function(new_data,
           ## getting individuals that have already observations traits_measures table
           individuals_already_traits <-
             dplyr::tbl(mydb, "data_traits_measures") %>%
-            dplyr::filter(id_data_individuals %in% linked_individuals$id_n) %>%
+            dplyr::filter(id_data_individuals %in% !!linked_individuals$id_n) %>%
             dplyr::collect()
 
           if(nrow(individuals_already_traits)>0 &
@@ -6197,7 +6278,12 @@ add_traits_measures <- function(new_data,
       trait_id <- unique(data_trait$id_trait)
       selected_data_traits <-
         data_trait %>%
-        dplyr::select(id_data_individuals, id_trait, id_liste_plots, id_sub_plots, trait, issue)
+        dplyr::select(id_data_individuals,
+                      id_trait,
+                      id_liste_plots,
+                      id_sub_plots,
+                      trait,
+                      issue)
 
       all_vals <-
         dplyr::tbl(mydb, "data_traits_measures") %>%
@@ -6206,21 +6292,24 @@ add_traits_measures <- function(new_data,
         dplyr::filter(traitid == trait_id) %>% #, !is.na(id_sub_plots)
         dplyr::collect()
 
-      if(valuetype$valuetype=="numeric")
-        all_vals <- all_vals %>%
-        dplyr::rename(id_trait = traitid, id_liste_plots = id_table_liste_plots, trait=traitvalue) %>%
+      if(valuetype$valuetype == "numeric")
+        all_vals <-
+        all_vals %>%
+        dplyr::rename(id_trait = traitid,
+                      id_liste_plots = id_table_liste_plots,
+                      trait=traitvalue) %>%
         dplyr::select(-traitvalue_char)
 
-      if(valuetype$valuetype=="character")
+      if(valuetype$valuetype == "character")
         all_vals <- all_vals %>%
         dplyr::rename(id_trait = traitid, id_liste_plots = id_table_liste_plots, trait=traitvalue_char) %>%
         dplyr::select(-traitvalue) %>%
         dplyr::mutate(trait = stringr::str_trim(trait))
 
-      all_vals %>%
-        dplyr::group_by(id_data_individuals, id_trait, id_liste_plots, id_sub_plots, issue) %>%
-        dplyr::count() %>%
-        dplyr::filter(n>1)
+      # all_vals %>%
+      #   dplyr::group_by(id_data_individuals, id_trait, id_liste_plots, id_sub_plots, issue) %>%
+      #   dplyr::count() %>%
+      #   dplyr::filter(n>1)
 
       # duplicated_rows_same_values <-
       #   bind_rows(selected_data_traits,
@@ -6747,33 +6836,55 @@ add_specimens <- function(new_data ,
                                           show_multiple_measures = FALSE,
                                           collapse_multiple_val = FALSE) {
 
+  ## merging traits measures and trait informations
   traits_measures <-
     dplyr::tbl(mydb, "data_traits_measures") %>%
     dplyr::left_join(dplyr::tbl(mydb, "traitlist"), by=c("traitid"="id_trait")) %>%
     dplyr::select(-id_specimen, -id_diconame)
 
-  if(is.null(id_individuals) & is.null(ids_plot)) res_individuals_full <-
+  ## filtering individuals based on ids of individuals and/or plots
+  if(is.null(id_individuals) & is.null(ids_plot))
+    res_individuals_full <-
       dplyr::tbl(mydb, "data_individuals")
-  if(!is.null(id_individuals) & is.null(ids_plot)) res_individuals_full <-
+  if(!is.null(id_individuals) & is.null(ids_plot))
+    res_individuals_full <-
       dplyr::tbl(mydb, "data_individuals") %>%
       dplyr::filter(id_n %in% id_individuals)
-  if(is.null(id_individuals) & !is.null(ids_plot)) res_individuals_full <-
+  if(is.null(id_individuals) & !is.null(ids_plot))
+    res_individuals_full <-
       dplyr::tbl(mydb, "data_individuals") %>%
       dplyr::filter(id_table_liste_plots_n %in% ids_plot)
 
+  ## getting specimens id and identification
   specimens_id_diconame <-
     dplyr::tbl(mydb, "specimens") %>%
     dplyr::select(id_specimen, id_diconame_n)
 
+  ## getting synonimies of identification
   diconames_id <-
     dplyr::tbl(mydb, "diconame") %>%
     dplyr::select(id_n, id_good_n)
 
+  ## merging specimens and good identification
   specimens_linked <-
     specimens_id_diconame %>%
     dplyr::left_join(diconames_id, by=c("id_diconame_n"="id_n")) %>%
     dplyr::rename(id_dico_name_specimen=id_good_n) %>%
     dplyr::select(id_specimen, id_dico_name_specimen)
+
+  ## getting link between specimen and individual
+  links_specimens <-
+    dplyr::tbl(mydb, "data_link_specimens") %>%
+    dplyr::select(id_n, id_specimen) %>%
+    dplyr::group_by(id_n) %>%
+    dplyr::summarise(id_specimen = max(id_specimen, na.rm = T))
+
+  ## adding id of specimens to individual (and removing old link)
+  res_individuals_full <-
+    res_individuals_full %>%
+    dplyr::select(-id_specimen) %>%
+    dplyr::left_join(links_specimens,
+                     by=c("id_n"="id_n"))
 
   res_individuals_full <-
     res_individuals_full %>%
@@ -6849,14 +6960,14 @@ add_specimens <- function(new_data ,
           traits_linked_subset %>%
           dplyr::collect() %>%
           dplyr::group_by(id_n) %>%
-          dplyr::summarise(traitvalue=dplyr::last(traitvalue),
-                           trait=dplyr::last(trait),
-                           !!issue_name:=dplyr::last(!!issue_name_enquo),
-                           day=dplyr::last(day),
-                           month=dplyr::last(month),
-                           year=dplyr::last(year),
-                           id_old=dplyr::last(id_old),
-                           id_trait_measures=dplyr::last(id_trait_measures),
+          dplyr::summarise(traitvalue = dplyr::last(traitvalue),
+                           trait = dplyr::last(trait),
+                           !!issue_name:= dplyr::last(!!issue_name_enquo),
+                           day = dplyr::last(day),
+                           month = dplyr::last(month),
+                           year= dplyr::last(year),
+                           id_old= dplyr::last(id_old),
+                           id_trait_measures = dplyr::last(id_trait_measures),
                            id_sub_plots = dplyr::last(id_sub_plots)) %>%
           dplyr::select(trait, traitvalue, !!issue_name_enquo, day, month, year, id_n, id_old, id_trait_measures,
                         id_sub_plots)
@@ -6880,12 +6991,13 @@ add_specimens <- function(new_data ,
 
         if(nrow(subs_plots_concerned)>0 & !collapse_multiple_val) {
           ## if the multiple values for individuals are for different census, putting multiple_census as TRUE
-          if(all(subs_plots_concerned$type=="census") &
-             max(subs_plots_concerned$typevalue)>1) {
+          if(all(subs_plots_concerned$type == "census") &
+             max(subs_plots_concerned$typevalue) > 1) {
             for (j in 1:max(subs_plots_concerned$typevalue)) {
+
               cat(paste("\n", j, "census(es) for", trait_name), "for",
                   nrow(subs_plots_concerned %>%
-                         dplyr::filter(type=="census", typevalue==j)), "plots")
+                         dplyr::filter(type == "census", typevalue == j)), "plots")
             }
             multiple_census <- TRUE
           }
@@ -6920,11 +7032,13 @@ add_specimens <- function(new_data ,
     if(multiple_census) {
 
       for (j in 1:max(subs_plots_concerned$typevalue)) {
+
         ids_subs_select <- subs_plots_concerned %>%
           dplyr::filter(typevalue == j) %>%
           dplyr::pull(id_sub_plots)
 
         if(length(ids_subs_select)>0) {
+
           traits_linked_subset_spread <-
             traits_linked_subset %>%
             dplyr::filter(id_sub_plots %in% ids_subs_select) %>%
@@ -6940,6 +7054,7 @@ add_specimens <- function(new_data ,
         }
       }
     }else{
+
       traits_linked_subset_spread <-
         traits_linked_subset %>%
         dplyr::select(-day, -month, -year) %>%
@@ -6951,6 +7066,7 @@ add_specimens <- function(new_data ,
 
     ## getting dates of traits measures
     for (j in 1:length(traits_linked_subset_spread_list)) {
+
       traits_linked_subset_spread_list[[j]] <-
         traits_linked_subset_spread_list[[j]] %>%
         dplyr::left_join(traits_linked_subset %>%
@@ -6974,7 +7090,9 @@ add_specimens <- function(new_data ,
 
     ## renaming measures table
     for (j in 1:length(traits_linked_subset_spread_list)) {
+
       if(multiple_census) {
+
         id_new_name <- paste("id_trait_measures", all_trait[i],
                              names(traits_linked_subset_spread_list)[j], sep="_")
         traits_linked_subset_spread_list[[j]] <-
@@ -6998,6 +7116,7 @@ add_specimens <- function(new_data ,
           dplyr::rename(!!issue_trait_name_new := !!issue_name_enquo)
 
         if(!skip_dates) {
+
           day_new_name <- paste("day", names(traits_linked_subset_spread_list)[j], sep="_")
           traits_linked_subset_spread_list[[j]] <-
             traits_linked_subset_spread_list[[j]] %>%
@@ -7008,8 +7127,10 @@ add_specimens <- function(new_data ,
           year_new_name <- paste("year", names(traits_linked_subset_spread_list)[j], sep="_")
           traits_linked_subset_spread_list[[j]] %>%
             dplyr::rename(!!year_new_name := year)
+
         }
       }else{
+
         id_new_name <- paste("id_trait_measures", all_trait[i], sep="_")
         traits_linked_subset_spread_list[[j]] <-
           traits_linked_subset_spread_list[[j]] %>%

@@ -25,9 +25,9 @@ update_traits_measures(
 
 \item{measures_property_new_data}{string vector with columns names new_data others than traits measures values}
 
-\item{col_names_property_corresp}{string vector with corresponding columns names for  measures_property_new_data}
+\item{col_names_property_corresp}{string vector with corresponding columns names for measures_property_new_data}
 
-\item{id_new_data}{integer which column of new_data contain the id to match dataset}
+\item{id_new_data}{integer which column of new_data contain the trait measure id to match dataset}
 
 \item{col_name_id_corresp}{integer which column of new_data contain the id to match dataset}
 

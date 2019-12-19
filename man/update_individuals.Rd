@@ -14,7 +14,7 @@ update_individuals(
 )
 }
 \arguments{
-\item{new_data}{string name of the team leader of the selected plot}
+\item{new_data}{data frame data containing id and new values}
 
 \item{col_names_select}{string plot name of the selected plots}
 
