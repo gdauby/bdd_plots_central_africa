@@ -1587,29 +1587,64 @@ query_plots <- function(team_lead = NULL,
   ## if any plots features others than census, adding them to metadata
   if(nrow(all_sub_type)>0) {
     for (i in 1:nrow(all_sub_type)) {
+
       id_sub_plot <-
         all_sub_type %>%
         dplyr::slice(i) %>%
         dplyr::pull(id_type_sub_plot)
 
-      summarized_subplot_data <-
-        sub_plot_data %>%
-        dplyr::filter(id_type_sub_plot==id_sub_plot) %>%
-        dplyr::group_by(id_table_liste_plots) %>%
-        dplyr::summarise(sum_sub_plot = mean(typevalue, na.rm=T)) %>%
-        dplyr::collect()
-
-      subplot_name <-
+      type_sub_plot <-
         all_sub_type %>%
         dplyr::slice(i) %>%
-        dplyr::pull(type)
+        dplyr::pull(valuetype)
 
-      subplot_name <-
-        paste0(subplot_name, "_averaged")
 
-      summarized_subplot_data <-
-        summarized_subplot_data %>%
-        dplyr::rename(!!subplot_name := sum_sub_plot)
+      if(type_sub_plot == "numeric") {
+
+         summarized_subplot_data <-
+          sub_plot_data %>%
+          dplyr::filter(id_type_sub_plot == id_sub_plot) %>%
+          dplyr::group_by(id_table_liste_plots) %>%
+          dplyr::summarise(sum_sub_plot = mean(typevalue, na.rm=T)) %>%
+          dplyr::collect()
+
+         subplot_name <-
+           all_sub_type %>%
+           dplyr::slice(i) %>%
+           dplyr::pull(type)
+
+         subplot_name <-
+           paste0(subplot_name, "_averaged")
+
+         summarized_subplot_data <-
+           summarized_subplot_data %>%
+           dplyr::rename(!!subplot_name := sum_sub_plot)
+
+      }
+
+      if(type_sub_plot == "character") {
+
+        summarized_subplot_data <-
+          sub_plot_data %>%
+          dplyr::filter(id_type_sub_plot == id_sub_plot) %>%
+          dplyr::group_by(id_table_liste_plots) %>%
+          dplyr::collect() %>%
+          # mutate(sum_sub_plot = first(typevalue_char)) %>%
+          # select(id_table_liste_plots, sum_sub_plot)
+          dplyr::summarise(sum_sub_plot =
+                             ifelse(length(unique(typevalue_char)) > 1,
+                                    stringr::str_flatten(typevalue_char, collapse = "|"),
+                                    typevalue_char))
+        subplot_name <-
+          all_sub_type %>%
+          dplyr::slice(i) %>%
+          dplyr::pull(type)
+
+        summarized_subplot_data <-
+          summarized_subplot_data %>%
+          dplyr::rename(!!subplot_name := sum_sub_plot)
+
+      }
 
       res <-
         res %>%
@@ -2689,9 +2724,9 @@ add_plots <- function(new_data,
 }
 
 
-#' Add an observation in trait measurement table
+#' Add an observation in subplot_features table
 #'
-#' Add a trait measure in trait measurement table
+#' Add a trait measure in subplot_features table
 #'
 #' @return list of tibbles that should be/have been added
 #'
@@ -2709,20 +2744,22 @@ add_plots <- function(new_data,
 add_subplot_features <- function(new_data,
                                  col_names_select,
                                  col_names_corresp,
-                                 collector_field=NULL,
-                                 plot_name_field,
-                                 id_plot_name=NULL,
+                                 collector_field = NULL,
+                                 plot_name_field = NULL,
+                                 id_plot_name = NULL,
+                                 id_plot_name_corresp = "id_table_liste_plots_n",
                                  subplottype_field,
-                                 add_data=FALSE) {
+                                 add_data = FALSE) {
 
   for (i in 1:length(subplottype_field)) if(!any(colnames(new_data)==subplottype_field[i]))
     stop(paste("subplottype_field provide not found in new_data", subplottype_field[i]))
 
   new_data_renamed <-
-    .rename_data(dataset = new_data, col_old = col_names_select, col_new = col_names_corresp)
+    .rename_data(dataset = new_data,
+                 col_old = col_names_select,
+                 col_new = col_names_corresp)
 
-  if(is.null(plot_name_field)
-     & is.null(id_plot_name)) stop("no plot links provided")
+  if(is.null(plot_name_field) & is.null(id_plot_name)) stop("no plot links provided, provide either plot_name_field or id_plot_name")
 
   if(!any(col_names_corresp=="day")) {
     warning("no information collection day provided")
@@ -2751,7 +2788,7 @@ add_subplot_features <- function(new_data,
 
   ### Linking collectors names
   if(!is.null(collector_field)) {
-    if(!any(colnames(new_data_renamed)==collector_field))
+    if(!any(colnames(new_data_renamed) == collector_field))
       stop("no collector_field found in new dataset")
     new_data_renamed <-
       .link_colnam(data_stand = new_data_renamed, collector_field = collector_field)
@@ -2764,7 +2801,8 @@ add_subplot_features <- function(new_data,
 
   ### Linking plot names
   if(!is.null(plot_name_field)) {
-    if(!any(colnames(new_data_renamed)==plot_name_field)) stop("plot_name_field not found in colnames")
+    if(!any(colnames(new_data_renamed)==plot_name_field))
+      stop("plot_name_field not found in colnames")
 
     new_data_renamed <-
       .link_plot_name(data_stand = new_data_renamed, plot_name_field = plot_name_field)
@@ -2772,32 +2810,52 @@ add_subplot_features <- function(new_data,
   }
 
   if(!is.null(id_plot_name)) {
-    id_plot_name <- "id_table_liste_plots_n"
+
+    # if(id_plot_name == "id_table_liste_plots_n") id_plot_name <- "id_table_liste_plots_n"
 
     new_data_renamed <-
       new_data_renamed %>%
-      dplyr::rename_at(dplyr::vars(id_plot_name), ~ id_plot_name)
+      dplyr::rename_at(dplyr::vars(id_plot_name), ~ id_plot_name_corresp)
 
-    if(any(colnames(new_data_renamed)=="plot_name"))
+    if(any(colnames(new_data_renamed) == "plot_name"))
       new_data_renamed <-
       new_data_renamed %>%
       dplyr::select(-plot_name)
 
+    if(id_plot_name_corresp == "id_table_liste_plots_n")
     link_plot <-
       new_data_renamed %>%
       dplyr::left_join(dplyr::tbl(mydb, "data_liste_plots") %>%
                          dplyr::select(plot_name, id_liste_plots) %>% dplyr::collect(),
-                       by=c("id_table_liste_plots_n"="id_liste_plots"))
+                       by=c("id_table_liste_plots_n" = "id_liste_plots"))
+
+
+    if(id_plot_name_corresp == "id_old")
+    link_plot <-
+      new_data_renamed %>%
+      dplyr::left_join(dplyr::tbl(mydb, "data_liste_plots") %>%
+                         dplyr::select(plot_name, id_old) %>% dplyr::collect(),
+                       by=c("id_old" = "id_old"))
 
     if(dplyr::filter(link_plot, is.na(plot_name)) %>%
-       nrow()>0) {
+       nrow() > 0) {
       print(dplyr::filter(link_plot, is.na(plot_name)))
       warning("provided id plot not found in plot metadata")
     }
 
-    new_data_renamed <-
-      new_data_renamed %>%
-      dplyr::rename(id_liste_plots=id_table_liste_plots_n)
+    if(id_plot_name_corresp == "id_table_liste_plots_n")
+      new_data_renamed <-
+        new_data_renamed %>%
+        dplyr::rename(id_liste_plots = id_table_liste_plots_n)
+
+    if(id_plot_name_corresp == "id_old")
+      new_data_renamed <-
+        new_data_renamed %>%
+        left_join(tbl(mydb, "data_liste_plots") %>%
+                    dplyr::select(id_old, id_liste_plots) %>%
+                    collect(),
+                  c("id_old"="id_old"))
+
   }
 
   ### preparing dataset to add for each trait
@@ -2821,13 +2879,23 @@ add_subplot_features <- function(new_data,
       data_subplottype %>%
       dplyr::filter(!is.na(subplottype))
 
-    ### adding trait id and adding potential issues based on trait
+    ### adding subplot id and adding potential issues based on subplot
     data_subplottype <-
       .link_subplotype(data_stand = data_subplottype, subplotype = subplottype)
 
     print(".add_modif_field")
     data_subplottype <-
       .add_modif_field(dataset = data_subplottype)
+
+
+    ## see what type of value numeric of character
+    valuetype <-
+      data_subplottype %>%
+      dplyr::distinct(id_subplottype) %>%
+      dplyr::left_join(dplyr::tbl(mydb, "subplotype_list") %>%
+                         dplyr::select(valuetype, id_subplotype) %>%
+                         dplyr::collect(),
+                       by=c("id_subplottype"="id_subplotype"))
 
     print("data_to_add")
     data_to_add <-
@@ -2837,7 +2905,11 @@ add_subplot_features <- function(new_data,
                     month = data_subplottype$month,
                     day = data_subplottype$day,
                     id_type_sub_plot = data_subplottype$id_subplottype,
-                    typevalue = data_subplottype$subplottype,
+                    # typevalue = data_subplottype$subplottype,
+                    typevalue = ifelse(rep(valuetype$valuetype == "numeric",
+                                           nrow(data_subplottype)), data_subplottype$subplottype, NA),
+                    typevalue_char = ifelse(rep(valuetype$valuetype == "character",
+                                                 nrow(data_subplottype)), data_subplottype$subplottype, NA),
                     original_subplot_name = ifelse(rep(any(colnames(data_subplottype)=="original_subplot_name"), nrow(data_subplottype)), data_subplottype$original_subplot_name, NA),
                     issue = data_subplottype$issue,
                     comment = ifelse(rep(any(colnames(data_subplottype)=="comment"),
@@ -2845,6 +2917,16 @@ add_subplot_features <- function(new_data,
                     date_modif_d = data_subplottype$date_modif_d,
                     date_modif_m = data_subplottype$date_modif_m,
                     date_modif_y = data_subplottype$date_modif_y)
+
+    if(any(is.na(data_to_add$id_table_liste_plots))) {
+      rm_na <- utils::askYesNo(msg = "Remove features not linked to plot?")
+
+      if(rm_na) data_to_add <-
+          data_to_add %>%
+          filter(!is.na(id_table_liste_plots))
+
+    }
+
 
     list_add_data[[length(list_add_data)+1]] <-
       data_to_add
@@ -3114,7 +3196,7 @@ update_individuals <- function(new_data,
     dplyr::select(-dbh, -liane, -tree_height, -branch_height, -branchlet_height, -crown_spread, -dbh_height) %>%
     colnames()
 
-  if(length(col_names_select)!=length(col_names_corresp))
+  if(length(col_names_select) != length(col_names_corresp))
     stop("col_names_select and col_names_corresp should have same length")
 
   for (i in 1:length(col_names_select))
@@ -5512,7 +5594,12 @@ add_subplottype <- function(new_type = NULL,
 
   if(is.null(new_valuetype)) stop("define new_valuetype")
 
-  if(!any(new_valuetype==c('numeric', 'integer', 'categorical', 'ordinal', 'logical', 'character'))) stop("valuetype should one of following 'numeric', 'integer', 'categorical', 'ordinal', 'logical', or 'character'")
+  if(!any(new_valuetype==c('numeric',
+                           'integer',
+                           'categorical',
+                           'ordinal',
+                           'logical',
+                           'character'))) stop("valuetype should one of following 'numeric', 'integer', 'categorical', 'ordinal', 'logical', or 'character'")
 
   if(new_valuetype=="numeric" | new_valuetype=="integer")
     if(!is.numeric(new_maxallowedvalue) & !is.integer(new_maxallowedvalue)) stop("valuetype numeric of integer and max value not of this type")
@@ -5534,7 +5621,8 @@ add_subplottype <- function(new_type = NULL,
 
   Q <- utils::askYesNo("confirm adding this type?")
 
-  if(Q) DBI::dbWriteTable(mydb, "subplotype_list", new_data_renamed, append = TRUE, row.names = FALSE)
+  if(Q)
+    DBI::dbWriteTable(mydb, "subplotype_list", new_data_renamed, append = TRUE, row.names = FALSE)
 
 
 }
@@ -7693,19 +7781,24 @@ add_specimens <- function(new_data ,
   }
 
   issues <- vector(mode = "character", length = nrow(data_stand))
-  if(any(data_stand$subplottype[!is.na(data_stand$subplottype)] < select_type_features$minallowedvalue)) {
-    warning(paste(subplotype, "values lower than minallowedvalue for", subplottype, "for",
-                  sum(data_stand$subplottype < select_type_features$minallowedvalue), "entries"))
-    issues[data_stand$subplottype < select_type_features$minallowedvalue] <-
-      paste(subplottype, "lower than minallowedvalue")
+  if(select_type_features$valuetype == "numeric") {
+    if(any(data_stand$subplottype[!is.na(data_stand$subplottype)] < select_type_features$minallowedvalue)) {
+      warning(paste(subplotype, "values lower than minallowedvalue for", subplottype, "for",
+                    sum(data_stand$subplottype < select_type_features$minallowedvalue), "entries"))
+      issues[data_stand$subplottype < select_type_features$minallowedvalue] <-
+        paste(subplottype, "lower than minallowedvalue")
+    }
   }
 
-  if(any(data_stand$subplottype[!is.na(data_stand$subplottype)] > select_type_features$maxallowedvalue)) {
-    warning(paste(subplottype, "values lower than maxallowedvalue for", subplottype, "for",
-                  sum(data_stand$subplottype > select_type_features$maxallowedvalue), "entries"))
-    issues[data_stand$subplottype > select_type_features$maxallowedvalue] <-
-      paste(subplottype, "higher than maxallowedvalue")
+  if(select_type_features$valuetype == "numeric") {
+    if(any(data_stand$subplottype[!is.na(data_stand$subplottype)] > select_type_features$maxallowedvalue)) {
+      warning(paste(subplottype, "values lower than maxallowedvalue for", subplottype, "for",
+                    sum(data_stand$subplottype > select_type_features$maxallowedvalue), "entries"))
+      issues[data_stand$subplottype > select_type_features$maxallowedvalue] <-
+        paste(subplottype, "higher than maxallowedvalue")
+    }
   }
+
   issues[issues==""] <- NA
 
   data_stand <-
