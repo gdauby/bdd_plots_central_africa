@@ -2033,8 +2033,12 @@ query_tax_all <- function(genus_searched = NULL,
     rs <- DBI::dbSendQuery(mydb, query)
     res <- DBI::dbFetch(rs)
     DBI::dbClearResult(rs)
+
   }else{
-    if(!is.null(genus_searched) | !is.null(tax_esp_searched) | !is.null(tax_fam_searched)) cat("Query for tax based on ID, others entries ignored \n")
+
+    if(!is.null(genus_searched) | !is.null(tax_esp_searched) | !is.null(tax_fam_searched))
+      cat("Query for tax based on ID, others entries ignored \n")
+
     res <-
       dplyr::tbl(mydb, "diconame") %>%
       dplyr::filter(id_n %in% id_search) %>%
@@ -3343,6 +3347,7 @@ update_ident_specimens <- function(colnam = NULL,
                                    add_backup = TRUE,
                                    show_results = TRUE,
                                    only_new_ident = T) {
+
   if(!exists("mydb")) call.mydb()
 
   if(is.null(id_speci)) {
@@ -3357,13 +3362,17 @@ update_ident_specimens <- function(colnam = NULL,
                       number = number, subset_columns = FALSE)
 
   }else{
+
     queried_speci <-
       query_specimens(id_search = id_speci, subset_columns = FALSE)
+
   }
 
   if(nrow(queried_speci)>0) {
+
     print(queried_speci %>%
             dplyr::select(family_name, surname, colnbr, detd, detm, dety, detby, cold, colm, coly, country, id_specimen))
+
 
     if(nrow(queried_speci)==1) {
       nbr_queried_speci_ok <- TRUE
@@ -3387,46 +3396,75 @@ update_ident_specimens <- function(colnam = NULL,
     }
 
     if(nbr_new_taxa_ok & nbr_queried_speci_ok) {
+
       new_values <-
-        dplyr::tibble(id_good_diconame=ifelse(!is.null(new_genus) | !is.null(new_species) | !is.null(new_family | !is.null(id_new_taxa)),
+        dplyr::tibble(id_diconame_n =
+                        ifelse(!is.null(new_genus) | !is.null(new_species) | !is.null(new_family | !is.null(id_new_taxa)),
                                               query_new_taxa$id_n, queried_speci$id_diconame_n),
-                      detd=ifelse(!is.null(new_detd), as.numeric(new_detd), queried_speci$detd),
-                      detm=ifelse(!is.null(new_detm), as.numeric(new_detm), queried_speci$detm),
-                      dety=ifelse(!is.null(new_dety), as.numeric(new_dety), queried_speci$dety),
-                      detby=ifelse(!is.null(new_detby), new_detby, queried_speci$detby),
-                      detvalue=ifelse(!is.null(new_detvalue), new_detvalue, queried_speci$detvalue)
+                      detd = ifelse(!is.null(new_detd), as.numeric(new_detd), queried_speci$detd),
+                      detm = ifelse(!is.null(new_detm), as.numeric(new_detm), queried_speci$detm),
+                      dety = ifelse(!is.null(new_dety), as.numeric(new_dety), queried_speci$dety),
+                      detby = ifelse(!is.null(new_detby), new_detby, queried_speci$detby),
+                      detvalue = ifelse(!is.null(new_detvalue), new_detvalue, queried_speci$detvalue)
         )
 
-      if(!is.na(new_values$detby)) if(new_values$detby=="NA") new_values$detby=NA
+      ## correcting if NA is not well coded and null
+      if(!is.na(new_values$detby))
+        if(new_values$detby == "NA")
+          new_values$detby <- NA
 
-      new_values <-
-        new_values %>%
-        tidyr::replace_na(list(detvalue.x = 0, detd = 0, detm = 0, dety = 0, detby=0))
 
-      query_select <-
-        queried_speci %>%
-        dplyr::select(id_diconame_n, detd, detm, dety, detby, detvalue) %>%
-        tidyr::replace_na(list(detvalue.x =0, detd = 0, detm = 0, dety = 0, detby=0))
+        comp_res <- .comp_print_vec(vec_1 = queried_speci  %>%
+                         dplyr::select(!!colnames(new_values)),
+                       vec_2 = new_values)
 
-      if(new_values$detd==0 & query_select$detd>0) new_values$detd=query_select$detd
-      if(new_values$detm==0 & query_select$detm>0) new_values$detm=query_select$detm
-      if(new_values$dety==0 & query_select$dety>0) new_values$dety=query_select$dety
-      if(new_values$detby==0 & query_select$detby>0) new_values$detby=query_select$detby
+        if(!is.na(comp_res$comp_html))
+          print(comp_res$comp_html)
 
-      if(new_values$detd==0 & query_select$detd==0) new_values$detd=query_select$detd=NA
-      if(new_values$detm==0 & query_select$detm==0) new_values$detm=query_select$detm=NA
-      if(new_values$dety==0 & query_select$dety==0) new_values$dety=query_select$dety=NA
-      if(new_values$detby==0 & query_select$detby==0) new_values$detby=query_select$detby=NA
 
-      comp_values <- new_values != query_select
-      comp_values <- dplyr::as_tibble(comp_values)
-      comp_values <- comp_values %>% dplyr::select_if(~sum(!is.na(.)) > 0)
+        print(queried_speci %>%
+                dplyr::select(family_name, surname, colnbr, detd, detm, dety, detby, cold, colm, coly, country, id_specimen))
+
+        # htmlTable::htmlTable(comp_res$comp_html)
+
+        comp_values <- comp_res$comp_tb
+
+      # new_values <-
+      #   new_values %>%
+      #   tidyr::replace_na(list(detvalue.x = 0,
+      #                          detd = 0,
+      #                          detm = 0,
+      #                          dety = 0,
+      #                          detby = 0))
+      #
+      # query_select <-
+      #   queried_speci %>%
+      #   dplyr::select(id_diconame_n, detd, detm, dety, detby, detvalue) %>%
+      #   tidyr::replace_na(list(detvalue.x =0, detd = 0, detm = 0, dety = 0, detby=0))
+      #
+      # if(new_values$detd==0 & query_select$detd>0) new_values$detd <- query_select$detd
+      # if(new_values$detm==0 & query_select$detm>0) new_values$detm <- query_select$detm
+      # if(new_values$dety==0 & query_select$dety>0) new_values$dety <- query_select$dety
+      # if(new_values$detby==0 & query_select$detby>0) new_values$detby <- query_select$detby
+      #
+      # if(new_values$detd==0 & query_select$detd==0) new_values$detd <- query_select$detd <- NA
+      # if(new_values$detm==0 & query_select$detm==0) new_values$detm <- query_select$detm <- NA
+      # if(new_values$dety==0 & query_select$dety==0) new_values$dety <- query_select$dety <- NA
+      # if(new_values$detby==0 & query_select$detby==0) new_values$detby <- query_select$detby <- NA
+      #
+      # comp_values <- new_values != query_select
+      # comp_values <- dplyr::as_tibble(comp_values)
+      # comp_values <- comp_values %>%
+      #   dplyr::select_if(~sum(!is.na(.)) > 0)
+
     }else{
       comp_values <- TRUE
     }
 
-    if(only_new_ident & nbr_new_taxa_ok) {
-      if(any(comp_values %>% dplyr::select_if(~sum(.) > 0) %>% colnames()=="id_good_diconame")) {
+    if(only_new_ident & nbr_new_taxa_ok & any(comp_values==TRUE)) {
+      if(any(comp_values %>%
+             dplyr::select_if(~sum(.) > 0) %>%
+             colnames() == "id_diconame_n")) {
         new_ident <- TRUE
       }else{
         new_ident <- FALSE
@@ -3436,7 +3474,8 @@ update_ident_specimens <- function(colnam = NULL,
       new_ident <- TRUE
     }
 
-    if(nbr_new_taxa_ok & any(comp_values==TRUE) & nbr_queried_speci_ok & new_ident) {
+    if(nbr_new_taxa_ok & any(comp_values==TRUE) &
+       nbr_queried_speci_ok & new_ident) {
 
       modif_types <-
         paste0(colnames(as.matrix(comp_values))[which(as.matrix(comp_values))], sep="__")
@@ -3448,10 +3487,43 @@ update_ident_specimens <- function(colnam = NULL,
       # }
 
       # print(modif_types)
-      col_sel <- comp_values %>% dplyr::select_if(~sum(.) > 0) %>% colnames()
-      print(new_values %>% dplyr::select(!!col_sel) )
-      print(query_tax_all(id_search = queried_speci$id_diconame_n, show_synonymies = F) %>% dplyr::select(-full_name_used, -full_name_used2) %>% as.data.frame())
-      print(query_new_taxa %>% dplyr::select(-full_name_used, -full_name_used2) %>% as.data.frame())
+      # col_sel <-
+      #   comp_values %>%
+      #   rename(id_diconame_n = id_good_diconame) %>%
+      #   dplyr::select_if(~sum(.) > 0) %>%
+      #   colnames()
+      #
+      # sel_new_values <-
+      #   new_values %>%
+      #   rename(id_diconame_n = id_good_diconame) %>%
+      #   dplyr::select(!!col_sel)
+      #
+      # query_select <-
+      #   query_select %>%
+      #   dplyr::select(!!col_sel)
+      #
+      #
+      #
+      # comp_tb <-
+      #   tibble(cols = colnames(query_select),
+      #        current = unlist(query_select),
+      #        new = unlist(sel_new_values)) %>%
+      #   mutate(comp = ifelse(current == new, FALSE, TRUE)) %>%
+      #   mutate(col = ifelse(comp,
+      #                       kableExtra::cell_spec(comp, color = "red", bold = T))) %>%
+      #   knitr::kable(escape = F)
+      #
+      # htmlTable::htmlTable(comp_tb)
+      #
+      # print(new_values %>%
+      #         dplyr::select(!!col_sel) )
+      # print(query_tax_all(id_search = queried_speci$id_diconame_n,
+      #                     show_synonymies = F) %>%
+      #         dplyr::select(-full_name_used, -full_name_used2) %>%
+      #         as.data.frame())
+      # print(query_new_taxa %>%
+      #         dplyr::select(-full_name_used, -full_name_used2) %>%
+      #         as.data.frame())
 
       confirmed <- utils::askYesNo("Confirm this update?")
 
@@ -3480,7 +3552,7 @@ update_ident_specimens <- function(colnam = NULL,
         rs <-
           DBI::dbSendQuery(mydb, statement="UPDATE specimens SET id_diconame_n=$2, detd=$3, detm=$4, dety=$5, detby=$6, detvalue=$7, data_modif_d=$8, data_modif_m=$9, data_modif_y=$10 WHERE id_specimen = $1",
                            params=list(queried_speci$id_specimen, # $1
-                                       new_values$id_good_diconame, # $2
+                                       new_values$id_diconame_n, # $2
                                        as.numeric(new_values$detd), # $3
                                        as.numeric(new_values$detm), # $4
                                        as.numeric(new_values$dety), # $5
@@ -3510,10 +3582,111 @@ update_ident_specimens <- function(colnam = NULL,
     return(dplyr::tibble(collector = dplyr::tbl(mydb, "table_colnam") %>%
                            dplyr::filter(id_table_colnam == !!new_data_renamed$id_colnam) %>%
                            dplyr::select(colnam) %>%
-                           dplyr::collect(),
+                           dplyr::collect() %>%
+                           dplyr::pull(),
                   number = number))
 
   }
+}
+
+
+
+
+
+#' Internal function
+#'
+#' Compare two rows and provide cols that differ and html with coloring different values
+#'
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#'
+#' @param vec_1 tibble one row and same col numbers of vec_2
+#' @param vec_2 tibble one row and same col numbers of vec_1
+#'
+#' @return A list with one tibble of logical and a html table
+#' @export
+.comp_print_vec <- function(vec_1, vec_2) {
+  vec_2 <- vec_2 %>%
+    replace(., is.na(.), -9999)
+
+  vec_1 <- vec_1 %>%
+    replace(., is.na(.), -9999)
+
+  vec_2_miss <- vec_2 %>%
+    replace(., .==-9999, TRUE)
+
+  vec_1_miss <- vec_1 %>%
+    replace(., .==-9999, TRUE)
+
+  comp_val <-
+    vec_1 != vec_2
+
+  comp_val <-
+    as_tibble(comp_val)
+
+  comp_val <-
+    comp_val %>%
+    dplyr::select_if(~isTRUE(.))
+
+  if(ncol(comp_val)>1) {
+
+    if(any(colnames(vec_1) == "id_diconame_n")) {
+
+      old_tax <-
+        query_tax_all(id_search = vec_2$id_diconame_n,
+                      show_synonymies = F)
+
+      new_tax <-
+        query_tax_all(id_search = vec_1$id_diconame_n,
+                      show_synonymies = F)
+
+      vec_1 <-
+        vec_1 %>%
+        dplyr::left_join(new_tax %>%
+                           dplyr::select(tax_fam, tax_gen, tax_esp, id_n),
+                         by=c("id_diconame_n"="id_n"))
+
+      vec_2 <-
+        vec_2 %>%
+        dplyr::left_join(old_tax %>%
+                           dplyr::select(tax_fam, tax_gen, tax_esp, id_n),
+                         by=c("id_diconame_n"="id_n"))
+
+    }
+
+    comp_tb <-
+      tibble(cols = colnames(vec_1),
+             current = unlist(vec_1),
+             new = unlist(vec_2))
+
+    comp_tb_html <- comp_tb
+
+
+    comp_tb_html <-
+      comp_tb_html %>%
+      replace(., is.na(.), -9999) %>%
+      mutate(new :=
+               kableExtra::cell_spec(new, "html",
+                         color = ifelse(new != current, "red", "blue"))
+      ) %>%
+      replace(., .== -9999, NA)
+
+    comp_tb_html <-
+      comp_tb_html %>%
+      kableExtra::kable(format = "html", escape = F) %>%
+      kableExtra::kable_styling("striped", full_width = F)
+
+
+
+    return(list(comp_tb = comp_val, comp_html = comp_tb_html))
+
+  }else{
+
+    return(list(comp_tb = FALSE, comp_html = NA))
+  }
+
+  # print(comp_tb_html)
+
 }
 
 
