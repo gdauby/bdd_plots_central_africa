@@ -1258,28 +1258,62 @@ launch_stand_tax_app <- function() {
 #' @return The database is loaded
 #'
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
-call.mydb <- function(pass=NULL, user=NULL) {
+call.mydb <- function(pass=NULL, user=NULL, offline = FALSE) {
 
   if(!exists("mydb")) {
-    if(is.null(pass))
-      pass <- rstudioapi::askForPassword("Please enter your password")
-
-    if(is.null(user))
-      user <- rstudioapi::askForPassword("Please enter your user name")
 
 
-    # mydb <- DBI::dbConnect(RPostgres::Postgres(),dbname = 'plots_transects',
-    #                   host = 'localhost',
-    #                   port = 5432, # or any other port specified by your DBA
-    #                   user = 'postgres',
-    #                   password = pass)
+    if(!offline) {
 
-    mydb <- DBI::dbConnect(RPostgres::Postgres(),dbname = 'plots_transects',
-                           host = 'dg474899-001.dbaas.ovh.net',
-                           port = 35699, # or any other port specified by your DBA
-                           user = user,
-                           password = pass)
+      if(is.null(pass))
+        pass <- rstudioapi::askForPassword("Please enter your password")
 
+      if(is.null(user))
+        user <- rstudioapi::askForPassword("Please enter your user name")
+
+
+      # mydb <- DBI::dbConnect(RPostgres::Postgres(),dbname = 'plots_transects',
+      #                   host = 'localhost',
+      #                   port = 5432, # or any other port specified by your DBA
+      #                   user = 'postgres',
+      #                   password = pass)
+
+      mydb <- DBI::dbConnect(RPostgres::Postgres(),dbname = 'plots_transects',
+                             host = 'dg474899-001.dbaas.ovh.net',
+                             port = 35699, # or any other port specified by your DBA
+                             user = user,
+                             password = pass)
+
+    }else{
+
+      # mydb <-
+      #   list(data_liste_plots = dplyr::tbl(mydb, "data_liste_plots"),
+      #        data_liste_sub_plots = dplyr::tbl(mydb, "data_liste_sub_plots"),
+      #        table_colnam = dplyr::tbl(mydb, "table_colnam"),
+      #        subplotype_list = dplyr::tbl(mydb, "subplotype_list"),
+      #        specimens = dplyr::tbl(mydb, "specimens"),
+      #        diconame = dplyr::tbl(mydb, "diconame"),
+      #        data_individuals = dplyr::tbl(mydb, "data_individuals"),
+      #        data_link_specimens = dplyr::tbl(mydb, "data_link_specimens"),
+      #        subplotype_list = dplyr::tbl(mydb, "subplotype_list"),
+      #        traitlist = dplyr::tbl(mydb, "traitlist"),
+      #        data_traits_measures = dplyr::tbl(mydb, "data_traits_measures"))
+
+      mydb <-
+        list(data_liste_plots = data_liste_plots,
+             data_liste_sub_plots = data_liste_sub_plots,
+             table_colnam = table_colnam,
+             subplotype_list = subplotype_list,
+             specimens = specimens,
+             diconame = diconame,
+             data_individuals = data_individuals,
+             data_link_specimens = data_link_specimens,
+             subplotype_list = subplotype_list,
+             traitlist = traitlist,
+             data_traits_measures = data_traits_measures)
+
+
+    }
 
     assign("mydb", mydb, envir = .GlobalEnv)
 
@@ -1770,6 +1804,7 @@ query_plots <- function(team_lead = NULL,
     #
     #   collect()
 
+
     # getting taxo identification from specimens
     specimens_id_diconame <-
       dplyr::tbl(mydb, "specimens") %>%
@@ -1783,8 +1818,8 @@ query_plots <- function(team_lead = NULL,
     # getting correct id_diconame considering synonymies
     specimens_linked <-
       specimens_id_diconame %>%
-      dplyr::left_join(diconames_id, by=c("id_diconame_n"="id_n")) %>%
-      dplyr::rename(id_dico_name_specimen=id_good_n) %>%
+      dplyr::left_join(diconames_id, by = c("id_diconame_n" = "id_n")) %>%
+      dplyr::rename(id_dico_name_specimen = id_good_n) %>%
       dplyr::select(id_specimen, id_dico_name_specimen)
 
     # test <-
@@ -1838,22 +1873,44 @@ query_plots <- function(team_lead = NULL,
     res_individuals_full <-
       res_individuals_full %>%
       dplyr::filter(id_table_liste_plots_n %in% !!res$id_liste_plots) %>%  #filtering for selected plots
-      dplyr::left_join(specimens_linked, by=c("id_specimen"="id_specimen")) %>% # adding id_diconame for specimens
-      dplyr::mutate(id_diconame_final=ifelse(!is.na(id_dico_name_specimen),
-                                             id_dico_name_specimen, id_diconame_n)) %>% #### selecting id_dico_name from specimens if any
-      dplyr::left_join(dplyr::tbl(mydb, "diconame") %>%
-                         dplyr::select(-data_modif_d, -data_modif_m, -data_modif_y),
-                       by=c("id_diconame_final"="id_n")) ## getting taxa information based on id_diconame_final
+      dplyr::left_join(diconames_id %>%
+                         dplyr::rename(id_diconame_good_n = id_good_n),
+                       by = c("id_diconame_n" = "id_n")) %>%
+      dplyr::left_join(specimens_linked, by = c("id_specimen" = "id_specimen")) %>% # adding id_diconame for specimens
+      dplyr::mutate(id_diconame_final = ifelse(
+        !is.na(id_dico_name_specimen),
+        id_dico_name_specimen,
+        id_diconame_good_n
+      )) %>% #### selecting id_dico_name from specimens if any
+      dplyr::left_join(
+        dplyr::tbl(mydb, "diconame") %>%
+          dplyr::select(-data_modif_d, -data_modif_m, -data_modif_y),
+        by = c("id_diconame_final" = "id_n")
+      ) ## getting taxa information based on id_diconame_final
 
     res_individuals_full <-
       res_individuals_full %>%
-      dplyr::select(-photo_tranche, -liane, -dbh, -dbh_height, -tree_height, -branch_height, -branchlet_height,
-                    -crown_spread, -observations,  -observations_census_2, -id_census2, -dbh_census2, -id_specimen_old)
+      dplyr::select(
+        -photo_tranche,
+        -liane,
+        -dbh,
+        -dbh_height,
+        -tree_height,
+        -branch_height,
+        -branchlet_height,-crown_spread,
+        -observations,
+        -observations_census_2,
+        -id_census2,
+        -dbh_census2,
+        -id_specimen_old
+      )
 
     if(!is.null(tag)) {
+
       res_individuals_full <-
         res_individuals_full %>%
-        dplyr::filter(ind_num_sous_plot==tag)
+        dplyr::filter(ind_num_sous_plot == tag)
+
     }
 
     res_individuals_full <-
@@ -1865,7 +1922,7 @@ query_plots <- function(team_lead = NULL,
     res_individuals_full <-
       res_individuals_full %>%
       dplyr::left_join(selec_plot_tables,
-                       by=c("id_table_liste_plots_n"="id_liste_plots"))
+                       by = c("id_table_liste_plots_n" = "id_liste_plots"))
 
     all_traits <- traits_list()
 
@@ -1878,10 +1935,13 @@ query_plots <- function(team_lead = NULL,
 
 
     for (i in 1:length(all_traits_list)) {
+
       res_individuals_full <-
         res_individuals_full %>%
         dplyr::left_join(all_traits_list[[i]] %>%
-                    dplyr::select(-id_old), by=c("id_n"="id_n"))
+                           dplyr::select(-id_old),
+                         by = c("id_n" = "id_n"))
+
     }
 
     res <-
@@ -1901,9 +1961,13 @@ query_plots <- function(team_lead = NULL,
   # dbDisconnect(mydb)
 
   if(show_multiple_census & !extract_individuals) {
+
     return(list(res, census_features))
+
   }else{
+
     return(res)
+
   }
 }
 
@@ -1957,9 +2021,11 @@ query_subplots <- function(team_lead = NULL,
   all_sub_type <-
     sub_plot_data %>%
     dplyr::distinct(id_type_sub_plot) %>%
-    dplyr::left_join(dplyr::tbl(mydb, "subplotype_list") %>%
-                       dplyr::select(type, valuetype, typedescription, id_subplotype),
-                     by=c("id_type_sub_plot"="id_subplotype")) %>%
+    dplyr::left_join(
+      dplyr::tbl(mydb, "subplotype_list") %>%
+        dplyr::select(type, valuetype, typedescription, id_subplotype),
+      by = c("id_type_sub_plot" = "id_subplotype")
+    ) %>%
     dplyr::filter(type != "census")
 
   if(!is.null(subtype)) {
@@ -1975,13 +2041,21 @@ query_subplots <- function(team_lead = NULL,
     dplyr::filter(id_type_sub_plot %in% !!(all_sub_type %>%
                                              dplyr::pull(id_type_sub_plot))) %>%
     dplyr::left_join(all_sub_type,
-              by=c("id_type_sub_plot"="id_type_sub_plot")) %>%
+                     by = c("id_type_sub_plot" = "id_type_sub_plot")) %>%
     dplyr::collect() %>%
-    dplyr::left_join(queried_plots %>%
-                dplyr::select(plot_name, id_liste_plots),
-              by=c("id_table_liste_plots"="id_liste_plots")) %>%
-    dplyr::select(plot_name, id_table_liste_plots, year, month, year,
-                  type, valuetype, typevalue)
+    dplyr::left_join(
+      queried_plots %>%
+        dplyr::select(plot_name, id_liste_plots),
+      by = c("id_table_liste_plots" = "id_liste_plots")
+    ) %>%
+    dplyr::select(plot_name,
+                  id_table_liste_plots,
+                  year,
+                  month,
+                  year,
+                  type,
+                  valuetype,
+                  typevalue)
 
 }
 
@@ -2085,8 +2159,8 @@ query_tax_all <- function(genus_searched = NULL,
 
     specimens_linked <-
       specimens_id_diconame %>%
-      dplyr::left_join(diconames_id, by=c("id_diconame_n"="id_n")) %>%
-      dplyr::rename(id_dico_name_specimen=id_good_n) %>%
+      dplyr::left_join(diconames_id, by = c("id_diconame_n" = "id_n")) %>%
+      dplyr::rename(id_dico_name_specimen = id_good_n) %>%
       dplyr::select(id_specimen, id_dico_name_specimen)
 
     selec_plot_tables <-
@@ -2109,16 +2183,29 @@ query_tax_all <- function(genus_searched = NULL,
 
     res_individuals <-
       dplyr::tbl(mydb, "data_individuals") %>%
-      dplyr::select(id_n, id_diconame_n, id_table_liste_plots_n, id_specimen, strate_cat, position_transect) %>%
+      dplyr::select(
+        id_n,
+        id_diconame_n,
+        id_table_liste_plots_n,
+        id_specimen,
+        strate_cat,
+        position_transect
+      ) %>%
       # dplyr::filter(id_table_liste_plots_n %in% selec_plot_tables$id_liste_plots) %>%  #filtering for selected plots
-      dplyr::left_join(specimens_linked, by=c("id_specimen"="id_specimen")) %>% # adding id_diconame for specimens
-      dplyr::left_join(selec_plot_tables, by=c("id_table_liste_plots_n"="id_liste_plots")) %>%  #adding metada information
-      dplyr::mutate(id_diconame_final=ifelse(!is.na(id_dico_name_specimen),
-                                             id_dico_name_specimen, id_diconame_n)) %>% #### selecting id_dico_name from specimens if any
-      dplyr::left_join(dplyr::tbl(mydb, "diconame") %>%
-                         dplyr::select(-data_modif_d, -data_modif_m, -data_modif_y),
-                       by=c("id_diconame_final"="id_n")) %>% ## getting taxa information based on id_diconame_final
-        dplyr::filter(id_diconame_final %in% !!res$id_n) ## filtering selected taxa
+      dplyr::left_join(specimens_linked, by = c("id_specimen" = "id_specimen")) %>% # adding id_diconame for specimens
+      dplyr::left_join(selec_plot_tables,
+                       by = c("id_table_liste_plots_n" = "id_liste_plots")) %>%  #adding metada information
+      dplyr::mutate(id_diconame_final = ifelse(
+        !is.na(id_dico_name_specimen),
+        id_dico_name_specimen,
+        id_diconame_n
+      )) %>% #### selecting id_dico_name from specimens if any
+      dplyr::left_join(
+        dplyr::tbl(mydb, "diconame") %>%
+          dplyr::select(-data_modif_d,-data_modif_m,-data_modif_y),
+        by = c("id_diconame_final" = "id_n")
+      ) %>% ## getting taxa information based on id_diconame_final
+      dplyr::filter(id_diconame_final %in% !!res$id_n) ## filtering selected taxa
 
     all_traits <- traits_list()
 
@@ -2754,6 +2841,8 @@ add_subplot_features <- function(new_data,
                                  id_plot_name_corresp = "id_table_liste_plots_n",
                                  subplottype_field,
                                  add_data = FALSE) {
+
+  if(!exists("mydb")) call.mydb()
 
   for (i in 1:length(subplottype_field)) if(!any(colnames(new_data)==subplottype_field[i]))
     stop(paste("subplottype_field provide not found in new_data", subplottype_field[i]))
@@ -7561,15 +7650,19 @@ add_specimens <- function(new_data ,
 #'
 #' @export
 .rename_data <- function(dataset, col_old, col_new) {
-  if(length(col_old)!=length(col_new)) stop("number of new columns names different of number of selected column names")
+  if (length(col_old) != length(col_new))
+    stop("number of new columns names different of number of selected column names")
 
   for (i in 1:length(col_old)) {
-    if(any(colnames(dataset)==col_old[i])){
+    if (any(colnames(dataset) == col_old[i])) {
       dataset <-
         dataset %>%
         dplyr::rename_at(dplyr::vars(col_old[i]), ~ col_new[i])
-    }else{
-      stop(paste("Column name provided not found in provided new dataset", col_old[i]))
+    } else{
+      stop(paste(
+        "Column name provided not found in provided new dataset",
+        col_old[i]
+      ))
     }
   }
   return(dataset)
