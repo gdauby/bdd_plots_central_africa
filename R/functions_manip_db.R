@@ -2225,6 +2225,13 @@ query_tax_all <- function(genus_searched = NULL,
     }
   }
 
+
+  if(nrow(res) < 20)
+    as_tibble(cbind(columns = names(res), record = t(res))) %>%
+    kableExtra::kable(format = "html", escape = F) %>%
+    kableExtra::kable_styling("striped", full_width = F) %>%
+    print()
+
   return(dplyr::as_tibble(res))
 }
 
