@@ -2,15 +2,16 @@
 % Please edit documentation in R/functions_manip_db.R
 \name{add_subplot_features}
 \alias{add_subplot_features}
-\title{Add an observation in trait measurement table}
+\title{Add an observation in subplot_features table}
 \usage{
 add_subplot_features(
   new_data,
   col_names_select,
   col_names_corresp,
   collector_field = NULL,
-  plot_name_field,
+  plot_name_field = NULL,
   id_plot_name = NULL,
+  id_plot_name_corresp = "id_table_liste_plots_n",
   subplottype_field,
   add_data = FALSE
 )
@@ -36,7 +37,7 @@ add_subplot_features(
 list of tibbles that should be/have been added
 }
 \description{
-Add a trait measure in trait measurement table
+Add a trait measure in subplot_features table
 }
 \author{
 Gilles Dauby, \email{gilles.dauby@ird.fr}

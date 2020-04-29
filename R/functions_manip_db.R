@@ -9910,7 +9910,21 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
 
 
 
-
+#' Growth computing for multiple census
+#'
+#' Growth computing for multiple census
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#'
+#' @param dataset tibble, ouput of query_plots
+#' @param metadata tibble, ouput of query_plots
+#' @param mindbh numeric see http://ctfs.si.edu/Public/CTFSRPackage/index.php/web/topics/growth~slash~growth.r/trim.growth
+#' @param err.limit integer any measure of second diameter higher than err.limit standard deviation below the first measure will be excluded
+#' @param maxgrow numeric any growth in mm/year higher than maxgrow will be excluded
+#' @param method string either 'I' or 'E'
+#'
+#' @return tibble
+#' @export
 growth_computing <- function(dataset,
                              metadata,
                              mindbh = NULL,

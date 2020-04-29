@@ -8,12 +8,12 @@ add_entry_dico_name(
   tax_gen = NULL,
   tax_esp = NULL,
   tax_fam = NULL,
+  full_name = NULL,
   tax_rank1 = NULL,
   tax_name1 = NULL,
+  synonym_of = NULL,
   detvalue = NULL,
-  morphocat = NULL,
-  full_name = NULL,
-  synonym_of = NULL
+  morphocat = NULL
 )
 }
 \arguments{
@@ -23,17 +23,17 @@ add_entry_dico_name(
 
 \item{tax_fam}{string family name}
 
+\item{full_name}{string full name : genus + species + authors}
+
 \item{tax_rank1}{string tax_rank1 name}
 
 \item{tax_name1}{string tax_name1 name}
 
+\item{synonym_of}{list if the new entry should be put in synonymy with an existing taxa, add in a list at least one values to identify to which taxa it will be put in synonymy: genus, species or id}
+
 \item{detvalue}{integer detvalue code}
 
 \item{morphocat}{integer morphocat code}
-
-\item{full_name}{string full name : genus + species + authors}
-
-\item{synonym_of}{list if the new entry should be put in synonymy with an existing taxa, add in a list at least one values to identify to which taxa it will be put in synonymy: genus, species or id}
 }
 \value{
 A tibble

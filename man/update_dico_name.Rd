@@ -8,25 +8,18 @@ update_dico_name(
   genus_searched = NULL,
   tax_esp_searched = NULL,
   tax_fam_searched = NULL,
+  id_searched = NULL,
   new_tax_gen = NULL,
   new_tax_esp = NULL,
-  new_full_name_auth = NULL,
   new_tax_fam = NULL,
   new_tax_rank1 = NULL,
   new_tax_name1 = NULL,
-  new_taxook = NULL,
-  new_morphocat = NULL,
-  new_detvalue = NULL,
-  new_full_name_no_auth = NULL,
-  new_full_name_used = NULL,
-  new_full_name_used2 = NULL,
-  new_id_diconame_good = NULL,
-  id_search = NULL,
   ask_before_update = TRUE,
   add_backup = TRUE,
   show_results = TRUE,
-  no_synonym_modif = FALSE,
-  synonym_of = NULL
+  cancel_synonymy = FALSE,
+  synonym_of = NULL,
+  exact_match = FALSE
 )
 }
 \arguments{
@@ -40,13 +33,21 @@ update_dico_name(
 
 \item{new_tax_esp}{string new species name}
 
-\item{new_full_name_auth}{string new full name with authors}
-
 \item{new_tax_fam}{string new family name}
 
 \item{new_tax_rank1}{string new rank}
 
 \item{new_tax_name1}{string new name of rank1}
+
+\item{ask_before_update}{logical TRUE by default, ask for confirmation before updating}
+
+\item{add_backup}{logical TRUE by default, add backup of modified data}
+
+\item{show_results}{logical TRUE by default, show the data that has been modified}
+
+\item{synonym_of}{list if the selected taxa should be put in synonymy with an existing taxa, add in a list at least one values to identify to which taxa it will be put in synonymy: genus, species or id}
+
+\item{new_full_name_auth}{string new full name with authors}
 
 \item{new_taxook}{integer new tax code}
 
@@ -64,15 +65,7 @@ update_dico_name(
 
 \item{id_search}{integer id of the taxa searched}
 
-\item{ask_before_update}{logical TRUE by default, ask for confirmation before updating}
-
-\item{add_backup}{logical TRUE by default, add backup of modified data}
-
-\item{show_results}{logical TRUE by default, show the data that has been modified}
-
 \item{no_synonym_modif}{logical FALSE by default, if TRUE and if the selected taxa is considered as synonym, then this will be modified and the selected taxa will not longer be a synonym}
-
-\item{synonym_of}{list if the selected taxa should be put in synonymy with an existing taxa, add in a list at least one values to identify to which taxa it will be put in synonymy: genus, species or id}
 }
 \value{
 No return value individuals updated
