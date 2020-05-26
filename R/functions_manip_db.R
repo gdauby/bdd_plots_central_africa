@@ -1255,13 +1255,14 @@ launch_stand_tax_app <- function() {
 #' @param pass string
 #' @param user string
 #'
+#' @importFrom rstudioapi askForPassword
+#' @importFrom RPostgres Postgres
 #' @return The database is loaded
-#'
+#' #'
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
 call.mydb <- function(pass=NULL, user=NULL, offline = FALSE) {
 
   if(!exists("mydb")) {
-
 
     if(!offline) {
 
@@ -1334,6 +1335,7 @@ call.mydb <- function(pass=NULL, user=NULL, offline = FALSE) {
 #' Provide list of countries where plots occur
 #'
 #' @return A tibble of all countries
+#' @import dplyr
 #'
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
 #' @export
@@ -1369,7 +1371,7 @@ country_list <- function() {
 #'
 #' @return A tibble of all province
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
-#'
+#' @importFrom rlang enquo
 #' @export
 province_list <- function(country=NULL) {
   if(!exists("mydb")) call.mydb()
@@ -1414,7 +1416,7 @@ method_list <- function() {
   nn <-
     dplyr::tbl(mydb, "data_liste_plots") %>%
     dplyr::group_by(method) %>%
-    dplyr::count() %>%
+    dplyr::summarise(n = n()) %>%
     dplyr::mutate(n=as.integer(n)) %>%
     dplyr::collect()
 
@@ -1451,10 +1453,12 @@ subplot_list <- function() {
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
 #' @export
 traits_list <- function() {
+
   all_colnames_ind <-
     dplyr::tbl(mydb, "traitlist") %>%
     dplyr::select(trait, id_trait, traitdescription) %>%
     dplyr::collect()
+
   return(all_colnames_ind)
 }
 
@@ -1489,6 +1493,11 @@ traits_list <- function() {
 #' @param collapse_multiple_val logical whether multiple traits measures should be collapsed (resulting values as character, separated by dash)
 #'
 #'
+#' @importFrom cli cli_alert_warning cli_rule cli_alert_info
+#' @importFrom DBI dbSendQuery dbFetch dbClearResult dbWriteTable
+#' @importFrom spData world
+#' @importFrom stringr str_flatten str_trim str_extract
+#'
 #' @return A tibble of plots or individuals if extract_individuals is TRUE
 #' @export
 query_plots <- function(team_lead = NULL,
@@ -1513,7 +1522,28 @@ query_plots <- function(team_lead = NULL,
 
   if(!exists("mydb")) call.mydb()
 
+  if(!is.null(id_individual))
+  {
+
+    cli::cli_rule(left = "Extracting from queried individuals - id_individual")
+    extract_individuals <- TRUE
+
+    if(!is.null(id_plot))
+      cli::cli_alert_warning("id_plot not null replaced by id_plot of the id_individuals")
+
+    id_plot <-
+      tbl(mydb, "data_individuals") %>%
+      dplyr::filter(id_n == id_individual) %>%
+      dplyr::select(id_table_liste_plots_n) %>%
+      dplyr::collect() %>%
+      pull()
+
+
+  }
+
+
   if(is.null(id_plot)) {
+
     query <- 'SELECT * FROM data_liste_plots WHERE MMM'
 
     if(!is.null(team_lead))
@@ -1530,7 +1560,7 @@ query_plots <- function(team_lead = NULL,
     }
 
     if(!is.null(locality_name)) {
-      if(length(locality_name)==1) {
+      if(length(locality_name) == 1) {
         query <- gsub(pattern = "MMM", replacement = paste0(" locality_name ILIKE '%", locality_name, "%' AND MMM"), x=query)
       }else{
         query <- gsub(pattern = "MMM", replacement = paste0("locality_name IN ('", paste(locality_name, collapse = "', '"), "') AND MMM"), x=query)
@@ -1538,20 +1568,60 @@ query_plots <- function(team_lead = NULL,
     }
 
     if(!is.null(province)) {
-      if(length(province)==1) {
+      if(length(province) == 1) {
         query <- gsub(pattern = "MMM", replacement = paste0(" province ILIKE '%", province, "%' AND MMM"), x=query)
       }else{
         query <- gsub(pattern = "MMM", replacement = paste0("province IN ('", paste(province, collapse = "', '"), "') AND MMM"), x=query)
       }
     }
 
-    if(!is.null(method)) {
-        if(length(method)==1) {
-          query <- gsub(pattern = "MMM", replacement = paste0(" method ILIKE '%", method, "%' AND MMM"), x=query)
-        }else{
-          query <- gsub(pattern = "MMM", replacement = paste0("method IN ('", paste(method, collapse = "', '"), "') AND MMM"), x=query)
-        }
+    if (!is.null(method)) {
+      query_method <- 'SELECT * FROM methodslist WHERE MMM'
+      if (length(method) == 1) {
+        query_method <-
+          gsub(
+            pattern = "MMM",
+            replacement = paste0(" method ILIKE '%", method, "%' AND MMM"),
+            x = query_method
+          )
+
+      } else{
+        query_method <-
+          gsub(
+            pattern = "MMM",
+            replacement = paste0("method IN ('", paste(method, collapse = "', '"), "') AND MMM"),
+            x = query_method
+          )
+
       }
+
+      query_method <-
+        gsub(pattern = "AND MMM", replacement = "", query_method)
+
+      rs_meth <- DBI::dbSendQuery(mydb, query_method)
+      res_meth <- DBI::dbFetch(rs_meth)
+      DBI::dbClearResult(rs_meth)
+      res_meth <- dplyr::as_tibble(res_meth)
+
+      if (nrow(res_meth) == 0) {
+        warning("no method selected!")
+
+      } else{
+        message("\n method(s) selected")
+        print(res_meth)
+
+        query <-
+          gsub(
+            pattern = "MMM",
+            replacement = paste0(
+              "id_method IN ('",
+              paste(res_meth$id_method, collapse = "', '"),
+              "') AND MMM"
+            ),
+            x = query
+          )
+      }
+    }
 
     if(!is.null(plot_name)) {
       if(length(plot_name)==1) {
@@ -1573,6 +1643,8 @@ query_plots <- function(team_lead = NULL,
       res %>%
       dplyr::select(-id_old)
   }else{
+
+    cli::cli_rule(left = "Extracting from queried plot - id_plot")
 
     res <-
       dplyr::tbl(mydb, "data_liste_plots") %>%
@@ -1621,7 +1693,7 @@ query_plots <- function(team_lead = NULL,
     dplyr::collect()
 
   ## if any plots features others than census, adding them to metadata
-  if(nrow(all_sub_type)>0) {
+  if(nrow(all_sub_type) > 0) {
     for (i in 1:nrow(all_sub_type)) {
 
       id_sub_plot <-
@@ -1668,9 +1740,11 @@ query_plots <- function(team_lead = NULL,
           # mutate(sum_sub_plot = first(typevalue_char)) %>%
           # select(id_table_liste_plots, sum_sub_plot)
           dplyr::summarise(sum_sub_plot =
-                             ifelse(length(unique(typevalue_char)) > 1,
-                                    stringr::str_flatten(typevalue_char, collapse = "|"),
-                                    typevalue_char))
+                             ifelse(
+                               length(unique(typevalue_char)) > 1,
+                               stringr::str_flatten(typevalue_char, collapse = "|"),
+                               typevalue_char
+                             ))
         subplot_name <-
           all_sub_type %>%
           dplyr::slice(i) %>%
@@ -1687,14 +1761,22 @@ query_plots <- function(team_lead = NULL,
         dplyr::left_join(summarized_subplot_data, by = c("id_liste_plots"="id_table_liste_plots"))
 
     }
+  } else {
+
+    cli::cli_alert_info("No sub_type (other than census) for selected plot(s)")
+
   }
 
   res <-
     res %>%
     dplyr::select(-date)
 
-  if(nrow(census_features)>1) {
+  if(nrow(census_features) > 1) {
+    cli::cli_rule(left = "Attaching census informations")
+    cli::cli_alert_info("Number of census found : {unique(pull(census_features, typevalue))}")
+
     for (i in 1:nrow(dplyr::distinct(census_features, typevalue))) {
+
 
       census_features_selected <-
         census_features %>%
@@ -1713,12 +1795,13 @@ query_plots <- function(team_lead = NULL,
         dplyr::mutate(date_julian = date::as.date(date))
 
 
-
       res <-
         res %>%
-        dplyr::left_join(census_features_selected %>%
-                           dplyr::select(id_table_liste_plots, date, date_julian),
-                         by = c("id_liste_plots"="id_table_liste_plots"))
+        dplyr::left_join(
+          census_features_selected %>%
+            dplyr::select(id_table_liste_plots, date, date_julian),
+          by = c("id_liste_plots" = "id_table_liste_plots")
+        )
 
       date_name <- paste0("date_census_", i)
       date_name_enquo <-
@@ -1745,12 +1828,17 @@ query_plots <- function(team_lead = NULL,
 
   if(map) {
 
+    cli::cli_rule(left = "Mapping")
+
     world_map <- spData::world
 
     if(any(is.na(res$ddlat)) | any(is.na(res$ddlon))) {
-      cat("\n removing following plots because missing coordinates")
-      print(res %>%
-              dplyr::filter(is.na(ddlat), is.na(ddlon)))
+      not_georef_plot <-
+        dplyr::filter(res, is.na(ddlat), is.na(ddlon)) %>%
+        dplyr::pull(plot_name)
+
+      cli::cli_alert_warning("removing following plots because missing coordinates: {not_georef_plot}")
+
     }
 
     res <-
@@ -1761,7 +1849,7 @@ query_plots <- function(team_lead = NULL,
     data_sf <- sf::st_as_sf(res, coords = c("ddlon", "ddlat"), crs = 4326)
     bbox_data <- sf::st_bbox(data_sf)
 
-    if(map_type=="ggplot") {
+    if(map_type == "ggplot") {
 
       outputmap <-
         ggplot2::ggplot() +
@@ -1789,14 +1877,16 @@ query_plots <- function(team_lead = NULL,
 
     }
 
-    if(map_type=="mapview") {
+    if(map_type == "mapview") {
       map_types <- c("Esri.NatGeoWorldMap", "Esri.WorldImagery", "OpenStreetMap.DE",
                      "Esri.WorldPhysical")
 
       print(map_type)
       outputmap <-  mapview::mapview(data_sf, map.types = map_types)
     }
+
     print(outputmap)
+
   }
 
   if(extract_individuals) {
@@ -1941,7 +2031,7 @@ query_plots <- function(team_lead = NULL,
         collapse_multiple_val = collapse_multiple_val
       )
 
-    if(length(all_traits_list)>0) {
+    if (length(all_traits_list) > 0) {
       for (i in 1:length(all_traits_list)) {
         res_individuals_full <-
           res_individuals_full %>%
@@ -1963,10 +2053,15 @@ query_plots <- function(team_lead = NULL,
       dplyr::arrange(id_n)
   }
 
-  if(remove_ids)
+  if(remove_ids) {
+
+    cli::cli_alert_warning("ids removed - remove_ids = {remove_ids} ")
+
     res <-
-    res %>%
-    dplyr::select_at(which(!grepl("id_", colnames(res))))
+      res %>%
+      dplyr::select_at(which(!grepl("id_", colnames(res))))
+  }
+
   # dbDisconnect(mydb)
 
   if(show_multiple_census & !extract_individuals) {
@@ -2008,24 +2103,26 @@ query_subplots <- function(team_lead = NULL,
                         subtype = NULL) {
 
   queried_plots <-
-    query_plots(team_lead = team_lead,
-              plot_name = plot_name,
-              tag = tag,
-              country = country, province = province,
-              locality_name = locality_name, method = method,
-              remove_ids = FALSE
-                )
+    query_plots(
+      team_lead = team_lead,
+      plot_name = plot_name,
+      tag = tag,
+      country = country,
+      province = province,
+      locality_name = locality_name,
+      method = method,
+      remove_ids = FALSE
+    )
 
-  message(paste0(nrow(queried_plots), " plots selected"))
+  cli::cli_alert_info("{nrow(queried_plots)} plots selected")
 
   sub_plot_data <-
     dplyr::tbl(mydb, "data_liste_sub_plots") %>%
     dplyr::filter(id_table_liste_plots %in% !!queried_plots$id_liste_plots)
 
-  message("subplot_features found for ", nrow(dplyr::distinct(sub_plot_data %>%
+  cli::cli_alert_info("subplot_features found for {nrow(dplyr::distinct(sub_plot_data %>%
                                                          dplyr::collect(),
-                                                       id_table_liste_plots)),
-          " plots")
+                                                       id_table_liste_plots))} plots")
 
   all_sub_type <-
     sub_plot_data %>%
@@ -2034,14 +2131,15 @@ query_subplots <- function(team_lead = NULL,
       dplyr::tbl(mydb, "subplotype_list") %>%
         dplyr::select(type, valuetype, typedescription, id_subplotype),
       by = c("id_type_sub_plot" = "id_subplotype")
-    ) %>%
-    dplyr::filter(type != "census")
+    )
+  # %>%
+  #   dplyr::filter(type != "census")
 
-  if(!is.null(subtype)) {
+  if (!is.null(subtype)) {
     all_sub_type <-
       all_sub_type %>%
       dplyr::filter(grepl(subtype, type))
-    message("Selected subplot features:")
+    cli::cli_alert_info("Selected subplot features:")
     print(all_sub_type)
   }
 
@@ -2065,6 +2163,8 @@ query_subplots <- function(team_lead = NULL,
                   type,
                   valuetype,
                   typevalue)
+
+  return(extracted_data)
 
 }
 
@@ -5160,6 +5260,14 @@ add_individuals <- function(new_data ,
     new_data %>%
     dplyr::rename_at(dplyr::vars(col_names_select[id_col]), ~ col_names_corresp[id_col])
 
+  new_data_renamed <-
+    .rename_data(dataset = new_data_renamed,
+                 col_old = col_names_select,
+                 col_new = col_names_corresp)
+
+  new_data_renamed <-
+    new_data_renamed %>%
+    dplyr::select(all_of(col_names_corresp))
 
   # new_data_renamed <-
   #   new_data %>%
@@ -5223,10 +5331,7 @@ add_individuals <- function(new_data ,
   col_names_corresp <-
     col_names_corresp[-id_col]
 
-  new_data_renamed <-
-    .rename_data(dataset = new_data_renamed,
-                 col_old = col_names_select,
-                 col_new = col_names_corresp)
+
 
   col_names_corresp <-
     c(col_names_corresp, "id_table_liste_plots_n")
@@ -5285,7 +5390,7 @@ add_individuals <- function(new_data ,
 
   ## checking DBH
   # if(!any(colnames(new_data_renamed)=="dbh")) stop("dbh column missing")
-  if(any(is.na(new_data_renamed$dbh))) {
+  if(any(is.na(names(new_data_renamed) == "dbh"))) {
 
     message("\n dbh and others traits measure should be added independantly using add_traits_measures function")
 
@@ -5409,7 +5514,7 @@ add_individuals <- function(new_data ,
 
   }
 
-  if(dplyr::pull(method)=="1ha-IRD") {
+  if (dplyr::pull(method) == "1ha-IRD" | dplyr::pull(method) == " ") {
     if (!any(colnames(new_data_renamed) == "ind_num_sous_plot"))
       stop("ind_num_sous_plot column missing - Tag individual")
 
@@ -5438,10 +5543,12 @@ add_individuals <- function(new_data ,
         by = c("id_table_liste_plots_n" = "id_liste_plots")
       )
 
-    warning("\n Duplicated tags in some plots")
-    print(duplicated_tags)
+    if(nrow(duplicated_tags) > 0) {
+      warning("\n Duplicated tags in some plots")
+      print(duplicated_tags)
 
-    write_excel_csv(duplicated_tags, "duplicated_tags.csv")
+      readr::write_excel_csv(duplicated_tags, "duplicated_tags.csv")
+    }
   }
 
   ## checking ind_num_sous_plot
@@ -5573,7 +5680,8 @@ add_individuals <- function(new_data ,
 
     confirmed <- utils::askYesNo("Confirm adding?")
 
-    if(confirmed) DBI::dbWriteTable(mydb, "data_individuals", new_data_renamed, append = TRUE, row.names = FALSE)
+    if(confirmed)
+      DBI::dbWriteTable(mydb, "data_individuals", new_data_renamed, append = TRUE, row.names = FALSE)
 
   }
 
@@ -6867,13 +6975,16 @@ add_traits_measures <- function(new_data,
                                 traits_field,
                                 add_data = FALSE) {
 
-  for (i in 1:length(traits_field)) if(!any(colnames(new_data)==traits_field[i]))
-    stop(paste("traits_field provide not found in new_data", traits_field[i]))
+  for (i in 1:length(traits_field))
+    if (!any(colnames(new_data) == traits_field[i]))
+      stop(paste("traits_field provide not found in new_data", traits_field[i]))
 
-  if(!is.null(col_names_select) & !is.null(col_names_corresp)) {
+  if (!is.null(col_names_select) & !is.null(col_names_corresp)) {
     new_data_renamed <-
-      .rename_data(dataset = new_data, col_old = col_names_select, col_new = col_names_corresp)
-  }else{
+      .rename_data(dataset = new_data,
+                   col_old = col_names_select,
+                   col_new = col_names_corresp)
+  } else{
     new_data_renamed <- new_data
   }
 
@@ -6885,34 +6996,37 @@ add_traits_measures <- function(new_data,
   if(nrow(new_data_renamed)==0)
     stop("no values for selected trait(s)")
 
-  if(!any(col_names_corresp=="day")) {
+  if (!any(col_names_corresp == "day")) {
     warning("no information collection day provided")
     new_data_renamed <-
       new_data_renamed %>%
       tibble::add_column(day = NA)
-    if(is.null(plot_name_field) & is.null(individual_plot_field) &
-       is.null(id_specimen) & is.null(id_plot_name) &
-       is.null(id_tag_plot)) stop("no links provided (either plot, specimen or tag), thus date is mandatory")
+    if (is.null(plot_name_field) & is.null(individual_plot_field) &
+        is.null(id_specimen) & is.null(id_plot_name) &
+        is.null(id_tag_plot))
+      stop("no links provided (either plot, specimen or tag), thus date is mandatory")
   }
 
-  if(!any(col_names_corresp=="year")) {
+  if (!any(col_names_corresp == "year")) {
     warning("no information collection year provided")
     new_data_renamed <-
       new_data_renamed %>%
       tibble::add_column(year = NA)
-    if(is.null(plot_name_field) & is.null(individual_plot_field) &
-       is.null(id_specimen) & is.null(id_plot_name) &
-       is.null(id_tag_plot)) stop("no links provided (either plot, specimen or tag), thus date is mandatory")
+    if (is.null(plot_name_field) & is.null(individual_plot_field) &
+        is.null(id_specimen) & is.null(id_plot_name) &
+        is.null(id_tag_plot))
+      stop("no links provided (either plot, specimen or tag), thus date is mandatory")
   }
 
-  if(!any(col_names_corresp=="month")) {
+  if (!any(col_names_corresp == "month")) {
     warning("no information collection month provided")
     new_data_renamed <-
       new_data_renamed %>%
       tibble::add_column(month = NA)
-    if(is.null(plot_name_field) & is.null(individual_plot_field) &
-       is.null(id_specimen) & is.null(id_plot_name) &
-       is.null(id_tag_plot)) stop("no links provided (either plot, specimen or tag), thus date is mandatory")
+    if (is.null(plot_name_field) & is.null(individual_plot_field) &
+        is.null(id_specimen) & is.null(id_plot_name) &
+        is.null(id_tag_plot))
+      stop("no links provided (either plot, specimen or tag), thus date is mandatory")
   }
 
   if(!any(col_names_corresp=="country")) {
@@ -6926,35 +7040,37 @@ add_traits_measures <- function(new_data,
 
   }
 
-  if(!any(col_names_corresp=="decimallatitude")) {
+  if (!any(col_names_corresp == "decimallatitude")) {
     warning("no decimallatitude provided")
     new_data_renamed <-
       new_data_renamed %>%
       tibble::add_column(decimallatitude = NA) %>%
       dplyr::mutate(decimallatitude = as.double(decimallatitude))
-    if(is.null(plot_name_field) & is.null(individual_plot_field) &
-       is.null(id_specimen) & is.null(id_plot_name) &
-       is.null(id_tag_plot)) stop("no links provided (either plot, specimen or tag), thus decimallatitude is mandatory")
+    if (is.null(plot_name_field) & is.null(individual_plot_field) &
+        is.null(id_specimen) & is.null(id_plot_name) &
+        is.null(id_tag_plot))
+      stop("no links provided (either plot, specimen or tag), thus decimallatitude is mandatory")
   }
 
-  if(!any(col_names_corresp=="decimallongitude")) {
+  if (!any(col_names_corresp == "decimallongitude")) {
     warning("no decimallongitude provided")
     new_data_renamed <-
       new_data_renamed %>%
       tibble::add_column(decimallongitude = NA) %>%
       dplyr::mutate(decimallongitude = as.double(decimallongitude))
-    if(is.null(plot_name_field) & is.null(individual_plot_field) &
-       is.null(id_specimen) & is.null(id_plot_name) &
-       is.null(id_tag_plot)) stop("no links provided (either plot, specimen or tag), thus decimallongitude is mandatory")
+    if (is.null(plot_name_field) & is.null(individual_plot_field) &
+        is.null(id_specimen) & is.null(id_plot_name) &
+        is.null(id_tag_plot))
+      stop("no links provided (either plot, specimen or tag), thus decimallongitude is mandatory")
   }
 
   new_data_renamed <-
     new_data_renamed %>%
-    tibble::add_column(id_new_data=1:nrow(.))
+    tibble::add_column(id_new_data = 1:nrow(.))
 
   ### Linking collectors names
   if(!is.null(collector_field)) {
-    if(!any(colnames(new_data_renamed)==collector_field))
+    if(!any(colnames(new_data_renamed) == collector_field))
       stop("no collector_field found in new dataset")
     new_data_renamed <-
       .link_colnam(data_stand = new_data_renamed, collector_field = collector_field)
@@ -7031,7 +7147,7 @@ add_traits_measures <- function(new_data,
                        dplyr::select(id_table_colnam, colnam), by=c("id_colnam"="id_table_colnam")) %>%
     dplyr::collect()
 
-  if(nrow(censuses)>0) { # & length(unique(censuses$typevalue))>1
+  if(nrow(censuses) > 0) { # & length(unique(censuses$typevalue))>1
     message("\n multiple census for concerned plots")
     censuses %>%
       dplyr::select(plot_name, id_table_liste_plots, year, month, day, typevalue, type, colnam, additional_people) %>%
@@ -7043,6 +7159,8 @@ add_traits_measures <- function(new_data,
       censuses %>%
       dplyr::filter(typevalue == as.numeric(census_chosen)) %>%
       dplyr::select(id_table_liste_plots, id_sub_plots)
+
+    if(nrow(chosen_ids_subplots) == 0) stop("chosen census not available")
 
     missing_census <-
       new_data_renamed %>%
@@ -7079,12 +7197,13 @@ add_traits_measures <- function(new_data,
       multiple_census <- FALSE
     }
   }else{
+
     new_data_renamed <-
       new_data_renamed %>%
       tibble::add_column(id_sub_plots = NA) %>%
       dplyr::mutate(id_sub_plots = as.integer(id_sub_plots))
-  }
 
+  }
 
   ### linking individuals by id
   if(!is.null(id_tag_plot) & is.null(individual_plot_field)) {
@@ -7099,24 +7218,28 @@ add_traits_measures <- function(new_data,
 
     link_individuals <-
       new_data_renamed %>%
-      dplyr::left_join(dplyr::tbl(mydb, "data_individuals") %>%
-                  dplyr::select(id_diconame_n, id_n) %>% dplyr::collect(),
-                by=c("id_n"="id_n"))
+      dplyr::left_join(
+        dplyr::tbl(mydb, "data_individuals") %>%
+          dplyr::select(id_diconame_n, id_n) %>% dplyr::collect(),
+        by = c("id_n" = "id_n")
+      )
 
-    if(dplyr::filter(link_individuals, is.na(id_diconame_n)) %>%
-       nrow()>0) {
+    if (dplyr::filter(link_individuals, is.na(id_diconame_n)) %>%
+        nrow() > 0) {
       print(dplyr::filter(link_individuals, is.na(id_diconame_n)))
       stop("provided id individuals not found in data_individuals")
     }
 
     new_data_renamed <-
       new_data_renamed %>%
-      dplyr::rename(id_data_individuals=id_n)
-  }else{
+      dplyr::rename(id_data_individuals = id_n)
+  } else{
+
     new_data_renamed <-
       new_data_renamed %>%
       tibble::add_column(id_data_individuals = NA) %>%
       dplyr::mutate(id_data_individuals = as.integer(id_data_individuals))
+
   }
 
   ### Linking specimens
@@ -7142,21 +7265,28 @@ add_traits_measures <- function(new_data,
       stop("provided id specimens not found in specimens table")
     }
   }else{
-    if(!any(colnames(new_data_renamed)== "id_specimen")) {
+
+    if (!any(colnames(new_data_renamed) == "id_specimen")) {
+
       new_data_renamed <-
         new_data_renamed %>%
         tibble::add_column(id_specimen = NA) %>%
         dplyr::mutate(id_specimen = as.integer(id_specimen))
-    }else{
+
+    } else{
+
       warning("id_specimen column already in new_data, check if content is correct")
+
     }
+
   }
 
   ### preparing dataset to add for each trait
-  list_add_data <- list()
+  list_add_data <- vector('list', length(traits_field))
   for (i in 1:length(traits_field)) {
+
     trait <- traits_field[i]
-    if(!any(colnames(new_data_renamed)==trait))
+    if(!any(colnames(new_data_renamed) == trait))
       stop(paste("trait field not found", trait))
 
     data_trait <-
@@ -7166,22 +7296,24 @@ add_traits_measures <- function(new_data,
       "trait"
     data_trait <-
       data_trait %>%
-      dplyr::rename_at(dplyr::vars(trait), ~ trait_name)
+      dplyr::rename_at(dplyr::vars(all_of(trait)), ~ trait_name)
 
     data_trait <-
       data_trait %>%
       dplyr::filter(!is.na(trait))
 
-    if(any(data_trait$trait==0)) {
+    if(any(data_trait$trait == 0)) {
+
       add_0 <- utils::askYesNo("Some value are equal to 0. Do you want to add these values anyway ??")
 
       if(!add_0)
         data_trait <-
           data_trait %>%
           dplyr::filter(trait != 0)
+
     }
 
-    if(nrow(data_trait)>0) {
+    if(nrow(data_trait) > 0) {
       ### adding trait id and adding potential issues based on trait
       data_trait <-
         .link_trait(data_stand = data_trait, trait = trait)
@@ -7190,35 +7322,53 @@ add_traits_measures <- function(new_data,
       valuetype <-
         data_trait %>%
         dplyr::distinct(id_trait) %>%
-        dplyr::left_join(dplyr::tbl(mydb, "traitlist") %>%
-                           dplyr::select(valuetype, id_trait) %>%
-                           dplyr::collect(),
-                         by=c("id_trait"="id_trait"))
+        dplyr::left_join(
+          dplyr::tbl(mydb, "traitlist") %>%
+            dplyr::select(valuetype, id_trait) %>%
+            dplyr::collect(),
+          by = c("id_trait" = "id_trait")
+        )
 
       ### Linking individuals
       if(!is.null(individual_plot_field)) {
+
         individual_plot <-
           "ind_num_sous_plot"
 
         data_trait <-
           data_trait %>%
-          dplyr::rename_at(dplyr::vars(individual_plot_field), ~ individual_plot)
+          dplyr::rename_at(dplyr::vars(all_of(individual_plot_field)), ~ individual_plot)
 
+
+        ## not numeric or missing individuals tag
         nbe_not_numeric <-
           suppressWarnings(which(is.na(as.numeric(data_trait$ind_num_sous_plot))))
 
-        cat(paste0("Number of non numeric value in column indicating invividual number in plot : ", length(nbe_not_numeric)), "\n")
-
         data_trait <-
           data_trait %>%
-          dplyr::mutate(ind_num_sous_plot=as.numeric(ind_num_sous_plot))
+          dplyr::mutate(ind_num_sous_plot = as.numeric(ind_num_sous_plot))
 
+        if(length(nbe_not_numeric) > 0) {
+          cli::cli_alert_warning(
+            "Number of non numeric (or missing) value in column indicating invividual number in plot : {length(nbe_not_numeric)}"
+          )
+          print(nbe_not_numeric)
+
+          data_trait <-
+            data_trait %>%
+            filter(!is.na(ind_num_sous_plot))
+
+          cli::cli_alert_warning("Number of non numeric (or missing) value REMOVED")
+        }
+
+        ## vector of id of all plots
         ids_plots_represented <-
           data_trait %>%
           dplyr::distinct(id_liste_plots) %>%
           dplyr::filter(!is.na(id_liste_plots)) %>%
           dplyr::pull()
 
+        ## query of all individuals of these plots
         all_individual_selected_plot <-
           dplyr::tbl(mydb, "data_individuals") %>%
           dplyr::select(ind_num_sous_plot, id_table_liste_plots_n,
@@ -7226,10 +7376,14 @@ add_traits_measures <- function(new_data,
           dplyr::filter(id_table_liste_plots_n %in% ids_plots_represented) %>%
           dplyr::collect()
 
-        linked_individuals_list <- list()
-        linked_problems_individuals_list <- list()
+
+        cli::cli_h3("Checking plot by plot if individuals already linked to selected trait")
+        cli::cli_alert_info("Expected for some individuals if added traits measures are new census")
+
+        linked_individuals_list <- vector('list', length(ids_plots_represented))
+        linked_individuals_likely_dup <- vector('list', length(ids_plots_represented))
         for (j in 1:length(ids_plots_represented)) {
-          # cat(" ",j)
+
           ### getting all individuals of selected plot
           all_individual_selected_plot_subset <-
             all_individual_selected_plot %>%
@@ -7237,13 +7391,13 @@ add_traits_measures <- function(new_data,
 
           new_data_renamed_subset <-
             data_trait %>%
-            dplyr::filter(id_liste_plots==ids_plots_represented[j])
+            dplyr::filter(id_liste_plots == ids_plots_represented[j])
 
           ## individuals in new observations linked to data_individuals
           linked_individuals <-
             dplyr::left_join(new_data_renamed_subset,
                              all_individual_selected_plot_subset,
-                             by=c("ind_num_sous_plot"="ind_num_sous_plot"))
+                             by=c("ind_num_sous_plot" = "ind_num_sous_plot"))
 
           ## getting individuals that have already observations traits_measures table
           individuals_already_traits <-
@@ -7251,12 +7405,47 @@ add_traits_measures <- function(new_data,
             dplyr::filter(id_data_individuals %in% !!linked_individuals$id_n) %>%
             dplyr::collect()
 
-          if(nrow(individuals_already_traits)>0 &
+          if(nrow(individuals_already_traits) > 0 &
              any(unique(data_trait$id_trait) %in%
                  unique(individuals_already_traits$traitid))) {
 
-            message("Individuals linked to imported measures and for selected trait already in db -
-                    CHECK CONSISTENCY")
+            cli::cli_alert_warning("Individuals of plot id {ids_plots_represented[j]} already linked to this trait - consistency should be checked")
+
+            linked_individuals %>%
+              dplyr::select(id_new_data,
+                            id_trait,
+                            id_table_liste_plots_n,
+                            id_sub_plots,
+                            ind_num_sous_plot,
+                            id_n,
+                            trait)
+
+            ## traits measures linked to same individuals from same subplot and same trait
+            possible_duplicates_measures <-
+              individuals_already_traits %>%
+              filter(
+                traitid == unique(data_trait$id_trait),
+                id_sub_plots %in% unique(data_trait$id_sub_plots)
+              ) %>%
+              dplyr::select(
+                            id_data_individuals,
+                            id_trait_measures,
+                            traitvalue) %>%
+              dplyr::rename(traitvalue_exist = traitvalue)
+
+
+            linked_individuals_already_db <-
+              linked_individuals %>%
+              dplyr::left_join(possible_duplicates_measures,
+                               by = c("id_n" = "id_data_individuals")) %>%
+              filter(!is.na(id_trait_measures)) %>%
+              dplyr::select(id_new_data, trait, traitvalue_exist)
+
+            linked_individuals_likely_dup[[j]] <-
+              linked_individuals_already_db
+
+            # linked_problems_individuals_list[[j]] <-
+            #   individuals_already_traits
 
             # if(any(colnames(new_data_renamed)=="id_diconame_n") &
             #    any(traits_field=="id_diconame_n"))
@@ -7299,14 +7488,13 @@ add_traits_measures <- function(new_data,
             #         dplyr::filter(!id_new_data %in% problems_individuals_selected$id_new_data)
             #
             #
-            #       linked_problems_individuals_list[[length(linked_problems_individuals_list)+1]] <-
-            #         problems_individuals_selected
+
             #     }
             #   }
             # }
           }
 
-          linked_individuals_list[[length(linked_individuals_list)+1]] <-
+          linked_individuals_list[[j]] <-
             linked_individuals %>%
             dplyr::select(id_new_data, id_n, id_specimen)
 
@@ -7315,38 +7503,62 @@ add_traits_measures <- function(new_data,
         linked_individuals_list <-
           dplyr::bind_rows(linked_individuals_list)
 
-        linked_problems_individuals_list <-
-          dplyr::bind_rows(linked_problems_individuals_list)
+        linked_individuals_likely_dup <-
+          dplyr::bind_rows(linked_individuals_likely_dup)
+
+        cli::cli_alert_info("Found {nrow(linked_individuals_likely_dup)} measures likely already in db")
+
+        remove_dup <- askYesNo(msg = "Remove these measures?")
+        if(remove_dup)
+          data_trait <-
+          data_trait %>%
+          filter(!id_new_data %in% linked_individuals_likely_dup$id_new_data)
+
+        # linked_problems_individuals_list <-
+        #   dplyr::bind_rows(linked_problems_individuals_list)
 
         ## Adding link to individuals in plots
         data_trait <-
           data_trait %>%
           dplyr::left_join(linked_individuals_list)
 
-        if(!any(colnames(data_trait)=="id_data_individuals")) {
+        if (!any(colnames(data_trait) == "id_data_individuals")) {
+
           data_trait <-
             data_trait %>%
-            dplyr::rename(id_data_individuals=id_n)
-        }else{
+            dplyr::rename(id_data_individuals = id_n)
+
+        } else{
+
           data_trait <-
             data_trait %>%
-            dplyr::mutate(id_data_individuals=id_n)
+            dplyr::mutate(id_data_individuals = id_n)
+
         }
 
         not_linked_ind <-
           data_trait %>%
           dplyr::filter(is.na(id_data_individuals))
 
-        if(nrow(not_linked_ind)>0) {
+        if (nrow(not_linked_ind) > 0) {
           message("Measures not linked to individuals")
           print(paste(nrow(not_linked_ind), "measures"))
           print(not_linked_ind %>%
                   as.data.frame())
-          remove_not_link <- utils::askYesNo(msg = "Remove these measures ?")
-          if(remove_not_link)
+          remove_not_link <-
+            utils::askYesNo(msg = "Remove these measures ?")
+
+          unlinked_individuals <-
+            not_linked_ind
+
+          if (remove_not_link)
             data_trait <-
             data_trait %>%
             dplyr::filter(!is.na(id_data_individuals))
+
+
+        }else{
+          unlinked_individuals <- NA
         }
 
         ## identify duplicated individuals i.e. observations linked to same individual
@@ -7354,10 +7566,10 @@ add_traits_measures <- function(new_data,
           data_trait %>%
           dplyr::group_by(id_data_individuals) %>%
           dplyr::count() %>%
-          dplyr::filter(n>1, !is.na(id_data_individuals))
+          dplyr::filter(n > 1, !is.na(id_data_individuals))
 
-        if(nrow(ids_dup)>0) {
-          message("more than one observation of one trait for a given individual")
+        if (nrow(ids_dup) > 0) {
+          cli::cli_alert_warning("More than one observation of selected trait for a given individual - {nrow(ids_dup)} individuals concerned - adding issue")
 
           obs_dup <-
             data_trait %>%
@@ -7377,7 +7589,7 @@ add_traits_measures <- function(new_data,
             }
           }
 
-          issue_2[issue_2==""] <- NA
+          issue_2[issue_2 == ""] <- NA
 
           ## merging issue
           data_trait <-
@@ -7387,19 +7599,19 @@ add_traits_measures <- function(new_data,
             dplyr::mutate(issue = ifelse(issue ==", ", NA, issue)) %>%
             dplyr::select(-issue_2)
         }
-      }
+      } # end Linking individuals
 
       ## adding id_diconame_n ONLY if no individuals or specimen linked
-      # otherwise, identification retreived from individual or specimen
-      if(!any(colnames(data_trait)=="id_diconame")) {
+      # otherwise, identification retrieved from individual or specimen
+      if (!any(colnames(data_trait) == "id_diconame")) {
         data_no_specimen_no_individual <-
           data_trait
-        if(any(colnames(data_trait)=="id_data_individuals")) {
+        if (any(colnames(data_trait) == "id_data_individuals")) {
           data_no_specimen_no_individual <-
             data_no_specimen_no_individual %>%
             dplyr::filter(is.na(id_data_individuals))
         }
-        if(any(colnames(data_trait)=="id_specimen")) {
+        if (any(colnames(data_trait) == "id_specimen")) {
           data_no_specimen_no_individual <-
             data_no_specimen_no_individual %>%
             dplyr::filter(is.na(id_specimen))
@@ -7417,7 +7629,7 @@ add_traits_measures <- function(new_data,
 
         ids_ind <- data_trait$id_data_individuals
 
-        ## retreiving taxonomic information for linked individuals
+        ## retrieving taxonomic information for linked individuals
         founded_ind <-
           query_plots(extract_individuals = T, id_individual = ids_ind, remove_ids = FALSE)
 
@@ -7497,22 +7709,33 @@ add_traits_measures <- function(new_data,
       }
 
       no_linked_measures <- FALSE
-      if(nrow(data_no_specimen_no_individual)>0) {
+      if (nrow(data_no_specimen_no_individual) > 0) {
         print(data_no_specimen_no_individual)
-        warning("no taxa identification, no link to specimen, no link to individuals for measures/observations")
+        cli::cli_alert_danger(
+          "no taxa identification, no link to specimen, no link to individuals for measures/observations"
+        )
         no_linked_measures <- TRUE
       }
 
-      ### chosssing kind of measures
-      print("basis")
-      if(!any(colnames(data_trait)=="basisofrecord")) {
+      ### choosing kind of measures
+      cli::cli_h3("basis")
+      if (!any(colnames(data_trait) == "basisofrecord")) {
         choices <-
-          dplyr::tibble(basis =
-                   c('LivingSpecimen', 'PreservedSpecimen', 'FossilSpecimen', 'literatureData', 'traitDatabase', 'expertKnowledge'))
+          dplyr::tibble(
+            basis =
+              c(
+                'LivingSpecimen',
+                'PreservedSpecimen',
+                'FossilSpecimen',
+                'literatureData',
+                'traitDatabase',
+                'expertKnowledge'
+              )
+          )
 
         print(choices)
         selected_basisofrecord <-
-          readline(prompt="Choose basisofrecord : ")
+          readline(prompt = "Choose basisofrecord : ")
 
         data_trait <-
           data_trait %>%
@@ -7528,27 +7751,30 @@ add_traits_measures <- function(new_data,
           data_trait %>%
           dplyr::select(id_data_individuals, trait) %>%
           dplyr::left_join(dplyr::tbl(mydb, "data_traits_measures") %>%
-                             dplyr::filter(traitid == trait_id) %>%
+                             dplyr::filter(traitid == !!unique(data_trait$id_trait)) %>%
                              dplyr::select(id_data_individuals, traitvalue) %>%
                              dplyr::collect(),
                            by=c("id_data_individuals"="id_data_individuals")) %>%
           dplyr::group_by(id_data_individuals) %>%
           dplyr::summarise(traitvalue = max(traitvalue, na.rm = TRUE),
-                           trait = dplyr::first(trait))
+                           trait = dplyr::first(trait)) %>%
+          dplyr::mutate(traitvalue = replace(traitvalue, traitvalue == -Inf, NA))
 
-        ## comparaison with previous census if new values is lower than previous --> issue annotated
-        if(any(!is.na(comparisons$traitvalue)) & valuetype$valuetype=="numeric") {
+        ## comparison with previous census if new values is lower than previous --> issue annotated
+        if (any(!is.na(comparisons$traitvalue)) &
+            valuetype$valuetype == "numeric") {
           # message("\n multiple data")
           finding_incoherent_values <-
             comparisons %>%
             dplyr::mutate(diff = trait - traitvalue) %>%
             dplyr::filter(diff < 0)
 
-          if(any( finding_incoherent_values$diff<0)) {
+          if(any( finding_incoherent_values$diff < 0)) {
             message("\n incoherent new values compared to previous censuses")
-            finding_incoherent_values <- finding_incoherent_values %>%
+            finding_incoherent_values <-
+              finding_incoherent_values %>%
               dplyr::mutate(issue_new =
-                              ifelse(diff<0, "value lower than previous census", NA))
+                              ifelse(diff < 0, "value lower than previous census", NA))
 
             ### merging issues
             data_trait <-
@@ -7563,7 +7789,7 @@ add_traits_measures <- function(new_data,
       }
 
 
-      ### identify if measures are already wihtin DB
+      ### identify if measures are already within DB
       message("\n Identifying if imported values are already in DB")
       trait_id <- unique(data_trait$id_trait)
       selected_data_traits <-
@@ -7608,24 +7834,29 @@ add_traits_measures <- function(new_data,
       #   count() %>%
       #   filter(n>1)
 
+
       duplicated_rows <-
         dplyr::bind_rows(selected_data_traits,
                          all_vals) %>%
         dplyr::filter(is.na(issue)) %>%
-        dplyr::group_by(id_data_individuals, id_trait, id_liste_plots, id_sub_plots, issue) %>%
+        dplyr::group_by(id_data_individuals,
+                        id_trait,
+                        id_liste_plots,
+                        id_sub_plots,
+                        issue) %>%
         dplyr::count() %>%
-        dplyr::filter(n>1)
+        dplyr::filter(n > 1)
       # %>% # , id_data_individuals==73764
       # dplyr::filter(!grepl("more than one observation", issue))
 
       duplicated_rows_with_issue_no_double <-
         dplyr::bind_rows(selected_data_traits,
                          all_vals) %>%
-        dplyr::filter(!is.na(issue), !grepl("more than one observation", issue)) %>%
+        dplyr::filter(!is.na(issue),!grepl("more than one observation", issue)) %>%
         dplyr::select(-issue) %>%
         dplyr::group_by(id_data_individuals, id_trait, id_liste_plots, id_sub_plots) %>%
         dplyr::count() %>%
-        dplyr::filter(n>1)
+        dplyr::filter(n > 1)
 
       duplicated_rows_with_issue_double <-
         dplyr::bind_rows(selected_data_traits,
@@ -7634,7 +7865,7 @@ add_traits_measures <- function(new_data,
         dplyr::select(-issue) %>%
         dplyr::group_by(id_data_individuals, id_trait, id_liste_plots, id_sub_plots) %>%
         dplyr::count() %>%
-        dplyr::filter(n>2)
+        dplyr::filter(n > 2)
 
       # %>% #
       #   dplyr::filter(!grepl("more than one observation", issue))
@@ -7645,7 +7876,7 @@ add_traits_measures <- function(new_data,
       # duplicated_rows %>%
       #   filter(!id_data_individuals %in% selected_data_traits$id_data_individuals)
 
-      if(nrow(duplicated_rows)>1) {
+      if (nrow(duplicated_rows) > 1) {
         message("\n Some values are already in DB")
         print(duplicated_rows %>%
                 dplyr::ungroup() %>%
@@ -7676,47 +7907,79 @@ add_traits_measures <- function(new_data,
       #   data_trait %>%
       #   dplyr::rename_at("id_n", ~ "id_data_individuals")
 
-      print(".add_modif_field")
+      cli::cli_h3(".add_modif_field")
       data_trait <-
         .add_modif_field(dataset = data_trait)
 
-      print("data_to_add")
+      cli::cli_h3("data_to_add")
       data_to_add <-
-        dplyr::tibble(id_table_liste_plots = data_trait$id_liste_plots,
-                      id_data_individuals = data_trait$id_data_individuals,
-                      id_specimen = data_trait$id_specimen,
-                      id_diconame = data_trait$id_diconame,
-                      id_colnam = data_trait$id_colnam,
-                      id_sub_plots = data_trait$id_sub_plots,
-                      country = data_trait$country,
-                      decimallatitude = data_trait$decimallatitude,
-                      decimallongitude = data_trait$decimallongitude,
-                      elevation = ifelse(rep(any(colnames(data_trait)=="elevation"), nrow(data_trait)), data_trait$elevation, NA),
-                      verbatimlocality = ifelse(rep(any(colnames(data_trait)=="verbatimlocality"), nrow(data_trait)), data_trait$verbatimlocality, NA),
-                      basisofrecord = data_trait$basisofrecord,
-                      references = ifelse(rep(any(colnames(data_trait)=="references"), nrow(data_trait)), data_trait$references, NA),
-                      year = ifelse(rep(any(colnames(data_trait)=="year"), nrow(data_trait)), data_trait$year, NA),
-                      month = ifelse(rep(any(colnames(data_trait)=="month"), nrow(data_trait)), data_trait$month, NA),
-                      day = ifelse(rep(any(colnames(data_trait)=="day"), nrow(data_trait)), data_trait$day, NA),
-                      measurementremarks = ifelse(rep(any(colnames(data_trait)=="measurementremarks"),
-                                                      nrow(data_trait)), data_trait$measurementremarks, NA),
-                      measurementmethod = ifelse(rep(any(colnames(data_trait)=="measurementmethod"), nrow(data_trait)), data_trait$measurementmethod, NA),
-                      traitid = data_trait$id_trait,
-                      traitvalue = ifelse(rep(valuetype$valuetype == "numeric", nrow(data_trait)), data_trait$trait, NA),
-                      traitvalue_char = ifelse(rep(valuetype$valuetype == "character", nrow(data_trait)), data_trait$trait, NA),
-                      original_tax_name = ifelse(rep(any(colnames(data_trait)=="original_tax_name"), nrow(data_trait)), data_trait$original_tax_name, NA),
-                      original_plot_name = ifelse(rep(any(colnames(data_trait)=="original_plot_name"), nrow(data_trait)), data_trait$original_plot_name, NA),
-                      original_specimen = ifelse(rep(any(colnames(data_trait)=="original_specimen"), nrow(data_trait)), data_trait$original_specimen, NA),
-                      issue = data_trait$issue,
-                      date_modif_d = data_trait$date_modif_d,
-                      date_modif_m = data_trait$date_modif_m,
-                      date_modif_y = data_trait$date_modif_y)
+        dplyr::tibble(
+          id_table_liste_plots = data_trait$id_liste_plots,
+          id_data_individuals = data_trait$id_data_individuals,
+          id_specimen = data_trait$id_specimen,
+          id_diconame = data_trait$id_diconame,
+          id_colnam = data_trait$id_colnam,
+          id_sub_plots = data_trait$id_sub_plots,
+          country = data_trait$country,
+          decimallatitude = data_trait$decimallatitude,
+          decimallongitude = data_trait$decimallongitude,
+          elevation = ifelse(rep(
+            any(colnames(data_trait) == "elevation"), nrow(data_trait)
+          ), data_trait$elevation, NA),
+          verbatimlocality = ifelse(rep(
+            any(colnames(data_trait) == "verbatimlocality"), nrow(data_trait)
+          ), data_trait$verbatimlocality, NA),
+          basisofrecord = data_trait$basisofrecord,
+          references = ifelse(rep(
+            any(colnames(data_trait) == "references"), nrow(data_trait)
+          ), data_trait$references, NA),
+          year = ifelse(rep(
+            any(colnames(data_trait) == "year"), nrow(data_trait)
+          ), data_trait$year, NA),
+          month = ifelse(rep(
+            any(colnames(data_trait) == "month"), nrow(data_trait)
+          ), data_trait$month, NA),
+          day = ifelse(rep(any(
+            colnames(data_trait) == "day"
+          ), nrow(data_trait)), data_trait$day, NA),
+          measurementremarks = ifelse(rep(
+            any(colnames(data_trait) == "measurementremarks"),
+            nrow(data_trait)
+          ), data_trait$measurementremarks, NA),
+          measurementmethod = ifelse(rep(
+            any(colnames(data_trait) == "measurementmethod"), nrow(data_trait)
+          ), data_trait$measurementmethod, NA),
+          traitid = data_trait$id_trait,
+          traitvalue = ifelse(
+            rep(valuetype$valuetype == "numeric", nrow(data_trait)),
+            data_trait$trait,
+            NA
+          ),
+          traitvalue_char = ifelse(
+            rep(valuetype$valuetype == "character", nrow(data_trait)),
+            data_trait$trait,
+            NA
+          ),
+          original_tax_name = ifelse(rep(
+            any(colnames(data_trait) == "original_tax_name"), nrow(data_trait)
+          ), data_trait$original_tax_name, NA),
+          original_plot_name = ifelse(rep(
+            any(colnames(data_trait) == "original_plot_name"), nrow(data_trait)
+          ), data_trait$original_plot_name, NA),
+          original_specimen = ifelse(rep(
+            any(colnames(data_trait) == "original_specimen"), nrow(data_trait)
+          ), data_trait$original_specimen, NA),
+          issue = data_trait$issue,
+          date_modif_d = data_trait$date_modif_d,
+          date_modif_m = data_trait$date_modif_m,
+          date_modif_y = data_trait$date_modif_y
+        )
 
       if(no_linked_measures)
-        list_add_data[[length(list_add_data)+1]] <-
+        list_add_data[[i]] <-
         data_no_specimen_no_individual
 
-      list_add_data[[length(list_add_data)+1]] <-
+      list_add_data[[i]] <-
         data_to_add
 
       print(data_to_add)
@@ -7730,20 +7993,53 @@ add_traits_measures <- function(new_data,
       #                      collect(), by=c("id_type_sub_plot"="id_subplotype")) %>%
       #   View()
 
-      if(data_to_add %>% dplyr::distinct() %>% nrow() != nrow(data_to_add))
-        warning(paste("DUPLICATES IN NEW DATA FOR", trait))
+      if (data_to_add %>% dplyr::distinct() %>% nrow() != nrow(data_to_add)) {
+
+        duplicates_lg <- duplicated(data_to_add)
+
+        cli::cli_alert_warning("Duplicates in new data for {trait} concerning {length(duplicates_lg[duplicates_lg])} id(s)")
+
+        cf_merge <-
+          askYesNo(msg = "confirm merging duplicates?")
+
+        if (cf_merge) {
+
+          issues_dup <- data_to_add %>%
+            filter(id_data_individuals %in% data_to_add[duplicates_lg, "id_data_individuals"]) %>%
+            dplyr::select(issue, id_data_individuals)
+
+          ## resetting issue
+          if(any(grepl("identical value", issues_dup$issue))) {
+
+            issues_dup_modif_issue <-
+              issues_dup[grepl("identical value", issues_dup$issue),]
+
+            data_to_add <-
+              data_to_add %>%
+              mutate(issue = replace(issue, id_data_individuals %in% issues_dup_modif_issue$id_data_individuals, NA))
+
+          }
+
+          data_to_add <- data_to_add %>% dplyr::distinct()
+        } else{
+          stop()
+        }
+
+      }
 
       response <-
         utils::askYesNo("Confirm add these data to data_traits_measures table?")
 
       if(add_data & response) {
-        message(paste("adding data:", nrow(data_trait), "rows"))
+        cli::cli_alert_success("Adding data : {nrow(data_to_add)} values added")
         DBI::dbWriteTable(mydb, "data_traits_measures",
                           data_to_add, append = TRUE, row.names = FALSE)
       }
 
     }else{
-      message(paste("no added data for", trait, "- no values different of 0"))
+
+      cli::cli_alert_info("no added data for {trait} - no values different of 0")
+
     }
   }
 
@@ -7774,9 +8070,11 @@ add_traits_measures <- function(new_data,
   #          plot_name_corrected = plot_name.y)
 
 
+  if(exists('unlinked_individuals'))
+    return(list(list_traits_add = list_add_data, unlinked_individuals = unlinked_individuals))
 
-
-  return(list_add_data)
+  if(!exists('unlinked_individuals'))
+    return(list(list_traits_add = list_add_data))
 
 }
 
@@ -9192,7 +9490,8 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
     dplyr::filter(!is.na(number)) %>%
     dplyr::group_by(number) %>%
     dplyr::count()
-  if(any(count_nbe_file$n!=2)) stop("some plot do not have two directories!")
+  if (any(count_nbe_file$n != 2))
+    stop("some plot do not have two directories!")
 
   ncol_list <- list()
   nbe_herb <- list()
@@ -9233,27 +9532,44 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
     gps_data_subset <-
       gps_data %>%
       dplyr::mutate(date = as.character(Date)) %>%
-      dplyr::mutate(date_y=as.numeric(unlist(lapply(strsplit(date, "-"), FUN = function(x) x[[1]])))) %>%
-      dplyr::mutate(date_m=as.numeric(unlist(lapply(strsplit(date, "-"), FUN = function(x) x[[2]])))) %>%
-      dplyr::mutate(date_d=as.numeric(unlist(lapply(strsplit(date, "-"), FUN = function(x) x[[3]])))) %>%
+      dplyr::mutate(date_y = as.numeric(unlist(lapply(
+        strsplit(date, "-"),
+        FUN = function(x)
+          x[[1]]
+      )))) %>%
+      dplyr::mutate(date_m = as.numeric(unlist(lapply(
+        strsplit(date, "-"),
+        FUN = function(x)
+          x[[2]]
+      )))) %>%
+      dplyr::mutate(date_d = as.numeric(unlist(lapply(
+        strsplit(date, "-"),
+        FUN = function(x)
+          x[[3]]
+      )))) %>%
       dplyr::select(Longitude, Latitude, date, date_y, date_m, date_d)
 
     gps_data_subset_one_plot <-
       gps_data_subset %>%
-      tibble::add_column(plot_name = rep(paste0(plot_name,ifelse(j<10, "00", "0") ,j), nrow(.))) %>%
+      tibble::add_column(plot_name = rep(paste0(plot_name, ifelse(j < 10, "00", "0") , j), nrow(.))) %>%
       dplyr::group_by(plot_name) %>%
-      dplyr::summarise(ddlat = mean(Latitude), ddlon =  mean(Longitude),
-                date_y = min(date_y), date_m = min(date_m), date_d=min(date_d))
+      dplyr::summarise(
+        ddlat = mean(Latitude),
+        ddlon =  mean(Longitude),
+        date_y = min(date_y),
+        date_m = min(date_m),
+        date_d = min(date_d)
+      )
 
 
     gps_data_subset_one_plot <-
       gps_data_subset_one_plot %>%
-      tibble::add_column(data_provider="AMAP") %>%
-      tibble::add_column(co_authorship="AMAP") %>%
-      tibble::add_column(country="Cameroun") %>%
-      tibble::add_column(area_plot=10000) %>%
-      tibble::add_column(method ="1ha-IRD") %>%
-      tibble::add_column(locality_name=plot_name)
+      tibble::add_column(data_provider = "AMAP") %>%
+      tibble::add_column(co_authorship = "AMAP") %>%
+      tibble::add_column(country = "Cameroun") %>%
+      tibble::add_column(area_plot = 10000) %>%
+      tibble::add_column(method = "1ha-IRD") %>%
+      tibble::add_column(locality_name = plot_name)
 
 
     gps_plot_list[[j]] <- gps_data_subset_one_plot
@@ -9280,16 +9596,22 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
       print(dupl_id)
     }
 
-    if(occ_data$ID[1]!=1) {
+    if (occ_data$ID[1] != 1) {
       corrected_id <- vector(mode = "numeric", length = nrow(occ_data))
-      for (m in 1:nrow(occ_data)) corrected_id[m] <- occ_data$ID[m]-occ_data$ID[1]+1
+      for (m in 1:nrow(occ_data))
+        corrected_id[m] <- occ_data$ID[m] - occ_data$ID[1] + 1
 
-      logs_tb <- dplyr::bind_rows(logs_tb,
-                                  dplyr::tibble(plot_name =
-                                                  paste0(plot_name, ifelse(j<10, "00", "0") ,j),
-                                  field = "ID",
-                                  issue = "ID not starting at 1",
-                                  id = "all"))
+      logs_tb <- dplyr::bind_rows(
+        logs_tb,
+        dplyr::tibble(
+          plot_name =
+            paste0(plot_name, ifelse(j <
+                                       10, "00", "0") , j),
+          field = "ID",
+          issue = "ID not starting at 1",
+          id = "all"
+        )
+      )
       occ_data$ID <- corrected_id
 
       message("replacing ID by continuous ID")
@@ -9308,8 +9630,13 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
       sum(!is.na(occ_data$pIRD))
 
     ## quadrat identification
-    if(sum(occ_data$New_quadra[!is.na(occ_data$New_quadra)]=="yes")!=25) {
-      warning(paste("25 quadrat expected but", sum(occ_data$New_quadra=="yes"),"found"))
+    if (sum(occ_data$New_quadra[!is.na(occ_data$New_quadra)] == "yes") !=
+        25) {
+      warning(paste(
+        "25 quadrat expected but",
+        sum(occ_data$New_quadra == "yes"),
+        "found"
+      ))
     }
 
     all_expected_combination <-
@@ -9341,7 +9668,7 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
       dplyr::count() %>%
       dplyr::filter(n>1)
 
-    if(nrow(duplicates_quadrat)>0) {
+    if (nrow(duplicates_quadrat) > 0) {
       all_quadrat %>%
         dplyr::filter(quadrat %in% duplicates_quadrat$quadrat) %>%
         print()
@@ -9358,9 +9685,12 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
         all_quadrat %>%
         dplyr::slice(2)
 
-      if(quad1$X_theo==quad2$X_theo) path <- "vertical"
-      if(quad1$Y_theo==quad2$Y_theo) path <- "horizontal"
-      if(is.null(path)) stop("quadrat progression not logical")
+      if (quad1$X_theo == quad2$X_theo)
+        path <- "vertical"
+      if (quad1$Y_theo == quad2$Y_theo)
+        path <- "horizontal"
+      if (is.null(path))
+        stop("quadrat progression not logical")
 
       Y <-
         c(seq(0, 80, 20), rev(seq(0, 80, 20)), c(seq(0, 80, 20), rev(seq(0, 80, 20))),
@@ -9368,18 +9698,19 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
       X <-
         c(rep(0, 5), rep(20, 5), rep(40, 5), rep(60, 5), rep(80, 5))
 
-      if(path=="horizontal") {
+      if (path == "horizontal") {
         expected_quadrats <-
-          dplyr::tibble(x = Y, y= X) %>%
-          dplyr::mutate(quadrat = paste(x, y, sep="_"))
+          dplyr::tibble(x = Y, y = X) %>%
+          dplyr::mutate(quadrat = paste(x, y, sep = "_"))
       }
-      if(path=="vertical") {
+      if (path == "vertical") {
         expected_quadrats <-
-          dplyr::tibble(x = X, y= Y) %>%
-          dplyr::mutate(quadrat = paste(x, y, sep="_"))
+          dplyr::tibble(x = X, y = Y) %>%
+          dplyr::mutate(quadrat = paste(x, y, sep = "_"))
       }
 
-      quadrat_corrected <- vector(mode = "character", length = nrow(all_quadrat))
+      quadrat_corrected <-
+        vector(mode = "character", length = nrow(all_quadrat))
       for (k in 1:nrow(all_quadrat)) {
         quadrat_found <-
           all_quadrat %>%
@@ -9391,8 +9722,13 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
           dplyr::pull(quadrat)
         quadrat_found
         quadrat_expected
-        if(quadrat_found!=quadrat_expected) {
-          message(paste("replacing observed quadrat", quadrat_found, "by", quadrat_expected))
+        if (quadrat_found != quadrat_expected) {
+          message(paste(
+            "replacing observed quadrat",
+            quadrat_found,
+            "by",
+            quadrat_expected
+          ))
           quadrat_corrected[k] <- quadrat_expected
 
           ids <-
@@ -9400,18 +9736,24 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
             dplyr::slice(k) %>% dplyr::pull(ID)
           ids <- paste(ids, collapse = ", ")
 
-          logs_tb <- dplyr::bind_rows(logs_tb,
-                                      dplyr::tibble(plot_name = paste0(plot_name,ifelse(j<10, "00", "0") ,j),
-                                      field = "New_quadra",
-                                      issue = "error in quadrat automatically corrected",
-                                      id = ids))
+          logs_tb <- dplyr::bind_rows(
+            logs_tb,
+            dplyr::tibble(
+              plot_name = paste0(plot_name, ifelse(j < 10, "00", "0") , j),
+              field = "New_quadra",
+              issue = "error in quadrat automatically corrected",
+              id = ids
+            )
+          )
 
-        }else(
-          quadrat_corrected[k] <- quadrat_found
-        )
+        } else
+          (
+            quadrat_corrected[k] <- quadrat_found
+          )
       }
 
-      if(length(unique(quadrat_corrected))!=25) stop("still not 25 unique quadrat name")
+      if (length(unique(quadrat_corrected)) != 25)
+        stop("still not 25 unique quadrat name")
 
       all_quadrat <-
         all_quadrat %>%
@@ -9420,18 +9762,19 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
       occ_data <-
         occ_data %>%
         dplyr::left_join(all_quadrat %>%
-                    dplyr::select(ID, quadrat_corrected), by=c("ID"="ID"))
+                           dplyr::select(ID, quadrat_corrected),
+                         by = c("ID" = "ID"))
 
     }
 
-    if(any(colnames(all_quadrat)=="quadrat_corrected"))
+    if (any(colnames(all_quadrat) == "quadrat_corrected"))
       all_quadrat <-
       all_quadrat %>%
       dplyr::rename(quadrat_good_format = quadrat_corrected)
 
     # add_column(quadrat_good_format = unlist(lapply(strsplit(x = all_quadrat$quadrat_corrected, split = "_"), FUN = function(x) paste("(", x[1], ";", x[2], ")",sep=""))))
 
-    if(!any(colnames(all_quadrat)=="quadrat_corrected"))
+    if (!any(colnames(all_quadrat) == "quadrat_corrected"))
       all_quadrat <-
       all_quadrat %>%
       dplyr::rename(quadrat_good_format = quadrat)
@@ -9440,11 +9783,11 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
     quadrats <-
       vector(mode = "character", length = nrow(occ_data))
     for (k in 1:(nrow(all_quadrat))) {
-      if(k==25) {
+      if (k == 25) {
         quadrats[all_quadrat$ID[k]:nrow(occ_data)] <-
           all_quadrat$quadrat_good_format[k]
-      }else{
-        quadrats[all_quadrat$ID[k]:all_quadrat$ID[k+1]] <-
+      } else{
+        quadrats[all_quadrat$ID[k]:all_quadrat$ID[k + 1]] <-
           all_quadrat$quadrat_good_format[k]
         # print(all_quadrat$quadrat_good_format[k])
       }
@@ -9457,8 +9800,8 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
     ### adding plot name
     occ_data <-
       occ_data %>%
-      tibble::add_column(plot_name = rep(paste0(plot_name,ifelse(j<10, "00", "0") ,j),
-                                 nrow(occ_data)))
+      tibble::add_column(plot_name = rep(paste0(plot_name, ifelse(j < 10, "00", "0") , j),
+                                         nrow(occ_data)))
 
     ### rename and check dbh
     occ_data <-
@@ -9466,33 +9809,37 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
       dplyr::rename(dbh = DBH)
     if(any(occ_data$dbh>400)) stop("unrealistic dbh value")
 
-    if(any(occ_data$dbh<10)) {
+    if (any(occ_data$dbh < 10)) {
       message("dbh value lower than 10")
 
       ids <-
         occ_data %>%
-        dplyr::filter(dbh<10) %>% dplyr::pull(ID)
+        dplyr::filter(dbh < 10) %>% dplyr::pull(ID)
       ids <- paste(ids, collapse = ", ")
 
       logs_tb <-
         logs_tb %>%
-        dplyr::bind_rows(dplyr::tibble(plot_name = paste0(plot_name,ifelse(j<10, "00", "0") ,j),
-                         field = "dbh",
-                         issue = "dbh lower than 10",
-                         id = as.character(ids)))
+        dplyr::bind_rows(
+          dplyr::tibble(
+            plot_name = paste0(plot_name, ifelse(j < 10, "00", "0") , j),
+            field = "dbh",
+            issue = "dbh lower than 10",
+            id = as.character(ids)
+          )
+        )
 
     }
 
     if(any(is.na(occ_data$dbh))) stop("missing dbh value")
 
     ### rename and check DBH_height
-    if(!any(colnames(occ_data)=="dbh_height")) {
+    if (!any(colnames(occ_data) == "dbh_height")) {
       occ_data <-
         occ_data %>%
         dplyr::rename(dbh_height = DBH_height)
     }
 
-    if(any(is.na(occ_data$dbh_height))) {
+    if (any(is.na(occ_data$dbh_height))) {
       print(occ_data %>%
               dplyr::filter(is.na(dbh_height)))
       message("missing dbh_height value")
@@ -9505,13 +9852,18 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
 
       logs_tb <-
         logs_tb %>%
-        dplyr::bind_rows(dplyr::tibble(plot_name = paste0(plot_name,ifelse(j<10, "00", "0") ,j),
-                         field = "dbh_height",
-                         issue = "missing values",
-                         id = ids))
+        dplyr::bind_rows(
+          dplyr::tibble(
+            plot_name = paste0(plot_name, ifelse(j < 10, "00", "0") , j),
+            field = "dbh_height",
+            issue = "missing values",
+            id = ids
+          )
+        )
 
     }
-    if(any(occ_data$dbh_height[!is.na(occ_data$dbh_height)]>20)) stop("unrealistic dbh_height value")
+    if (any(occ_data$dbh_height[!is.na(occ_data$dbh_height)] > 20))
+      stop("unrealistic dbh_height value")
 
     ### rename and check original taxa name
     occ_data <-
@@ -9527,45 +9879,49 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
 
     ## identify and check coherence of multi stem
     list_multiple_stem <- list()
-    if(nrow(multi_stem_ind)>0) {
-
+    if (nrow(multi_stem_ind) > 0) {
       for (k in 1:nrow(multi_stem_ind)) {
         # print(k)
-        if(length(list_multiple_stem)>0) {ids <- unlist(lapply(list_multiple_stem, function(w) w$ID))
-        }else{ids <- 0}
+        if (length(list_multiple_stem) > 0) {
+          ids <- unlist(lapply(list_multiple_stem, function(w)
+            w$ID))
+        } else{
+          ids <- 0
+        }
 
-        if(!multi_stem_ind$ID[k] %in% ids) {
-
+        if (!multi_stem_ind$ID[k] %in% ids) {
           ### screnning of multiple stem : check for ID tag continuity and taxa similarity. Stop when one is not true
           q <- 1
           found <- TRUE
           add_tag <- NULL
-          while(found) {
+          while (found) {
             ## if ID tag continuity is true
-            if(multi_stem_ind$ID[k]+q==multi_stem_ind$ID[ifelse((k+q)>nrow(multi_stem_ind), nrow(multi_stem_ind), k+q)]) {
-              q <- q +1
+            if (multi_stem_ind$ID[k] + q == multi_stem_ind$ID[ifelse((k +
+                                                                      q) > nrow(multi_stem_ind),
+                                                                     nrow(multi_stem_ind),
+                                                                     k + q)]) {
+              q <- q + 1
 
               multi_stem_chunk <-
                 multi_stem_ind %>%
-                dplyr::slice(k:(k+q-1))
+                dplyr::slice(k:(k + q - 1))
 
-              if(length(unique(multi_stem_chunk$original_tax_name))>1) {
+              if (length(unique(multi_stem_chunk$original_tax_name)) > 1) {
                 dist. <-
                   .pairwise_string_similarity(string_vector =
                                                 multi_stem_chunk$original_tax_name[!is.na(multi_stem_chunk$original_tax_name)])
                 dist.[is.na(dist.)] <- 1
-              }else{
+              } else{
                 dist. <- 1
               }
 
-              if(any(dist.<0.8)) {
+              if (any(dist. < 0.8)) {
                 found <- FALSE
-                q <- q -1
+                q <- q - 1
 
-                if(multi_stem_ind %>%
-                   dplyr::slice(k:(k+q-1)) %>%
-                   nrow()==1) {
-
+                if (multi_stem_ind %>%
+                    dplyr::slice(k:(k + q - 1)) %>%
+                    nrow() == 1) {
                   message("multiple stem chunk with very different identification")
 
                   ### putting into log the problems
@@ -9577,33 +9933,43 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
 
                   logs_tb <-
                     logs_tb %>%
-                    dplyr::bind_rows(dplyr::tibble(plot_name = paste0(plot_name,ifelse(j<10, "00", "0") ,j),
-                                     field = "multistem",
-                                     issue = "different identification",
-                                     id = ids))
+                    dplyr::bind_rows(
+                      dplyr::tibble(
+                        plot_name = paste0(plot_name, ifelse(j < 10, "00", "0") , j),
+                        field = "multistem",
+                        issue = "different identification",
+                        id = ids
+                      )
+                    )
 
 
                 }
               }
 
-            }else{
-              if(q==1) {
-
+            } else{
+              if (q == 1) {
                 ## check if following Tag is same identification and has not been put into multiple stem
                 next_tag <-
                   occ_data %>%
-                  dplyr::filter(ID == multi_stem_ind$ID[k]+1) %>%
+                  dplyr::filter(ID == multi_stem_ind$ID[k] + 1) %>%
                   dplyr::select(ID, Rainfor_Tr, original_tax_name)
 
                 dist. <-
-                  .pairwise_string_similarity(string_vector = c(next_tag$original_tax_name, multi_stem_ind$original_tax_name[k]))
+                  .pairwise_string_similarity(
+                    string_vector = c(
+                      next_tag$original_tax_name,
+                      multi_stem_ind$original_tax_name[k]
+                    )
+                  )
                 dist.[is.na(dist.)] <- 1
 
-                if(dist.<0.8) {
+                if (dist. < 0.8) {
                   print(multi_stem_ind %>%
                           slice(k))
                   print(next_tag)
-                  message("expected following tag in multiple stem and next individual of different taxa")
+                  message(
+                    "expected following tag in multiple stem and next individual of different taxa"
+                  )
 
                   found <- FALSE
 
@@ -9618,18 +9984,22 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
 
                   logs_tb <-
                     logs_tb %>%
-                    dplyr::bind_rows(dplyr::tibble(plot_name = paste0(plot_name,ifelse(j<10, "00", "0") ,j),
-                                     field = "multistem",
-                                     issue = "expected following tag in multiple stem and next individual of different taxa",
-                                     id = as.character(ids)))
+                    dplyr::bind_rows(
+                      dplyr::tibble(
+                        plot_name = paste0(plot_name, ifelse(j < 10, "00", "0") , j),
+                        field = "multistem",
+                        issue = "expected following tag in multiple stem and next individual of different taxa",
+                        id = as.character(ids)
+                      )
+                    )
 
-                }else{
+                } else{
                   add_tag <-
                     next_tag
                   found <- FALSE
                 }
 
-              }else{
+              } else{
                 found <- FALSE
               }
             }
@@ -9637,33 +10007,34 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
 
           multi_stem_chunk <-
             multi_stem_ind %>%
-            dplyr::slice(k:(k+q-1))
+            dplyr::slice(k:(k + q - 1))
 
-          if(!is.null(add_tag)) multi_stem_chunk <-
+          if (!is.null(add_tag))
+            multi_stem_chunk <-
             dplyr::bind_rows(multi_stem_chunk, add_tag)
 
-          if(nrow(multi_stem_chunk)>1) {
-            list_multiple_stem[[length(list_multiple_stem)+1]] <-
+          if (nrow(multi_stem_chunk) > 1) {
+            list_multiple_stem[[length(list_multiple_stem) + 1]] <-
               multi_stem_chunk
           }
         }
       }
     }
 
-    multi_tiges_id <- vector(mode = "numeric", length = nrow(occ_data))
-    if(length(list_multiple_stem)>0) {
+    multi_tiges_id <-
+      vector(mode = "numeric", length = nrow(occ_data))
+    if (length(list_multiple_stem) > 0) {
       for (k in 1:length(list_multiple_stem)) {
-
         multi_stem_chunk <-
           list_multiple_stem[[k]]
         for (d in 2:nrow(multi_stem_chunk))
-          multi_tiges_id[occ_data$ID==multi_stem_chunk$ID[d]] <-
+          multi_tiges_id[occ_data$ID == multi_stem_chunk$ID[d]] <-
             multi_stem_chunk$ID[1]
       }
     }
 
     multi_tiges_id <-
-      replace(multi_tiges_id, multi_tiges_id==0, NA)
+      replace(multi_tiges_id, multi_tiges_id == 0, NA)
 
     occ_data <-
       occ_data %>%
@@ -9688,28 +10059,37 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
       occ_data %>%
       dplyr::filter(is.na(Date))
 
-    if(nrow(missing_coll_date) > 0) {
+    if (nrow(missing_coll_date) > 0) {
       message(paste("missing collection date for", missing_coll_date$id))
       for (i in 1:nrow(missing_coll_date)) {
         date_for_miss <-
           occ_data %>%
-          dplyr::filter(id == missing_coll_date$id[i]-1) %>%
+          dplyr::filter(id == missing_coll_date$id[i] - 1) %>%
           dplyr::pull(Date)
-        occ_data[occ_data$id==missing_coll_date$id[i],"Date"] <-
+        occ_data[occ_data$id == missing_coll_date$id[i], "Date"] <-
           date_for_miss
       }
     }
 
     occ_data <-
       occ_data %>%
-      dplyr::mutate(date_char= as.character(Date)) %>%
-      dplyr::mutate(year=as.numeric(unlist(lapply(strsplit(date_char, "-"), function(x) x[[1]])))) %>%
-      dplyr::mutate(month=as.numeric(unlist(lapply(strsplit(date_char, "-"), function(x) x[[2]])))) %>%
-      dplyr::mutate(day=as.numeric(unlist(lapply(strsplit(date_char, "-"), function(x) x[[3]]))))
+      dplyr::mutate(date_char = as.character(Date)) %>%
+      dplyr::mutate(year = as.numeric(unlist(lapply(strsplit(date_char, "-"), function(x)
+        x[[1]])))) %>%
+      dplyr::mutate(month = as.numeric(unlist(lapply(strsplit(date_char, "-"), function(x)
+        x[[2]])))) %>%
+      dplyr::mutate(day = as.numeric(unlist(lapply(strsplit(date_char, "-"), function(x)
+        x[[3]]))))
 
-    if(any(occ_data$day>31) | any(occ_data$day<1)) stop("day out of range")
-    if(any(occ_data$month>12) | any(occ_data$month<1)) stop("month out of range")
-    if(any(occ_data$year>lubridate::year(Sys.Date())) | any(occ_data$year<1900)) stop("year out of range")
+    if (any(occ_data$day > 31) |
+        any(occ_data$day < 1))
+      stop("day out of range")
+    if (any(occ_data$month > 12) |
+        any(occ_data$month < 1))
+      stop("month out of range")
+    if (any(occ_data$year > lubridate::year(Sys.Date())) |
+        any(occ_data$year < 1900))
+      stop("year out of range")
 
     traits_data <-
       occ_data %>%
@@ -9761,6 +10141,8 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
 #'
 #' @param meta tibble output of query_plot with no export individuals
 #' @param dataset tibble output of query_plot with export individuals
+#'
+#' @importFrom rlang parse_expr
 #'
 #' @return A list with as many tibble as census
 #' @export
@@ -9904,7 +10286,7 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
 
   censuses <-
     censuses %>%
-    tibble::add_column(excluded_growth =accept)
+    tibble::add_column(excluded_growth = accept)
   return(censuses)
 }
 
@@ -10045,18 +10427,24 @@ growth_computing <- function(dataset,
         deads <-
           splitted_census[[i]] %>%
           dplyr::select(id_n, stem_diameter_census_1) %>%
-          dplyr::left_join(splitted_census[[i+1]] %>%
-                      dplyr::select(id_n, stem_diameter_census_2),
-                    by=c("id_n"="id_n")) %>%
-          dplyr::filter(is.na(stem_diameter_census_2) | stem_diameter_census_2==0)
+          dplyr::left_join(
+            splitted_census[[i + 1]] %>%
+              dplyr::select(id_n, stem_diameter_census_2),
+            by = c("id_n" = "id_n")
+          ) %>%
+          dplyr::filter(is.na(stem_diameter_census_2) |
+                          stem_diameter_census_2 == 0)
 
         recruits <-
-          splitted_census[[i+1]] %>%
+          splitted_census[[i + 1]] %>%
           dplyr::select(id_n, stem_diameter_census_2) %>%
-          dplyr::left_join(splitted_census[[i]] %>%
-                      dplyr::select(id_n, stem_diameter_census_1),
-                    by=c("id_n"="id_n")) %>%
-          dplyr::filter(is.na(stem_diameter_census_1) | stem_diameter_census_1==0)
+          dplyr::left_join(
+            splitted_census[[i]] %>%
+              dplyr::select(id_n, stem_diameter_census_1),
+            by = c("id_n" = "id_n")
+          ) %>%
+          dplyr::filter(is.na(stem_diameter_census_1) |
+                          stem_diameter_census_1 == 0)
 
         censuses <- .time_diff(splitted_census[[i]], splitted_census[[i+1]])
 
