@@ -46,97 +46,105 @@ launch_query_tax_app <- function() {
 
     )
   ),
-              server = function(input, output, session) {
 
-                # stop the serveur in the end of the session
-                session$onSessionEnded(function() {
-                  stopApp()
-                })
+  server = function(input, output, session) {
+    # stop the serveur in the end of the session
+    session$onSessionEnded(function() {
+      stopApp()
+    })
 
-                extract <- reactiveValues(df = NULL)
+    extract <- reactiveValues(df = NULL)
 
-                plot_dbh_h <- reactiveValues(df = NULL)
+    plot_dbh_h <- reactiveValues(df = NULL)
 
-                ids_selected <- reactiveValues(df = NULL)
+    ids_selected <- reactiveValues(df = NULL)
 
-                data_height_dbh <- reactiveValues(df = NULL)
+    data_height_dbh <- reactiveValues(df = NULL)
 
-                # all_val <- reactiveValues(val=NULL)
-                # all_val$val <-
-                #   paste(input$genus , input$species)
+    # all_val <- reactiveValues(val=NULL)
+    # all_val$val <-
+    #   paste(input$genus , input$species)
 
-                # xxchange <- reactive({
-                #   paste(input$genus , input$species , input$family)
-                # })
+    # xxchange <- reactive({
+    #   paste(input$genus , input$species , input$family)
+    # })
 
-                observeEvent(input$launch_extract, {
+    observeEvent(input$launch_extract, {
+      # req(input$genus)
 
-                  # req(input$genus)
+      output$table <- DT::renderDataTable({
+        extract$df <-
+          query_tax_all(
+            genus_searched = input$genus,
+            tax_esp_searched = input$species,
+            extract_individuals = input$extract_ind,
+            tax_fam_searched = input$family,
+            verbose = FALSE
+          )
+        extract$df
 
-                  output$table <- DT::renderDataTable({
+      })
+    })
 
-                    extract$df <- query_tax_all(genus_searched = input$genus, tax_esp_searched = input$species,
-                                                extract_individuals = input$extract_ind, tax_fam_searched = input$family)
-                    extract$df
+    observeEvent(input$launch_extract, {
+      #
+      # output$test <- renderPrint({
+      #
+      #   print(input$genus)
+      #   print(input$species)
+      #   print(data_height_dbh$df)
+      #   # print(ids_selected$df)
+      #
+      # })
 
-                  })
-                })
+      output$plots_allo <-
+        renderPlot({
+          # ids_selected$df <-
+          #   query_tax_all(
+          #     genus_searched = input$genus,
+          #     tax_esp_searched = input$species,
+          #     tax_fam_searched = input$family,
+          #     verbose = FALSE
+          #   ) %>%
+          #   dplyr::select(id_n) %>%
+          #   dplyr::pull()
 
-                observeEvent(input$launch_extract, {
-                  #
-                  # output$test <- renderPrint({
-                  #
-                  #   print(input$genus)
-                  #   print(input$species)
-                  #   print(data_height_dbh$df)
-                  #   # print(ids_selected$df)
-                  #
-                  # })
+          # ids$vec <- id
+          if (length(ids_selected$df) > 0) {
+            # out_all <-
+            #   explore_allometric_taxa(id_search = ids_selected$df)
+            #
+            # data_height_dbh$df <-
+            #   out_all$data_height_dbh
+            #
+            # plot_dbh_h$df <- out_all$plot_height_dbh
+            # #
+            # plot_dbh_h$df
 
-                  output$plots_allo <-
-                    renderPlot({
-
-                      ids_selected$df <-
-                        query_tax_all(genus_searched = input$genus, tax_esp_searched = input$species,
-                                      tax_fam_searched = input$family) %>%
-                        dplyr::select(id_n) %>%
-                        dplyr::pull()
-
-                      # ids$vec <- id
-                      if(length(ids_selected$df)>0) {
-                        out_all <-
-                          explore_allometric_taxa(id_search = ids_selected$df)
-
-                        data_height_dbh$df <- out_all$data_height_dbh
-
-                        plot_dbh_h$df <- out_all$plot_height_dbh
-                        #
-                        plot_dbh_h$df
-
-                      }else{
-                        return()
-                      }
-                    })
+          } else{
+            return()
+          }
+        })
 
 
-                  output$data_brush <-
-                    renderTable({
-                      n <-
-                        nrow(brushedPoints(data_height_dbh$df, brush = input$plot_brush))
+      output$data_brush <-
+        renderTable({
+          n <-
+            nrow(brushedPoints(data_height_dbh$df, brush = input$plot_brush))
 
-                      if(n==0) {
-                        return()
-                      }else{
-                        brushedPoints(data_height_dbh$df, brush = input$plot_brush)
-                      }
+          if (n == 0) {
+            return()
+          } else{
+            brushedPoints(data_height_dbh$df, brush = input$plot_brush)
+          }
 
-                    })
+        })
 
-                })
+    })
 
-                # }
-                # )
-              })
+    # }
+    # )
+  })
   shiny::runApp(app, launch.browser = TRUE)
 
 }
@@ -1346,10 +1354,14 @@ country_list <- function() {
 
   nn <-
     dplyr::tbl(mydb, "data_liste_plots")
-  nn <- dplyr::group_by(nn, country)
-  nn <- dplyr::count(nn)
-  nn <- dplyr::mutate(nn, n=as.integer(n))
-  nn <- dplyr::collect(nn)
+  nn <-
+    dplyr::group_by(nn, country) %>%
+    summarise(n = n())
+  nn <-
+    nn %>%
+    collect() %>%
+    dplyr::mutate(n = as.integer(n)) %>%
+    arrange(country)
 
   # %>%
   #   dplyr::group_by(country) %>%
@@ -1385,15 +1397,15 @@ province_list <- function(country=NULL) {
 
     nn <-
       nn %>%
-      dplyr::filter(country==!!var)
+      dplyr::filter(country == !!var)
   }
 
   nn <-
     nn %>%
     dplyr::group_by(province) %>%
+    dplyr::collect() %>%
     dplyr::count() %>%
-    dplyr::mutate(n=as.integer(n)) %>%
-    dplyr::collect()
+    dplyr::mutate(n = as.integer(n))
 
   # dbDisconnect(mydb)
 
@@ -1495,7 +1507,6 @@ traits_list <- function() {
 #'
 #' @importFrom cli cli_alert_warning cli_rule cli_alert_info
 #' @importFrom DBI dbSendQuery dbFetch dbClearResult dbWriteTable
-#' @importFrom spData world
 #' @importFrom stringr str_flatten str_trim str_extract
 #'
 #' @return A tibble of plots or individuals if extract_individuals is TRUE
@@ -1516,6 +1527,7 @@ query_plots <- function(team_lead = NULL,
                         map_type = "mapview",
                         id_individual = NULL,
                         id_plot = NULL,
+                        id_diconame = NULL,
                         show_multiple_census = FALSE,
                         remove_ids = TRUE,
                         collapse_multiple_val = FALSE) {
@@ -1541,6 +1553,21 @@ query_plots <- function(team_lead = NULL,
 
   }
 
+  if(!is.null(id_diconame))
+  {
+
+    cli::cli_rule(left = "Extracting from queried taxa - id_diconame")
+    extract_individuals <- TRUE
+
+    if(!is.null(id_plot))
+      cli::cli_alert_warning("id_plot not null replaced by id_plot where id_diconame are found")
+
+    id_plot <-
+      query_tax_all(id_search = id_diconame, extract_individuals = T, verbose = FALSE, simple_ind_extract = T) %>%
+      pull(id_table_liste_plots_n)
+
+  }
+
 
   if(is.null(id_plot)) {
 
@@ -1551,27 +1578,65 @@ query_plots <- function(team_lead = NULL,
 
     # query <- "SELECT * FROM data_liste_plots WHERE  team_leader ILIKE '%Dauby%' AND country IN ('Gabon', 'Cameroun')"
 
-    if(!is.null(country)) {
-      if(length(country)==1) {
-        query <- gsub(pattern = "MMM", replacement = paste0(" country ILIKE '%", country, "%' AND MMM"), x=query)
-      }else{
-        query <- gsub(pattern = "MMM", replacement = paste0("country IN ('", paste(country, collapse = "', '"), "') AND MMM"), x=query)
+    if (!is.null(country)) {
+      if (length(country) == 1) {
+        query <-
+          gsub(
+            pattern = "MMM",
+            replacement = paste0(" country ILIKE '%", country, "%' AND MMM"),
+            x = query
+          )
+      } else{
+        query <-
+          gsub(
+            pattern = "MMM",
+            replacement = paste0("country IN ('", paste(country, collapse = "', '"), "') AND MMM"),
+            x = query
+          )
       }
     }
 
-    if(!is.null(locality_name)) {
-      if(length(locality_name) == 1) {
-        query <- gsub(pattern = "MMM", replacement = paste0(" locality_name ILIKE '%", locality_name, "%' AND MMM"), x=query)
-      }else{
-        query <- gsub(pattern = "MMM", replacement = paste0("locality_name IN ('", paste(locality_name, collapse = "', '"), "') AND MMM"), x=query)
+    if (!is.null(locality_name)) {
+      if (length(locality_name) == 1) {
+        query <-
+          gsub(
+            pattern = "MMM",
+            replacement = paste0(" locality_name ILIKE '%", locality_name, "%' AND MMM"),
+            x = query
+          )
+      } else{
+        query <-
+          gsub(
+            pattern = "MMM",
+            replacement = paste0(
+              "locality_name IN ('",
+              paste(locality_name, collapse = "', '"),
+              "') AND MMM"
+            ),
+            x = query
+          )
       }
     }
 
-    if(!is.null(province)) {
-      if(length(province) == 1) {
-        query <- gsub(pattern = "MMM", replacement = paste0(" province ILIKE '%", province, "%' AND MMM"), x=query)
-      }else{
-        query <- gsub(pattern = "MMM", replacement = paste0("province IN ('", paste(province, collapse = "', '"), "') AND MMM"), x=query)
+    if (!is.null(province)) {
+      if (length(province) == 1) {
+        query <-
+          gsub(
+            pattern = "MMM",
+            replacement = paste0(" province ILIKE '%", province, "%' AND MMM"),
+            x = query
+          )
+      } else{
+        query <-
+          gsub(
+            pattern = "MMM",
+            replacement = paste0(
+              "province IN ('",
+              paste(province, collapse = "', '"),
+              "') AND MMM"
+            ),
+            x = query
+          )
       }
     }
 
@@ -1592,7 +1657,6 @@ query_plots <- function(team_lead = NULL,
             replacement = paste0("method IN ('", paste(method, collapse = "', '"), "') AND MMM"),
             x = query_method
           )
-
       }
 
       query_method <-
@@ -1623,11 +1687,25 @@ query_plots <- function(team_lead = NULL,
       }
     }
 
-    if(!is.null(plot_name)) {
-      if(length(plot_name)==1) {
-        query <- gsub(pattern = "MMM", replacement = paste0(" plot_name ILIKE '%", plot_name, "%' AND MMM"), x=query)
-      }else{
-        query <- gsub(pattern = "MMM", replacement = paste0("plot_name IN ('", paste(plot_name, collapse = "', '"), "') AND MMM"), x=query)
+    if (!is.null(plot_name)) {
+      if (length(plot_name) == 1) {
+        query <-
+          gsub(
+            pattern = "MMM",
+            replacement = paste0(" plot_name ILIKE '%", plot_name, "%' AND MMM"),
+            x = query
+          )
+      } else{
+        query <-
+          gsub(
+            pattern = "MMM",
+            replacement = paste0(
+              "plot_name IN ('",
+              paste(plot_name, collapse = "', '"),
+              "') AND MMM"
+            ),
+            x = query
+          )
       }
     }
 
@@ -1642,7 +1720,8 @@ query_plots <- function(team_lead = NULL,
     res <-
       res %>%
       dplyr::select(-id_old)
-  }else{
+
+  } else {
 
     cli::cli_rule(left = "Extracting from queried plot - id_plot")
 
@@ -1830,7 +1909,10 @@ query_plots <- function(team_lead = NULL,
 
     cli::cli_rule(left = "Mapping")
 
-    world_map <- spData::world
+    if (requireNamespace("sf", quietly = TRUE)) {
+      library(sf)
+      data(world)
+    }
 
     if(any(is.na(res$ddlat)) | any(is.na(res$ddlon))) {
       not_georef_plot <-
@@ -1853,7 +1935,7 @@ query_plots <- function(team_lead = NULL,
 
       outputmap <-
         ggplot2::ggplot() +
-        ggplot2::geom_sf(data = world_map, alpha=0.8)
+        ggplot2::geom_sf(data = world, alpha=0.8)
 
       if(label) {
         if(try_optimal_label) {
@@ -1983,6 +2065,13 @@ query_plots <- function(team_lead = NULL,
           dplyr::select(-data_modif_d, -data_modif_m, -data_modif_y),
         by = c("id_diconame_final" = "id_n")
       ) ## getting taxa information based on id_diconame_final
+
+
+    if(!is.null(id_diconame))
+      res_individuals_full <-
+      res_individuals_full %>%
+      dplyr::filter(id_diconame_final %in% !!id_diconame)
+
 
     res_individuals_full <-
       res_individuals_full %>%
@@ -2183,6 +2272,8 @@ query_subplots <- function(team_lead = NULL,
 #' @param id_search integer
 #' @param show_synonymies logical
 #' @param extract_individuals logical
+#' @param verbose logical
+#' @param simple_ind_extract logical if TRUE only report IDs from individuals table
 #'
 #' @return A tibble of taxa or individuals if extract_individuals is TRUE
 #' @export
@@ -2192,11 +2283,14 @@ query_tax_all <- function(genus_searched = NULL,
                           tax_name1_searched = NULL,
                           id_search = NULL,
                           show_synonymies = TRUE,
-                          extract_individuals = FALSE) {
+                          extract_individuals = FALSE,
+                          simple_ind_extract = FALSE,
+                          verbose = TRUE) {
 
   if(!exists("mydb")) call.mydb()
 
   if(is.null(id_search)) {
+
     query <- 'SELECT * FROM diconame WHERE MMM'
 
     if(!is.null(genus_searched))
@@ -2220,22 +2314,26 @@ query_tax_all <- function(genus_searched = NULL,
   }else{
 
     if(!is.null(genus_searched) | !is.null(tax_esp_searched) | !is.null(tax_fam_searched))
-      cat("Query for tax based on ID, others entries ignored \n")
+      cli::cli_alert_info("Query for tax based on ID, others entries ignored")
 
     res <-
       dplyr::tbl(mydb, "diconame") %>%
       dplyr::filter(id_n %in% id_search) %>%
       dplyr::collect()
+
   }
 
-  if(nrow(res)==1 & show_synonymies) {
+  if (nrow(res) == 1 & show_synonymies) {
 
     taxa_syn <-
       dplyr::tbl(mydb, "diconame") %>%
-      dplyr::filter(id_good_n==!!res$id_n, id_n!=!!res$id_n) %>%
+      dplyr::filter(id_good_n == !!res$id_n, id_n != !!res$id_n) %>%
       dplyr::collect()
 
-
+  } else {
+    if (show_synonymies) {
+      cli::cli_alert_warning("synonyms are not shown when multiple taxa are found in query")
+    }
   }
 
   # dbDisconnect(mydb)
@@ -2244,104 +2342,191 @@ query_tax_all <- function(genus_searched = NULL,
     res %>%
     dplyr::select(-id, -id_good)
 
+  if (show_synonymies & nrow(res) == 1) {
+    res <-
+      res %>%
+      bind_rows(taxa_syn %>%
+                  dplyr::select(-id,-id_good))
+  }
 
-  if(extract_individuals & nrow(res)>0) {
+  if(extract_individuals & nrow(res) > 0) {
 
+    # getting taxo identification from specimens
     specimens_id_diconame <-
       dplyr::tbl(mydb, "specimens") %>%
       dplyr::select(id_specimen, id_diconame_n)
 
+    # getting all ids from diconames
     diconames_id <-
       dplyr::tbl(mydb, "diconame") %>%
       dplyr::select(id_n, id_good_n)
 
+    # getting correct id_diconame considering synonymies
     specimens_linked <-
       specimens_id_diconame %>%
       dplyr::left_join(diconames_id, by = c("id_diconame_n" = "id_n")) %>%
       dplyr::rename(id_dico_name_specimen = id_good_n) %>%
       dplyr::select(id_specimen, id_dico_name_specimen)
 
+    ## getting all metadata
     selec_plot_tables <-
-      dplyr::tbl(mydb, "data_liste_plots") %>%
-      dplyr::select(plot_name, team_leader, country, locality_name, id_liste_plots)
+      tbl(mydb, "data_liste_plots") %>%
+      dplyr::select(plot_name, team_leader, country, locality_name,
+                    data_provider, id_liste_plots) %>%
+      collect()
 
-    # res <-
-    #   dplyr::tbl(mydb, "data_individuals") %>%
-    #   dplyr::filter(id_diconame_n %in% res$id_n) %>%
-    #   dplyr::left_join(specimens_linked, by=c("id_specimen"="id_specimen")) %>%
-    #   dplyr::left_join(selec_plot_tables, by=c("id_table_liste_plots_n"="id_liste_plots")) %>%
-    #   dplyr::mutate(id_diconame_final=ifelse(!is.na(id_dico_name_specimen), id_dico_name_specimen, id_diconame_n)) %>%
-    #   dplyr::left_join(dplyr::tbl(mydb, "diconame"), by=c("id_diconame_final"="id_n")) %>%
-    #   dplyr::select(id_n, multi_tiges_id_good, plot_name,team_leader,country,locality_name, sous_plot_name, ind_num_sous_plot, code_individu, dbh, full_name_no_auth, full_name_used, tax_fam, tax_gen, tax_esp, morphocat,
-    #                 id_diconame_final, dbh_height, tree_height, branch_height, branchlet_height, crown_spread, liane, strate_cat,
-    #                 herbarium_code_char, id_specimen) %>%
-    #   dplyr::arrange(id_n) %>%
-    #   dplyr::collect()
+    res_individuals_full <-
+      dplyr::tbl(mydb, "data_individuals")
 
+    ### getting links to specimens -
+    ## TO BE e_dED POTENTIALLY IF MORE THAN ONE SPECIMEN IS LINKED TO ONE INDIVIDUAL
+    ## CODE TO EXTRACT THE "BEST" IDENTIFICATION IF DIFFERENT TO BE IMPLEMENETED
+    links_specimens <-
+      dplyr::tbl(mydb, "data_link_specimens") %>%
+      dplyr::select(id_n, id_specimen) %>%
+      dplyr::group_by(id_n) %>%
+      dplyr::summarise(id_specimen = max(id_specimen, na.rm = T))
 
-    res_individuals <-
-      dplyr::tbl(mydb, "data_individuals") %>%
-      dplyr::select(
-        id_n,
-        id_diconame_n,
-        id_table_liste_plots_n,
-        id_specimen,
-        strate_cat,
-        position_transect
-      ) %>%
-      # dplyr::filter(id_table_liste_plots_n %in% selec_plot_tables$id_liste_plots) %>%  #filtering for selected plots
+    res_individuals_full <-
+      res_individuals_full %>%
+      dplyr::select(-id_specimen) %>%
+      dplyr::left_join(links_specimens,
+                       by = c("id_n" = "id_n"))
+
+    res_individuals_full <-
+      res_individuals_full %>%
+      # dplyr::filter(id_table_liste_plots_n %in% !!res$id_liste_plots) %>%  #filtering for selected plots
+      dplyr::left_join(diconames_id %>%
+                         dplyr::rename(id_diconame_good_n = id_good_n),
+                       by = c("id_diconame_n" = "id_n")) %>%
       dplyr::left_join(specimens_linked, by = c("id_specimen" = "id_specimen")) %>% # adding id_diconame for specimens
-      dplyr::left_join(selec_plot_tables,
-                       by = c("id_table_liste_plots_n" = "id_liste_plots")) %>%  #adding metada information
       dplyr::mutate(id_diconame_final = ifelse(
         !is.na(id_dico_name_specimen),
         id_dico_name_specimen,
-        id_diconame_n
+        id_diconame_good_n
       )) %>% #### selecting id_dico_name from specimens if any
-      dplyr::left_join(
-        dplyr::tbl(mydb, "diconame") %>%
-          dplyr::select(-data_modif_d,-data_modif_m,-data_modif_y),
-        by = c("id_diconame_final" = "id_n")
-      ) %>% ## getting taxa information based on id_diconame_final
-      dplyr::filter(id_diconame_final %in% !!res$id_n) ## filtering selected taxa
+      dplyr::filter(id_diconame_final %in% !!res$id_n)
 
-    all_traits <- traits_list()
+    if(!simple_ind_extract) {
+      res_individuals_full <-
+        res_individuals_full %>%
+        dplyr::left_join(
+          dplyr::tbl(mydb, "diconame") %>%
+            dplyr::select(-data_modif_d, -data_modif_m, -data_modif_y),
+          by = c("id_diconame_final" = "id_n")
+        ) ## getting taxa information based on id_diconame_final
+    }
 
-    all_traits_list <-
-      .get_trait_individuals_values(traits = all_traits$trait,
-                                    id_individuals = res_individuals %>% dplyr::pull(id_n))
+    res_individuals_full <-
+      res_individuals_full %>%
+      dplyr::select(
+        -photo_tranche,
+        -liane,
+        -dbh,
+        -dbh_height,
+        -tree_height,
+        -branch_height,
+        -branchlet_height,-crown_spread,
+        -observations,
+        -observations_census_2,
+        -id_census2,
+        -dbh_census2,
+        -id_specimen_old
+      )
+
+    res_individuals_full <-
+      res_individuals_full %>%
+      dplyr::collect() %>%
+      dplyr::mutate(original_tax_name = stringr::str_trim(original_tax_name))
+
+    if(!simple_ind_extract) {
+      #adding metada information
+      res_individuals_full <-
+        res_individuals_full %>%
+        dplyr::left_join(selec_plot_tables,
+                         by = c("id_table_liste_plots_n" = "id_liste_plots"))
+
+      all_traits <- traits_list()
+
+      all_traits_list <-
+        .get_trait_individuals_values(
+          traits = all_traits$trait,
+          id_individuals = res_individuals_full$id_n,
+          show_multiple_measures = T,
+          skip_dates = T,
+          collapse_multiple_val = F
+        )
+
+      if (length(all_traits_list) > 0) {
+        for (i in 1:length(all_traits_list)) {
+          res_individuals_full <-
+            res_individuals_full %>%
+            dplyr::left_join(all_traits_list[[i]] %>%
+                               dplyr::select(-id_old),
+                             by = c("id_n" = "id_n"))
+
+        }
+      }
+    }
 
     res <-
-      res_individuals %>%
-      dplyr::collect()
-
-    for (i in 1:length(all_traits_list)) {
-      res <-
-        res %>%
-        dplyr::left_join(all_traits_list[[i]] %>%
-                           dplyr::select(-id_old), by=c("id_n"="id_n"))
-    }
+      res_individuals_full %>%
+      dplyr::arrange(id_n)
   }
 
 
-  if(nrow(res) < 20)
-    as_tibble(cbind(columns = names(res), record = t(res))) %>%
-    kableExtra::kable(format = "html", escape = F) %>%
-    kableExtra::kable_styling("striped", full_width = F) %>%
-    print()
+  if(nrow(res) < 20 & verbose) {
+    res_html <-
+      tibble(columns = names(res), data.frame(t(res), fix.empty.names = T)) %>%
+      # as_tibble(cbind(columns = names(res), record = t(res))) %>%
+      mutate_all(~ tidyr::replace_na(., ""))
 
-  if(nrow(res)==1 & show_synonymies) {
-    if(res$id_good_n!=res$id_n) {
-      cat("\n This taxa is considered SYNONYM of")
-      print(dplyr::tbl(mydb, "diconame") %>%
-              dplyr::filter(id_n==!!res$id_good_n) %>%
-              dplyr::select(full_name, full_name_no_auth, tax_fam, tax_gen, morphocat, tax_rank1, tax_name1))
+    for (i in (which(res$id_good_n != res$id_n) + 1)) {
+      col_ <- colnames(res_html)[i]
+      var_new <-
+        rlang::parse_expr(rlang::quo_name(rlang::enquo(col_)))
+
+      res_html <-
+        res_html %>%
+        mutate(!!var_new :=
+                 kableExtra::cell_spec(!!var_new,
+                                       "html",
+                                       background = "grey",
+                                       color = "white", italic = T))
     }
 
-    if(nrow(taxa_syn)>0) {
-      cat("\n This taxa has the following SYNONYMS")
-      print(taxa_syn %>%
-              dplyr::select(full_name, full_name_no_auth, tax_fam, tax_gen, morphocat))
+    res_html %>%
+      kableExtra::kable(format = "html", escape = F) %>%
+      kableExtra::kable_styling("striped", full_width = F) %>%
+      print()
+
+  }
+
+  if (nrow(res) == 1 & show_synonymies & verbose) {
+    if (res$id_good_n != res$id_n) {
+      cli::cli_alert_info("This taxa is considered SYNONYM")
+
+      print(
+        dplyr::tbl(mydb, "diconame") %>%
+          dplyr::filter(id_n == !!res$id_good_n) %>%
+          dplyr::select(
+            full_name,
+            full_name_no_auth,
+            tax_fam,
+            tax_gen,
+            morphocat,
+            tax_rank1,
+            tax_name1
+          )
+      )
+    }
+
+    if (nrow(taxa_syn) > 0) {
+      cli::cli_alert_info("This taxa has SYNONYM(S)")
+      print(
+        taxa_syn %>%
+          dplyr::select(full_name, full_name_no_auth, tax_fam, tax_gen, morphocat)
+      )
     }
   }
 
@@ -2374,9 +2559,14 @@ explore_allometric_taxa <- function(genus_searched = NULL,
 
   if(!exists("mydb")) call.mydb()
 
+  res_taxa <- query_tax_all(
+    genus_searched = genus_searched,
+    tax_esp_searched =
+      tax_esp_searched,
+    id_search = id_search, verbose = F)
+
   tax_data <-
-    query_tax_all(genus_searched = genus_searched, tax_esp_searched =
-                    tax_esp_searched, id_search = id_search, extract_individuals = TRUE)
+    query_plots(id_diconame = res_taxa$id_n)
 
   if(nrow(tax_data)>0) {
     # cat(paste0("\n ", nrow(tax_data), " taxa selected"))
@@ -2467,7 +2657,16 @@ explore_allometric_taxa <- function(genus_searched = NULL,
   #   ggplot() +
   #   geom_point(data = data_allo3, mapping = aes(x = tree_height, y = crown_spread))
 
-  if(nrow(tax_data)>0) return(list(data_height_dbh=data_allo1, data_crow_dbh=data_allo2, taxa_data=tax_data, plot_height_dbh=gg_plot1, plot_crown_dbh=gg_plot2))
+  if (nrow(tax_data) > 0)
+    return(
+      list(
+        data_height_dbh = data_allo1,
+        data_crow_dbh = data_allo2,
+        taxa_data = tax_data,
+        plot_height_dbh = gg_plot1,
+        plot_crown_dbh = gg_plot2
+      )
+    )
 }
 
 
@@ -5710,21 +5909,22 @@ add_individuals <- function(new_data ,
 #'
 #' @return A tibble
 #' @export
-get_updates_diconame <- function(id=NULL,
-                                 last_months=NULL,
-                                 last_10_entry=TRUE,
-                                 last=NULL) {
+get_updates_diconame <- function(id = NULL,
+                                 last_months = NULL,
+                                 last_10_entry = TRUE,
+                                 last = NULL) {
+
 
   if(!exists("mydb")) call.mydb()
 
   tb <-
     dplyr::tbl(mydb, "followup_updates_diconames")
 
-  if(!is.null(id) & !last_10_entry) {
+  if (!is.null(id) & !last_10_entry) {
     var <- rlang::enquo(id)
     entry <-
-      dplyr::tbl %>%
-      dplyr::filter(id_n==!!var) %>%
+      tb %>%
+      dplyr::filter(id_n == !!var) %>%
       dplyr::collect()
   }
 
@@ -5752,11 +5952,11 @@ get_updates_diconame <- function(id=NULL,
   }
 
   if(last_10_entry) {
-    max_id<-
-      dplyr::tbl %>%
+    max_id <-
+      tb %>%
       dplyr::arrange(dplyr::desc(id_fol_up_diconame)) %>%
       dplyr::select(id_fol_up_diconame) %>%
-      dplyr::top_n(1) %>%
+      dplyr::slice_head() %>%
       dplyr::collect()
 
     if(is.null(last)) {
@@ -6651,14 +6851,14 @@ query_specimens <- function(collector = NULL,
 
   }
 
-  if(nrow(query)==1 & show_previous_modif) {
+  if (nrow(query) == 1 & show_previous_modif) {
     modif_backups <-
       dplyr::tbl(mydb, "followup_updates_specimens") %>%
-      dplyr::filter(id_specimen==!!query$id_specimen) %>%
+      dplyr::filter(id_specimen == !!query$id_specimen) %>%
       dplyr::filter(grepl("id_good_diconame", modif_type)) %>%
       dplyr::collect()
 
-    if(nrow(modif_backups)>0) {
+    if(nrow(modif_backups) > 0) {
       modif_backups <-
         dplyr::tbl(mydb, "followup_updates_specimens") %>%
         dplyr::filter(id_specimen==!!query$id_specimen) %>%
@@ -6797,6 +6997,13 @@ query_specimens <- function(collector = NULL,
                     theme="GILLES", outfile = paste0(file_labels, ".rtf"))
 
   }
+
+  if(nrow(query) < 20)
+    as_tibble(cbind(columns = names(query), record = t(query))) %>%
+    kableExtra::kable(format = "html", escape = F) %>%
+    kableExtra::kable_styling("striped", full_width = F) %>%
+    print()
+
 
   if(!extract_linked_individuals) return(query)
 

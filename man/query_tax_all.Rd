@@ -11,7 +11,9 @@ query_tax_all(
   tax_name1_searched = NULL,
   id_search = NULL,
   show_synonymies = TRUE,
-  extract_individuals = FALSE
+  extract_individuals = FALSE,
+  simple_ind_extract = FALSE,
+  verbose = TRUE
 )
 }
 \arguments{
@@ -28,6 +30,10 @@ query_tax_all(
 \item{show_synonymies}{logical}
 
 \item{extract_individuals}{logical}
+
+\item{simple_ind_extract}{logical if TRUE only report IDs from individuals table}
+
+\item{verbose}{logical}
 }
 \value{
 A tibble

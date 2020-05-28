@@ -13,6 +13,7 @@ call.mydb(pass = NULL, user = NULL, offline = FALSE)
 }
 \value{
 The database is loaded
+#'
 }
 \description{
 Load the database and ask for password
