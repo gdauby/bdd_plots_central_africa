@@ -7027,11 +7027,13 @@ query_specimens <- function(collector = NULL,
 
   }
 
-  if (nrow(query) == 1 & show_previous_modif) {
-    nrow_query <-
-      nrow(query)
+  nrow_query <-
+    nrow(query)
 
-    query <-
+  if (nrow(query) == 1 & show_previous_modif ) {
+
+    if(nrow(modif_backups) > 0)
+      query <-
       bind_rows(query,
                 modif_backups)
 
@@ -7045,18 +7047,20 @@ query_specimens <- function(collector = NULL,
                                                 fix.empty.names = T)) %>%
       mutate_all(~ tidyr::replace_na(., ""))
 
-    for (i in ((nrow_query  + 2):(nrow(query)  + 1))) {
-      col_ <- colnames(res_html)[i]
-      var_new <-
-        rlang::parse_expr(rlang::quo_name(rlang::enquo(col_)))
+    if(show_previous_modif & nrow(modif_backups) > 0) {
+      for (i in ((nrow_query  + 2):(nrow(query)  + 1))) {
+        col_ <- colnames(res_html)[i]
+        var_new <-
+          rlang::parse_expr(rlang::quo_name(rlang::enquo(col_)))
 
-      res_html <-
-        res_html %>%
-        mutate(!!var_new :=
-                 kableExtra::cell_spec(!!var_new,
-                                       "html",
-                                       background = "grey",
-                                       color = "white", italic = T))
+        res_html <-
+          res_html %>%
+          mutate(!!var_new :=
+                   kableExtra::cell_spec(!!var_new,
+                                         "html",
+                                         background = "grey",
+                                         color = "white", italic = T))
+      }
     }
 
     res_html %>%
