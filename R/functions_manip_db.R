@@ -1545,11 +1545,10 @@ query_plots <- function(team_lead = NULL,
 
     id_plot <-
       tbl(mydb, "data_individuals") %>%
-      dplyr::filter(id_n == id_individual) %>%
+      dplyr::filter(id_n %in% id_individual) %>%
       dplyr::select(id_table_liste_plots_n) %>%
       dplyr::collect() %>%
       pull()
-
 
   }
 
@@ -1909,8 +1908,8 @@ query_plots <- function(team_lead = NULL,
 
     cli::cli_rule(left = "Mapping")
 
-    if (requireNamespace("sf", quietly = TRUE)) {
-      library(sf)
+    if (requireNamespace("spData", quietly = TRUE)) {
+      library(spData)
       data(world)
     }
 
@@ -6739,8 +6738,12 @@ query_specimens <- function(collector = NULL,
 
   query_speci <-
     dplyr::tbl(mydb, "specimens") %>%
-    dplyr::left_join(dplyr::tbl(mydb, "diconame") %>% dplyr::select(-detvalue, -data_modif_d, -data_modif_m, -data_modif_y), by=c("id_diconame_n"="id_n")) %>%
-    dplyr::left_join(dplyr::tbl(mydb, "table_colnam"), by=c("id_colnam"="id_table_colnam"))
+    dplyr::left_join(
+      dplyr::tbl(mydb, "diconame") %>% dplyr::select(-detvalue,-data_modif_d,-data_modif_m,-data_modif_y),
+      by = c("id_diconame_n" = "id_n")
+    ) %>%
+    dplyr::left_join(dplyr::tbl(mydb, "table_colnam"),
+                     by = c("id_colnam" = "id_table_colnam"))
   # %>%
   #   dplyr::select(-id_specimen_old, -id_diconame, -photo_tranche, -id_colnam, -id_good, -id, -id_good_n)
 
@@ -6752,18 +6755,18 @@ query_specimens <- function(collector = NULL,
                   cold, colm, coly, detvalue, id_specimen, id_diconame_n)
 
   ## filter by collector or id_colnam (id of people table)
-  if((!is.null(collector) | !is.null(id_colnam)) & is.null(id_search)) {
-
-    if(is.null(id_colnam)) {
+  if ((!is.null(collector) |
+       !is.null(id_colnam)) & is.null(id_search)) {
+    if (is.null(id_colnam)) {
       var <- rlang::enquo(collector)
 
       query_speci <-
         query_speci %>%
         dplyr::filter(grepl(!!var, colnam))
-    }else{
+    } else{
       query_speci <-
         query_speci %>%
-        dplyr::filter(id_colnam==!!id_colnam)
+        dplyr::filter(id_colnam == !!id_colnam)
     }
   }
 
@@ -6773,7 +6776,7 @@ query_specimens <- function(collector = NULL,
 
     query_speci <-
       query_speci %>%
-      dplyr::filter(colnbr==var)
+      dplyr::filter(colnbr == var)
   }
 
   if(!is.null(number_min) & is.null(id_search)) {
@@ -6782,7 +6785,7 @@ query_specimens <- function(collector = NULL,
 
     query_speci <-
       query_speci %>%
-      dplyr::filter(colnbr>=var)
+      dplyr::filter(colnbr >= var)
   }
 
   if(!is.null(number_max) & is.null(id_search)) {
@@ -6827,7 +6830,7 @@ query_specimens <- function(collector = NULL,
 
     query_speci <-
       query_speci %>%
-      dplyr::filter(id_specimen==var)
+      dplyr::filter(id_specimen == var)
   }
 
   query <-
@@ -6837,6 +6840,7 @@ query_specimens <- function(collector = NULL,
   # print(query)
 
   if(extract_linked_individuals) {
+
     linked_ind <-
       dplyr::tbl(mydb, "data_link_specimens") %>%
       dplyr::filter(id_specimen == !!query$id_specimen) %>%
@@ -6844,21 +6848,34 @@ query_specimens <- function(collector = NULL,
       dplyr::collect()
 
     linked_ind <-
-      query_plots(id_individual = linked_ind$id_n,
-            extract_individuals = TRUE, remove_ids = FALSE)
+      query_plots(
+        id_individual = linked_ind$id_n,
+        extract_individuals = TRUE,
+        remove_ids = FALSE
+      )
 
-    message(paste0("\n This specimen is linked to ", nrow(linked_ind), " individuals from ", length(unique(linked_ind$plot_name)), " different plots"))
+    cli::cli_alert_info(
+      "This specimen is linked to {nrow(linked_ind)} individuals from {length(unique(linked_ind$plot_name))} plot(s)"
+    )
 
   }
 
   if (nrow(query) == 1 & show_previous_modif) {
+
     modif_backups <-
       dplyr::tbl(mydb, "followup_updates_specimens") %>%
       dplyr::filter(id_specimen == !!query$id_specimen) %>%
       dplyr::filter(grepl("id_good_diconame", modif_type)) %>%
+      dplyr::left_join(
+        dplyr::tbl(mydb, "diconame") %>% dplyr::select(-detvalue,-data_modif_d,-data_modif_m,-data_modif_y),
+        by = c("id_diconame_n" = "id_n")
+      ) %>%
+      dplyr::left_join(dplyr::tbl(mydb, "table_colnam"),
+                       by = c("id_colnam" = "id_table_colnam")) %>%
       dplyr::collect()
 
     if(nrow(modif_backups) > 0) {
+
       modif_backups <-
         dplyr::tbl(mydb, "followup_updates_specimens") %>%
         dplyr::filter(id_specimen==!!query$id_specimen) %>%
@@ -6866,10 +6883,19 @@ query_specimens <- function(collector = NULL,
         dplyr::left_join(dplyr::tbl(mydb, "diconame"), by=c("id_diconame_n"="id_n")) %>%
         dplyr::select(colnam, colnbr, suffix, full_name, tax_fam, tax_gen, tax_esp, ddlat, ddlon, country, detby, detd, detm, dety, add_col,
                       cold, colm, coly, detvalue.x, id_specimen)
-      cat("\n Previous modification in identification")
-      print(modif_backups)
+
+      # cat("\n Previous modification in identification")
+      #
+      # print(modif_backups)
+
+      modif_backups <-
+        modif_backups %>%
+        dplyr::select(all_of(names(query)))
+
     }else{
-      cat("\n No identification change in backups")
+
+      cli::cli_alert_info("No identification change in backups")
+
     }
   }
 
@@ -6998,11 +7024,43 @@ query_specimens <- function(collector = NULL,
 
   }
 
+  if (nrow(query) == 1 & show_previous_modif) {
+    nrow_query <-
+      nrow(query)
+
+    query <-
+      bind_rows(query,
+                modif_backups)
+
+  }
+
+
   if(nrow(query) < 20)
-    as_tibble(cbind(columns = names(query), record = t(query))) %>%
-    kableExtra::kable(format = "html", escape = F) %>%
-    kableExtra::kable_styling("striped", full_width = F) %>%
-    print()
+  {
+    res_html <-
+      tibble(columns = names(query), data.frame(t(query),
+                                                fix.empty.names = T)) %>%
+      mutate_all(~ tidyr::replace_na(., ""))
+
+    for (i in ((nrow_query  + 2):(nrow(query)  + 1))) {
+      col_ <- colnames(res_html)[i]
+      var_new <-
+        rlang::parse_expr(rlang::quo_name(rlang::enquo(col_)))
+
+      res_html <-
+        res_html %>%
+        mutate(!!var_new :=
+                 kableExtra::cell_spec(!!var_new,
+                                       "html",
+                                       background = "grey",
+                                       color = "white", italic = T))
+    }
+
+    res_html %>%
+      kableExtra::kable(format = "html", escape = F) %>%
+      kableExtra::kable_styling("striped", full_width = F) %>%
+      print()
+  }
 
 
   if(!extract_linked_individuals) return(query)
