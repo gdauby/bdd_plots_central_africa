@@ -1505,7 +1505,6 @@ traits_list <- function() {
 #' @param collapse_multiple_val logical whether multiple traits measures should be collapsed (resulting values as character, separated by dash)
 #'
 #'
-#' @importFrom cli cli_alert_warning cli_rule cli_alert_info
 #' @importFrom DBI dbSendQuery dbFetch dbClearResult dbWriteTable
 #' @importFrom stringr str_flatten str_trim str_extract
 #'
@@ -1938,9 +1937,14 @@ query_plots <- function(team_lead = NULL,
 
       if(label) {
         if(try_optimal_label) {
+
+          if (!any(rownames(utils::installed.packages()) == "ggrepel"))
+            stop("ggrepel package needed, please install it")
+
           outputmap <-
             outputmap +
             ggrepel::geom_text_repel(ggplot2::aes(x= res$ddlon, y= res$ddlat, label= data_sf$plot_name), hjust=0, vjust=0)
+
         }else{
           outputmap <-
             outputmap +
@@ -3065,6 +3069,10 @@ herbarium_label <-
 #' @param new_data tibble
 #' @param col_names_select string a vector of string indicating columns names of new_data
 #' @param col_names_corresp string a vector of string indicating to which columns selected columns of new_data corresponds
+#'
+#' @importFrom methods new
+#' @importFrom stats dist sd
+#' @importFrom utils askYesNo data
 #'
 #' @return No return value, new plots are added
 #' @export
@@ -6876,15 +6884,7 @@ query_specimens <- function(collector = NULL,
 
     if(nrow(modif_backups) > 0) {
 
-      modif_backups <-
-        dplyr::tbl(mydb, "followup_updates_specimens") %>%
-        dplyr::filter(id_specimen==!!query$id_specimen) %>%
-        dplyr::filter(grepl("id_good_diconame", modif_type)) %>%
-        dplyr::left_join(dplyr::tbl(mydb, "diconame"), by=c("id_diconame_n"="id_n")) %>%
-        dplyr::select(colnam, colnbr, suffix, full_name, tax_fam, tax_gen, tax_esp, ddlat, ddlon, country, detby, detd, detm, dety, add_col,
-                      cold, colm, coly, detvalue.x, id_specimen)
-
-      # cat("\n Previous modification in identification")
+            # cat("\n Previous modification in identification")
       #
       # print(modif_backups)
 
@@ -6900,6 +6900,9 @@ query_specimens <- function(collector = NULL,
   }
 
   if(generate_labels) {
+
+    if (!any(rownames(utils::installed.packages()) == "measurements"))
+      stop("measurements package needed, please install it")
 
     lat_convert <-
       measurements::conv_unit(query$ddlat, from = "dec_deg", to = "deg_min_sec")
@@ -9734,6 +9737,10 @@ add_specimens <- function(new_data ,
 #' @return A list with two tibbles
 #' @export
 process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
+
+  if (!any(rownames(utils::installed.packages()) == "foreign"))
+    stop("foreign package needed, please install it")
+
   all_dirs <-
     list.dirs(path = PATH,
               full.names = FALSE, recursive = FALSE)
@@ -10578,6 +10585,11 @@ growth_computing <- function(dataset,
                              err.limit = 4, # any measure of second diameter higher than err.limit standard deviation below the first measure will be excluded
                              maxgrow = 75, # any growth (mm/year) higher than maxgrow will be excluded
                              method = "I") {
+
+  if (!any(rownames(utils::installed.packages()) == "date")) {
+    stop("date package needed, please install it")
+  }
+
 
   if(!any(metadata[[2]]$typevalue>1))
     stop("Only one census recorded for all selected plots")
