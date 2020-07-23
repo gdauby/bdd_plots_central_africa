@@ -2686,47 +2686,83 @@ explore_allometric_taxa <- function(genus_searched = NULL,
 #' @param font string
 #' @param font_size integer
 herbarium_label <-
-  function (dat = NULL, theme = c("GILLES"), outfile = "herblabel.rtf", font = c("Roman", "Arial"),
-            font_size = 1)
+  function (dat = NULL,
+            theme = c("GILLES"),
+            outfile = "herblabel.rtf",
+            font = c("Roman", "Arial"),
+            font_size = 1
+  )
   {
+
     if (is.null(dat)) {
       stop("'dat' should be specified")
     }
+
     theme <- match.arg(theme)
     font <- match.arg(font)
     herbdat000 <- dat
     herbdat000[herbdat000 == ""] <- NA
     dat$LAT_FLAG <- toupper(dat$LAT_FLAG)
     dat$LON_FLAG <- toupper(dat$LON_FLAG)
+
     if (any(is.na(herbdat000$HERBARIUM))) {
-      stop(paste("\"HERBARIUM\" not provided for row: ", paste(which(is.na(herbdat000$HERBARIUM)) +
-                                                                 1, collapse = ", ")))
+      stop(paste(
+        "\"HERBARIUM\" not provided for row: ",
+        paste(which(is.na(
+          herbdat000$HERBARIUM
+        )) +
+          1, collapse = ", ")
+      ))
     }
+
     if (any(is.na(herbdat000$COLLECTOR))) {
-      stop(paste("\"COLLECTOR\" not provided for row: ", paste(which(is.na(herbdat000$COLLECTOR)) +
-                                                                 1, collapse = ", ")))
+      stop(paste(
+        "\"COLLECTOR\" not provided for row: ",
+        paste(which(is.na(
+          herbdat000$COLLECTOR
+        )) +
+          1, collapse = ", ")
+      ))
     }
     if (any(is.na(herbdat000$COLLECTOR_NUMBER))) {
-      stop(paste("\"COLLECTOR_NUMBER\" not provided for row: ",
-                 paste(which(is.na(herbdat000$COLLECTOR_NUMBER)) +
-                         1, collapse = ", ")))
+      stop(paste(
+        "\"COLLECTOR_NUMBER\" not provided for row: ",
+        paste(which(is.na(
+          herbdat000$COLLECTOR_NUMBER
+        )) +
+          1, collapse = ", ")
+      ))
     }
     if (any(is.na(herbdat000$DATE_COLLECTED))) {
-      stop(paste("\"DATE_COLLECTED\" not provided for row: ",
-                 paste(which(is.na(herbdat000$DATE_COLLECTED)) +
-                         1, collapse = ", ")))
+      stop(paste(
+        "\"DATE_COLLECTED\" not provided for row: ",
+        paste(which(is.na(
+          herbdat000$DATE_COLLECTED
+        )) +
+          1, collapse = ", ")
+      ))
     }
     if (any(is.na(herbdat000$FAMILY))) {
-      warning(paste("\"FAMILY\" not provided for row: ", paste(which(is.na(herbdat000$FAMILY)) +
-                                                                 1, collapse = ", ")))
+      warning(paste(
+        "\"FAMILY\" not provided for row: ",
+        paste(which(is.na(
+          herbdat000$FAMILY
+        )) +
+          1, collapse = ", ")
+      ))
     }
     # if (any(is.na(herbdat000$GENUS))) {
     #   warning(paste("\"GENUS\" must be provided for row: ",
     #                 paste(which(is.na(herbdat000$GENUS)) + 1, collapse = ", ")))
     # }
     if (any(is.na(herbdat000$COUNTRY))) {
-      stop(paste("\"COUNTRY\" not provided for row: ", paste(which(is.na(herbdat000$COUNTRY)) +
-                                                               1, collapse = ", ")))
+      stop(paste(
+        "\"COUNTRY\" not provided for row: ",
+        paste(which(is.na(
+          herbdat000$COUNTRY
+        )) +
+          1, collapse = ", ")
+      ))
     }
     # if (any(is.na(herbdat000$STATE_PROVINCE))) {
     #   warning(paste("\"STATE_PROVINCE\" not provided for row: ",
@@ -2739,17 +2775,29 @@ herbarium_label <-
     #   herbdat000$COUNTY[is.na(herbdat000$COUNTY)] <- " "
     # }
     if (any(is.na(herbdat000$LOCALITY))) {
-      warning(paste("\"LOCALITY\" not provided for row: ",
-                    paste(which(is.na(herbdat000$LOCALITY)) + 1, collapse = ", ")))
+      warning(paste(
+        "\"LOCALITY\" not provided for row: ",
+        paste(which(is.na(
+          herbdat000$LOCALITY
+        )) + 1, collapse = ", ")
+      ))
     }
     if (any(is.na(herbdat000$IDENTIFIED_BY))) {
-      warning(paste("\"IDENTIFIED_BY\" not provided for row: ",
-                    paste(which(is.na(herbdat000$IDENTIFIED_BY)) + 1, collapse = ", ")))
+      warning(paste(
+        "\"IDENTIFIED_BY\" not provided for row: ",
+        paste(which(is.na(
+          herbdat000$IDENTIFIED_BY
+        )) + 1, collapse = ", ")
+      ))
     }
     if (any(is.na(herbdat000$DATE_IDENTIFIED))) {
-      warning(paste("\"DATE_IDENTIFIED\" not provided for row: ",
-                    paste(which(is.na(herbdat000$DATE_IDENTIFIED)) +
-                            1, collapse = ", ")))
+      warning(paste(
+        "\"DATE_IDENTIFIED\" not provided for row: ",
+        paste(which(is.na(
+          herbdat000$DATE_IDENTIFIED
+        )) +
+          1, collapse = ", ")
+      ))
     }
     print(paste(nrow(herbdat000), "herbarium specimen labels to create:"))
     pgenus <- herblabel::pgenus
@@ -2765,6 +2813,7 @@ herbarium_label <-
       res <- format(as.Date(x), "%d %B %Y")
       return(res)
     }
+
     formatdate2 <- function(x) {
       if (!is.na(suppressWarnings(as.integer(x)))) {
         if (!grepl("^darwin", R.version$os)) {
@@ -2777,10 +2826,13 @@ herbarium_label <-
       res <- format(as.Date(x))
       return(res)
     }
+
+
     Cap <- function(x) {
       paste(toupper(substring(x, 1, 1)), tolower(substring(x,
                                                            2)), sep = "")
     }
+
     Cap2 <- function(x) {
       paste(toupper(substring(x, 1, 1)), substring(x, 2),
             sep = "")
@@ -2788,6 +2840,7 @@ herbarium_label <-
     replace_space <- function(x) {
       gsub("^[[:space:]]+|[[:space:]]+$", "", x)
     }
+
     REPLACE <- function(x) {
       if (length(x) > 1) {
         stop("only one string is allowed")
@@ -2811,6 +2864,9 @@ herbarium_label <-
       res <- gsub("^[[:space:]]+|[[:space:]]+$", "", res)
       return(res)
     }
+
+
+
     latin_source <- herblabel::latin_source
     genera_names <- as.character(pgenus$GENUS)
     italic_latin <- function(x) {
@@ -2824,10 +2880,13 @@ herbarium_label <-
                                 "\\i0\\cf0 ", sep = "")
       paste(res.split, collapse = " ", sep = "")
     }
-    same_families <- c("Palmae", "Arecaceae", "Gramineae", "Poaceae",
-                       "Leguminosae", "Fabaceae", "Guttiferae", "Clusiaceae",
-                       "Cruciferae", "Brassicaceae", "Labiatae", "Lamiaceae",
-                       "Compositae", "Asteraceae", "Umbelliferae", "Apiaceae")
+
+    # same_families <- c("Palmae", "Arecaceae", "Gramineae", "Poaceae",
+    #                    "Leguminosae", "Fabaceae", "Guttiferae", "Clusiaceae",
+    #                    "Cruciferae", "Brassicaceae", "Labiatae", "Lamiaceae",
+    #                    "Compositae", "Asteraceae", "Umbelliferae", "Apiaceae")
+
+
     herbdat000$FAMILY <- toupper(herbdat000$FAMILY)
     herbdat000$GLOBAL_UNIQUE_IDENTIFIER <- replace_space(herbdat000$GLOBAL_UNIQUE_IDENTIFIER)
     herbdat000$HERBARIUM <- replace_space(herbdat000$HERBARIUM)
@@ -2888,33 +2947,45 @@ herbarium_label <-
     herbdat000$LAT_FLAG <- toupper(herbdat000$LAT_FLAG)
     herbdat000$LON_FLAG <- toupper(herbdat000$LON_FLAG)
     for (i in 1:nrow(herbdat000)) {
-      herbdat_temp <- herbdat000[i, ]
-      if (any(!is.na(herbdat_temp$LAT_DEGREE), !is.na(herbdat_temp$LAT_MINUTE),
-              !is.na(herbdat_temp$LAT_SECOND)) & is.na(herbdat_temp$LAT_FLAG)) {
+      herbdat_temp <- herbdat000[i,]
+      if (any(
+        !is.na(herbdat_temp$LAT_DEGREE),
+        !is.na(herbdat_temp$LAT_MINUTE),!is.na(herbdat_temp$LAT_SECOND)
+      ) & is.na(herbdat_temp$LAT_FLAG)) {
         lat_check_ind_1[i] <- TRUE
       }
-      if (all(!is.na(herbdat_temp$LAT_DEGREE), !is.na(herbdat_temp$LAT_MINUTE),
-              !is.na(herbdat_temp$LAT_SECOND)) & is.na(herbdat_temp$LAT_FLAG)) {
+      if (all(
+        !is.na(herbdat_temp$LAT_DEGREE),
+        !is.na(herbdat_temp$LAT_MINUTE),!is.na(herbdat_temp$LAT_SECOND)
+      ) & is.na(herbdat_temp$LAT_FLAG)) {
         lat_check_ind_2[i] <- TRUE
       }
       if (!herbdat_temp$LAT_FLAG %in% c("N", "S", NA)) {
         lat_check_ind_3[i] <- TRUE
       }
-      if (any(!is.na(herbdat_temp$LON_DEGREE), !is.na(herbdat_temp$LON_MINUTE),
-              !is.na(herbdat_temp$LON_SECOND)) & is.na(herbdat_temp$LON_FLAG)) {
+      if (any(
+        !is.na(herbdat_temp$LON_DEGREE),
+        !is.na(herbdat_temp$LON_MINUTE),!is.na(herbdat_temp$LON_SECOND)
+      ) & is.na(herbdat_temp$LON_FLAG)) {
         lon_check_ind_1[i] <- TRUE
       }
-      if (all(!is.na(herbdat_temp$LON_DEGREE), !is.na(herbdat_temp$LON_MINUTE),
-              !is.na(herbdat_temp$LON_SECOND)) & is.na(herbdat_temp$LON_FLAG)) {
+      if (all(
+        !is.na(herbdat_temp$LON_DEGREE),
+        !is.na(herbdat_temp$LON_MINUTE),!is.na(herbdat_temp$LON_SECOND)
+      ) & is.na(herbdat_temp$LON_FLAG)) {
         lon_check_ind_2[i] <- TRUE
       }
       if (!herbdat_temp$LON_FLAG %in% c("E", "W", NA)) {
         lon_check_ind_3[i] <- TRUE
       }
     }
+
     if (any(lat_check_ind_1)) {
-      lat_check_ind_1_msg <- paste("Degree, Minutes and Seconds for Latitude not completed in row:",
-                                   paste(which(lat_check_ind_1), collapse = ", "))
+      lat_check_ind_1_msg <-
+        paste(
+          "Degree, Minutes and Seconds for Latitude not completed in row:",
+          paste(which(lat_check_ind_1), collapse = ", ")
+        )
       stop(lat_check_ind_1_msg)
     }
     if (any(lat_check_ind_2)) {
@@ -2923,13 +2994,17 @@ herbarium_label <-
       stop(lat_check_ind_2_msg)
     }
     if (any(lat_check_ind_3)) {
-      lat_check_ind_3_msg <- paste("Only N or S is allowed for the LAT_FLAG in row:",
-                                   paste(which(lat_check_ind_3), collapse = ", "))
+      lat_check_ind_3_msg <-
+        paste("Only N or S is allowed for the LAT_FLAG in row:",
+              paste(which(lat_check_ind_3), collapse = ", "))
       stop(lat_check_ind_3_msg)
     }
     if (any(lon_check_ind_1)) {
-      lon_check_ind_1_msg <- paste("Degree, Minutes and Seconds for Longitude not completed in row:",
-                                   paste(which(lon_check_ind_1), collapse = ", "))
+      lon_check_ind_1_msg <-
+        paste(
+          "Degree, Minutes and Seconds for Longitude not completed in row:",
+          paste(which(lon_check_ind_1), collapse = ", ")
+        )
       stop(lon_check_ind_1_msg)
     }
     if (any(lon_check_ind_2)) {
@@ -2938,19 +3013,31 @@ herbarium_label <-
       stop(lon_check_ind_2_msg)
     }
     if (any(lon_check_ind_3)) {
-      lon_check_ind_3_msg <- paste("Only N or S is allowed for the LON_FLAG in row:",
-                                   paste(which(lon_check_ind_3), collapse = ", "))
+      lon_check_ind_3_msg <-
+        paste("Only N or S is allowed for the LON_FLAG in row:",
+              paste(which(lon_check_ind_3), collapse = ", "))
       stop(lon_check_ind_3_msg)
     }
+
     if (font == "Roman") {
-      fonttab <- "{\\fonttbl{\\f0\\froman\\fcharset134 SimSun;}{\\f1\\froman\\fcharset134 Times New Roman;}}"
+      fonttab <-
+        "{\\fonttbl{\\f0\\froman\\fcharset134 SimSun;}{\\f1\\froman\\fcharset134 Times New Roman;}}"
     }
+
     if (font == "Arial") {
-      fonttab <- "{\\fonttbl{\\f0\\fswiss\\fcharset134 SimSun;}{\\f1\\fswiss\\fcharset134 Arial;}}"
+      fonttab <-
+        "{\\fonttbl{\\f0\\fswiss\\fcharset134 SimSun;}{\\f1\\fswiss\\fcharset134 Arial;}}"
     }
-    temp1 <- paste("{\\rtf1\\ansi\\ansicpg936\\deflangfe2052\\fcharset134\\deff1",
-                   fonttab, "{\\stylesheet{\\*\\cs3 Default Paragraph Font;}}{\\colortbl\\red0\\green0\\blue0;\\red255\\green0\\blue0;\\red0\\green255\\blue0;\\red0\\green0\\blue255;}\\paperw12240\\paperh15840\\margl1800\\margr1800\\margt1440\\margb1440\\gutter0\\ftnbj\\aenddoc\\jcompress1\\viewkind4\\viewscale100\\asianbrkrule\\allowfieldendsel\\snaptogridincell\\viewkind4\\sectd\\sbkpage\\pgwsxn11906\\pghsxn16838\\marglsxn600\\margrsxn600\\margtsxn720\\margbsxn10\\guttersxn0\\headery720\\footery720\\pgbrdropt0\\sectdefaultcl\\cols2\\colsx1080\\linebetcol1\\endnhere",
-                   sep = "")
+
+    temp1 <-
+      paste(
+        "{\\rtf1\\ansi\\ansicpg936\\deflangfe2052\\fcharset134\\deff1",
+        fonttab,
+        "{\\stylesheet{\\*\\cs3 Default Paragraph Font;}}{\\colortbl\\red0\\green0\\blue0;\\red255\\green0\\blue0;\\red0\\green255\\blue0;\\red0\\green0\\blue255;}\\paperw12240\\paperh15840\\margl1800\\margr1800\\margt1440\\margb1440\\gutter0\\ftnbj\\aenddoc\\jcompress1\\viewkind4\\viewscale100\\asianbrkrule\\allowfieldendsel\\snaptogridincell\\viewkind4\\sectd\\sbkpage\\pgwsxn11906\\pghsxn16838\\marglsxn600\\margrsxn600\\margtsxn720\\margbsxn10\\guttersxn0\\headery720\\footery720\\pgbrdropt0\\sectdefaultcl\\cols2\\colsx1080\\linebetcol1\\endnhere",
+        sep = ""
+
+      )
+
     temp2 <- c()
     temp_count <- seq(0, nrow(herbdat000), by = 5)
     temp_count[1] <- 1
@@ -2958,7 +3045,9 @@ herbarium_label <-
     NEW_DATE_IDENTIFIED <- as.character(c())
     herbdat_row1 <- herbdat000[1, ]
     for (i in 1:nrow(herbdat000)) {
+
       herbdat <- herbdat000[i, ]
+
       if (nrow(herbdat000) > 5) {
         if (i %in% temp_count) {
           print(paste("Making label for row: ", i))
@@ -2966,68 +3055,248 @@ herbarium_label <-
       }
 
       if (theme == "GILLES") {
-        res <- c(paste("{\\pard\\keep\\keepn\\fi0\\li0\\brsp20\\qc\\sb350\\sa80\\fs",
-                       trunc(font_size * 20), "", herbdat$HERBARIUM,
-                       "\\b0\\par }", sep = ""),
-                 ifelse(is.na(herbdat$TITLE), "", paste("{\\pard\\keep\\keepn\\fi0\\li0\\fs",
-                                                        trunc(font_size * 18), "\\qc\\sb10\\sa100\\b ",
-                                                        herbdat$TITLE, "\\b0 \\par }", sep = "")),
-                 ifelse(is.na(herbdat$FAMILY), paste("{\\pard\\keep\\keepn\\fi0\\li0\\qc\\sb10\\sa100\\fs",
-                                                     trunc(font_size * 18), "\\b ", "\\b0\\qc0 \\par }",
-                                                     sep = ""), paste("{\\pard\\keep\\keepn\\fi0\\li0\\qc\\sb10\\sa100\\fs",
-                                                                      trunc(font_size * 18), "\\b ", herbdat$FAMILY,
-                                                                      "\\b0\\qc0 \\par }", sep = "")),
-                 ifelse(is.na(herbdat$FULL_NAME),
-                        "", paste("{\\pard\\keep\\keepn\\fi-288\\li288\\sb100\\sa200\\fs", trunc(font_size * 20), "\\b\\i ", herbdat$FULL_NAME,
-                                  "\\b0\\par}", sep = "")),
-                 paste("{\\pard\\keep\\keepn\\fi0\\li0\\sb120\\sa20\\fs", trunc(font_size * 18), " ",
-                       REPLACE(paste(toupper(ifelse(is.na(herbdat$COUNTRY), "", herbdat$COUNTRY)), ", ",
-                                     ifelse(is.na(herbdat$STATE_PROVINCE), "", herbdat$STATE_PROVINCE), ", ",
-                                     ifelse(is.na(herbdat$COUNTY), "", herbdat$COUNTY), ", ",
-                                     ifelse(is.na(herbdat$LOCALITY), "", as.character(herbdat$LOCALITY)), sep = "")), "\\par}", sep = ""),
-                 REPLACE(ifelse(is.na(herbdat$LAT_DEGREE), "", paste("{\\pard\\keep\\keepn\\fi0\\li0\\sb20\\sa150\\fs", trunc(font_size * 18), "\\qj ",
-                                                                     herbdat$LAT_DEGREE, "\\u176;",
-                                                                     herbdat$LAT_MINUTE, "\\u39;",
-                                                                     herbdat$LAT_SECOND, "\\u34;",
-                                                                     herbdat$LAT_FLAG, ", ",
-                                                                     herbdat$LON_DEGREE, "\\u176;",
-                                                                     herbdat$LON_MINUTE, "\\u39;",
-                                                                     herbdat$LON_SECOND, "\\u34;",
-                                                                     herbdat$LON_FLAG,
-                                                                     ifelse(is.na(herbdat$ELEVATION), "", paste("; ", herbdat$ELEVATION, "m", sep = "")), "\\par }",
-                                                                     sep = ""))),
-                 ifelse((is.na(herbdat$ATTRIBUTES)) & (is.na(herbdat$REMARKS)), "", italic_latin(gsub("\\.  ", "\\. ", gsub(" \\.", "\\.", gsub("\\. \\.", "\\. ", gsub("\\. +", "\\. ",
-                                                                                                                                                                        REPLACE(paste("{\\pard\\keep\\keepn\\fi0\\li0", paste("\\fs", trunc(font_size * 18), sep = ""), "\\sb60",
-                                                                                                                                                                                      ifelse(is.na(herbdat$ATTRIBUTES), "", Cap2(as.character(herbdat$ATTRIBUTES))),
-                                                                                                                                                                                      ifelse(is.na(herbdat$ATTRIBUTES), "", ". "),
-                                                                                                                                                                                      ifelse(is.na(herbdat$REMARKS), "", Cap2(as.character(herbdat$REMARKS))),"\\sa80\\par}", sep = " ")))))))),
-                 ifelse(is.na(herbdat$ADDITIONAL_COLLECTOR), paste("{\\pard\\keep\\keepn\\fi0\\sb200\\sa100\\fs", trunc(font_size * 18), "\\tqr\\tx4850\\b ",
-                                                                   herbdat$COLLECTOR, ", #",
-                                                                   herbdat$COLLECTOR_NUMBER, "\\b0", "  ",
-                                                                   ifelse(nchar(paste(herbdat$COLLECTOR, herbdat$ADDITIONAL_COLLECTOR, ", #", herbdat$COLLECTOR_NUMBER)) > 40, "\\line", "  "), " \\tab ",
-                                                                   tryCatch(formatdate(herbdat$DATE_COLLECTED),
-                                                                            error = function(e) {cat(" ")
-                                                                              herbdat$DATE_COLLECTED}), "\\par}", sep = ""),
-                        paste("{\\pard\\keep\\keepn\\fi0\\sb200\\sa100",
-                              paste("\\fs", trunc(font_size * 18), sep = ""), "\\tqr\\tx4850\\b ",
-                              herbdat$COLLECTOR, ", ",
-                              herbdat$ADDITIONAL_COLLECTOR, "  #",
-                              herbdat$COLLECTOR_NUMBER, "\\b0", "  ",
-                              ifelse(nchar(paste(herbdat$COLLECTOR, herbdat$ADDITIONAL_COLLECTOR, ", #", herbdat$COLLECTOR_NUMBER)) > 40, "\\line", "  "), " \\tab ",
-                              tryCatch(formatdate(herbdat$DATE_COLLECTED), error = function(e) {cat(" ")
-                                herbdat$DATE_COLLECTED}), "\\par}", sep = "")),
-                 ifelse(is.na(herbdat$PROJECT), "", paste("{\\pard\\keep\\keepn\\fi0\\li0\\sa160\\fs", trunc(font_size * 18), "\\ql\\b ", as.character(herbdat$PROJECT), "\\ql0\\b0\\par }", sep = "")),
-                 ifelse(is.na(herbdat$GLOBAL_UNIQUE_IDENTIFIER) & is.na(herbdat$TYPE_STATUS) & is.na(herbdat$IDENTIFIED_BY) & is.na(herbdat$DATE_IDENTIFIED), "",
-                        paste("{\\pard\\keep\\sa40\\keepn\\fi0\\li0\\fs", trunc(font_size * 18), "\\tqr\\tx4850 ",
-                              # gsub("_","", ifelse(is.na(herbdat$GLOBAL_UNIQUE_IDENTIFIER), "", as.character(herbdat$GLOBAL_UNIQUE_IDENTIFIER))),
-                              " \\tab ",
-                              ifelse(is.na(herbdat$TYPE_STATUS), "", herbdat$TYPE_STATUS),
-                              ifelse(is.na(herbdat$IDENTIFIED_BY), "", paste(" Det.: ", herbdat$IDENTIFIED_BY)),
-                              ifelse(is.na(herbdat$DATE_IDENTIFIED), "", ", "),
-                              ifelse(is.na(herbdat$DATE_IDENTIFIED), "",
-                                     tryCatch(formatdate(herbdat$DATE_IDENTIFIED), error = function(e) {cat(" ")
-                                       herbdat$DATE_IDENTIFIED})), "\\par}", sep = "")),
-                 paste("{\\pard\\keep\\keepn\\sa100\\fs", trunc(font_size * 18), sep = ""), " \\par }", paste("{\\pard\\keep\\qc\\fs", trunc(font_size * 18), sep = ""), "  .                  .                   .\\par}")
+        res <-
+          c(
+            paste(
+              "{\\pard\\keep\\keepn\\fi0\\li0\\brsp20\\qc\\sb350\\sa80\\fs",
+              trunc(font_size * 20),
+              "",
+              herbdat$HERBARIUM,
+              "\\b0\\par }",
+              sep = ""
+            ),
+            ifelse(
+              is.na(herbdat$TITLE),
+              "",
+              paste(
+                "{\\pard\\keep\\keepn\\fi0\\li0\\fs",
+                trunc(font_size * 18),
+                "\\qc\\sb10\\sa100\\b ",
+                herbdat$TITLE,
+                "\\b0 \\par }",
+                sep = ""
+              )
+            ),
+            ifelse(
+              is.na(herbdat$FAMILY),
+              paste(
+                "{\\pard\\keep\\keepn\\fi0\\li0\\qc\\sb10\\sa100\\fs",
+                trunc(font_size * 18),
+                "\\b ",
+                "\\b0\\qc0 \\par }",
+                sep = ""
+              ),
+              paste(
+                "{\\pard\\keep\\keepn\\fi0\\li0\\qc\\sb10\\sa100\\fs",
+                trunc(font_size * 18),
+                "\\b ",
+                herbdat$FAMILY,
+                "\\b0\\qc0 \\par }",
+                sep = ""
+              )
+            ),
+            ifelse(
+              is.na(herbdat$FULL_NAME),
+              "",
+              paste(
+                "{\\pard\\keep\\keepn\\fi-288\\li288\\sb100\\sa200\\fs",
+                trunc(font_size * 20),
+                "\\b\\i ",
+                herbdat$FULL_NAME,
+                "\\b0\\par}",
+                sep = ""
+              )
+            ),
+            paste(
+              "{\\pard\\keep\\keepn\\fi0\\li0\\sb120\\sa20\\fs",
+              trunc(font_size * 18),
+              " ",
+              REPLACE(
+                paste(
+                  toupper(ifelse(
+                    is.na(herbdat$COUNTRY), "", herbdat$COUNTRY
+                  )),
+                  ", ",
+                  ifelse(is.na(herbdat$STATE_PROVINCE), "", herbdat$STATE_PROVINCE),
+                  ", ",
+                  ifelse(is.na(herbdat$COUNTY), "", herbdat$COUNTY),
+                  ", ",
+                  ifelse(
+                    is.na(herbdat$LOCALITY),
+                    "",
+                    as.character(herbdat$LOCALITY)
+                  ),
+                  sep = ""
+                )
+              ),
+              "\\par}",
+              sep = ""
+            ),
+            REPLACE(ifelse(
+              is.na(herbdat$LAT_DEGREE),
+              "",
+              paste(
+                "{\\pard\\keep\\keepn\\fi0\\li0\\sb20\\sa150\\fs",
+                trunc(font_size * 18),
+                "\\qj ",
+                herbdat$LAT_DEGREE,
+                "\\u176;",
+                herbdat$LAT_MINUTE,
+                "\\u39;",
+                herbdat$LAT_SECOND,
+                "\\u34;",
+                herbdat$LAT_FLAG,
+                ", ",
+                herbdat$LON_DEGREE,
+                "\\u176;",
+                herbdat$LON_MINUTE,
+                "\\u39;",
+                herbdat$LON_SECOND,
+                "\\u34;",
+                herbdat$LON_FLAG,
+                ifelse(
+                  is.na(herbdat$ELEVATION),
+                  "",
+                  paste("; ", herbdat$ELEVATION, "m", sep = "")
+                ),
+                "\\par }",
+                sep = ""
+              )
+            )),
+            ifelse((is.na(
+              herbdat$ATTRIBUTES
+            )) &
+              (is.na(herbdat$REMARKS)), "", italic_latin(gsub(
+                "\\.  ", "\\. ", gsub(" \\.", "\\.", gsub(
+                  "\\. \\.", "\\. ", gsub("\\. +", "\\. ",
+                                          REPLACE(
+                                            paste(
+                                              "{\\pard\\keep\\keepn\\fi0\\li0",
+                                              paste("\\fs", trunc(font_size * 18), sep = ""),
+                                              "\\sb60",
+                                              ifelse(is.na(herbdat$ATTRIBUTES), "", Cap2(as.character(
+                                                herbdat$ATTRIBUTES
+                                              ))),
+                                              ifelse(is.na(herbdat$ATTRIBUTES), "", ". "),
+                                              ifelse(is.na(herbdat$REMARKS), "", Cap2(as.character(herbdat$REMARKS))),
+                                              "\\sa80\\par}",
+                                              sep = " "
+                                            )
+                                          ))
+                ))
+              ))),
+            ifelse(
+              is.na(herbdat$ADDITIONAL_COLLECTOR),
+              paste(
+                "{\\pard\\keep\\keepn\\fi0\\sb200\\sa100\\fs",
+                trunc(font_size * 18),
+                "\\tqr\\tx4850\\b ",
+                herbdat$COLLECTOR,
+                ", #",
+                herbdat$COLLECTOR_NUMBER,
+                "\\b0",
+                "  ",
+                ifelse(nchar(
+                  paste(
+                    herbdat$COLLECTOR,
+                    herbdat$ADDITIONAL_COLLECTOR,
+                    ", #",
+                    herbdat$COLLECTOR_NUMBER
+                  )
+                ) > 40, "\\line", "  "),
+                " \\tab ",
+                tryCatch(
+                  formatdate(herbdat$DATE_COLLECTED),
+                  error = function(e) {
+                    cat(" ")
+                    herbdat$DATE_COLLECTED
+                  }
+                ),
+                "\\par}",
+                sep = ""
+              ),
+              paste(
+                "{\\pard\\keep\\keepn\\fi0\\sb200\\sa100",
+                paste("\\fs", trunc(font_size * 18), sep = ""),
+                "\\tqr\\tx4850\\b ",
+                herbdat$COLLECTOR,
+                ", ",
+                herbdat$ADDITIONAL_COLLECTOR,
+                "  #",
+                herbdat$COLLECTOR_NUMBER,
+                "\\b0",
+                "  ",
+                ifelse(nchar(
+                  paste(
+                    herbdat$COLLECTOR,
+                    herbdat$ADDITIONAL_COLLECTOR,
+                    ", #",
+                    herbdat$COLLECTOR_NUMBER
+                  )
+                ) > 40, "\\line", "  "),
+                " \\tab ",
+                tryCatch(
+                  formatdate(herbdat$DATE_COLLECTED),
+                  error = function(e) {
+                    cat(" ")
+                    herbdat$DATE_COLLECTED
+                  }
+                ),
+                "\\par}",
+                sep = ""
+              )
+            ),
+            ifelse(
+              is.na(herbdat$PROJECT),
+              "",
+              paste(
+                "{\\pard\\keep\\keepn\\fi0\\li0\\sa160\\fs",
+                trunc(font_size * 18),
+                "\\ql\\b ",
+                as.character(herbdat$PROJECT),
+                "\\ql0\\b0\\par }",
+                sep = ""
+              )
+            ),
+            ifelse(
+              is.na(herbdat$GLOBAL_UNIQUE_IDENTIFIER) &
+                is.na(herbdat$TYPE_STATUS) &
+                is.na(herbdat$IDENTIFIED_BY) & is.na(herbdat$DATE_IDENTIFIED),
+              "",
+              paste(
+                "{\\pard\\keep\\sa40\\keepn\\fi0\\li0\\fs",
+                trunc(font_size * 18),
+                "\\tqr\\tx4850 ",
+                # gsub("_","", ifelse(is.na(herbdat$GLOBAL_UNIQUE_IDENTIFIER), "", as.character(herbdat$GLOBAL_UNIQUE_IDENTIFIER))),
+                " \\tab ",
+                ifelse(is.na(herbdat$TYPE_STATUS), "", herbdat$TYPE_STATUS),
+                ifelse(
+                  is.na(herbdat$IDENTIFIED_BY),
+                  "",
+                  paste(" Det.: ", herbdat$IDENTIFIED_BY)
+                ),
+                ifelse(is.na(herbdat$DATE_IDENTIFIED), "", ", "),
+                ifelse(is.na(herbdat$DATE_IDENTIFIED), "",
+                       tryCatch(
+                         formatdate(herbdat$DATE_IDENTIFIED),
+                         error = function(e) {
+                           cat(" ")
+                           herbdat$DATE_IDENTIFIED
+                         }
+                       )),
+                "\\par}",
+                sep = ""
+              )
+            ),
+            paste(
+              "{\\pard\\keep\\keepn\\sa100\\fs",
+              trunc(font_size * 18),
+              sep = ""
+            ),
+            " \\par }",
+            paste("{\\pard\\keep\\qc\\fs", trunc(font_size * 18), sep = ""),
+            "  .                  .                   .\\par}"
+          )
       }
 
       NEW_DATE_COLLECTED[i] <- tryCatch(formatdate2(herbdat$DATE_COLLECTED),
@@ -3041,8 +3310,11 @@ herbarium_label <-
       temp2 <- c(temp2, res)
       herbdat_row1 <- rbind(herbdat_row1, herbdat)
     }
+
     template <- c(temp1, temp2, "}")
+
     res <- template[!template %in% ""]
+
     res <- res[!res %in% " "]
     res <- replace_space(res)
     res <- iconv(x = res, from = "UTF-8", to = "GB18030")
@@ -5062,6 +5334,7 @@ update_trait_list_table <- function(trait_searched = NULL,
 #' @param new_year integer new year of subplot
 #' @param new_month integer new month of subplot
 #' @param new_day integer new day of subplot
+#' @param new_colnam character new colnam of subplot
 #' @param ask_before_update logical TRUE by default, ask for confirmation before updating
 #' @param add_backup logical TRUE by default, add backup
 #' @param show_results logical TRUE by default, show the data that has been modified
@@ -5075,6 +5348,8 @@ update_subplots_table <- function(subplots_id = NULL,
                                   new_year = NULL,
                                   new_month = NULL,
                                   new_day = NULL,
+                                  new_colnam = NULL,
+                                  new_add_people = NULL,
                                   ask_before_update = TRUE,
                                   add_backup = TRUE,
                                   show_results = TRUE) {
@@ -5085,9 +5360,16 @@ update_subplots_table <- function(subplots_id = NULL,
     stop("\n Provide subplots_id to update")
 
   ### checking if at least one modification is asked
-  new_vals <- c(new_id_type_sub_plot, new_typevalue, new_year,
-                new_month, new_day)
-  if(!any(!is.null(new_vals))) stop("\n No new values to be updated.")
+  new_vals <- c(new_id_type_sub_plot,
+                new_typevalue,
+                new_year,
+                new_month,
+                new_day,
+                new_colnam,
+                new_add_people)
+
+  if (!any(!is.null(new_vals)))
+    stop("\n No new values to be updated.")
 
   ### querying for entries to be modified
   query_subplots <-
@@ -5096,8 +5378,22 @@ update_subplots_table <- function(subplots_id = NULL,
       dplyr::collect()
 
   print(query_subplots %>% as.data.frame())
-  if(nrow(query_subplots)>1) stop("more than one subplots selected, select one")
-  if(nrow(query_subplots)==0) stop("no subplots selected, select one")
+  if (nrow(query_subplots) > 1)
+    stop("more than one subplots selected, select one")
+  if (nrow(query_subplots) == 0)
+    stop("no subplots selected, select one")
+
+  if(!is.null(new_colnam)) {
+    new_id_colnam <-
+      .link_colnam(data_stand = tibble(colnam = new_colnam),
+                   collector_field = 1)
+
+    new_id_colnam <-
+      new_id_colnam$id_colnam
+
+  }else{
+    new_id_colnam <- NULL
+  }
 
   modif_types <-
     vector(mode = "character", length = nrow(query_subplots))
@@ -5112,7 +5408,11 @@ update_subplots_table <- function(subplots_id = NULL,
                   day = ifelse(!is.null(new_day), as.numeric(new_day),
                                query_subplots$day),
                   typevalue = ifelse(!is.null(new_typevalue), as.numeric(new_typevalue),
-                                     query_subplots$typevalue))
+                                     query_subplots$typevalue),
+                  id_colnam = ifelse(!is.null(new_id_colnam), as.numeric(new_id_colnam),
+                                     query_subplots$id_colnam),
+                  additional_people = ifelse(!is.null(new_add_people), new_add_people,
+                                             query_subplots$additional_people))
 
   new_vals <-
     new_vals %>%
@@ -5122,15 +5422,21 @@ update_subplots_table <- function(subplots_id = NULL,
     dplyr::bind_rows(
       new_vals,
       query_subplots %>%
-        dplyr::select(id_type_sub_plot, year, month, day, typevalue)
+        dplyr::select(id_type_sub_plot, year, month, day, typevalue, id_colnam, additional_people)
     )
 
   sel_query_subplots <-
     sel_query_subplots %>%
-    replace(., is.na(.), -9999)
+    mutate_if(is.character, ~ tidyr::replace_na(., "-9999")) %>%
+    mutate_if(is.numeric, ~ tidyr::replace_na(., -9999))
 
   comp_vals <-
-    apply(sel_query_subplots, MARGIN = 2, FUN = function(x) x[1]!=x[2:length(x)])
+    apply(
+      sel_query_subplots,
+      MARGIN = 2,
+      FUN = function(x)
+        x[1] != x[2:length(x)]
+    )
 
   # if(!is.null(nrow(comp_vals))) {
   #   query_trait <-
@@ -5188,7 +5494,7 @@ update_subplots_table <- function(subplots_id = NULL,
 
       rs <-
         DBI::dbSendQuery(mydb,
-                         statement = "UPDATE data_liste_sub_plots SET id_type_sub_plot=$2, year=$3, month=$4, day=$5, typevalue=$6, date_modif_d=$7, date_modif_m=$8, date_modif_y=$9 WHERE id_sub_plots = $1",
+                         statement = "UPDATE data_liste_sub_plots SET id_type_sub_plot=$2, year=$3, month=$4, day=$5, typevalue=$6, date_modif_d=$7, date_modif_m=$8, date_modif_y=$9, id_colnam=$10, additional_people=$11 WHERE id_sub_plots = $1",
                          params = list(query_subplots$id_sub_plots, # $1
                                      rep(ifelse(!is.null(new_id_type_sub_plot), as.numeric(new_id_type_sub_plot),
                                                 query_subplots$id_type_sub_plot), nrow(query_subplots)), # $2
@@ -5202,7 +5508,12 @@ update_subplots_table <- function(subplots_id = NULL,
                                                 query_subplots$typevalue), nrow(query_subplots)), # $6
                                      rep(query_subplots$date_modif_d, nrow(query_subplots)), # $7
                                      rep(query_subplots$date_modif_m, nrow(query_subplots)), # $8
-                                     rep(query_subplots$date_modif_y, nrow(query_subplots))) # $9
+                                     rep(query_subplots$date_modif_y, nrow(query_subplots)), # $9
+                                     rep(ifelse(!is.null(new_id_colnam), as.numeric(new_id_colnam),
+                                                query_subplots$id_colnam), nrow(query_subplots)), # $10
+                                     rep(ifelse(!is.null(new_add_people), as.character(new_add_people),
+                                                query_subplots$additional_people), nrow(query_subplots))) # 11
+
                          )
 
       DBI::dbClearResult(rs)
@@ -5291,8 +5602,6 @@ update_traits_measures <- function(new_data,
         print("check")
         print(colnames_property)
       }
-
-
   }
 
   # id_db <- col_id
@@ -5315,8 +5624,11 @@ update_traits_measures <- function(new_data,
   }
 
   all_corresponding_matches <- list()
-  if(!is.null(trait_values_new_data) & !is.null(col_names_trait_corresp)) nbe_col_cor <- length(col_names_trait_corresp)
-  if(!is.null(measures_property_new_data) & !is.null(col_names_property_corresp)) nbe_col_cor <- length(col_names_property_corresp)
+  if(!is.null(trait_values_new_data) & !is.null(col_names_trait_corresp))
+    nbe_col_cor <- length(col_names_trait_corresp)
+  if(!is.null(measures_property_new_data) & !is.null(col_names_property_corresp))
+    nbe_col_cor <- length(col_names_property_corresp)
+
   for (k in 1:nbe_col_cor) {
 
     if(!is.null(trait_values_new_data) & !is.null(col_names_trait_corresp))
@@ -5336,7 +5648,7 @@ update_traits_measures <- function(new_data,
     matches <-
       output_matches[[2]][[1]]
 
-    if(launch_update & nrow(matches)>0) {
+    if(launch_update & nrow(matches) > 0) {
       matches <-
         matches %>%
         dplyr::select(id, dplyr::contains("_new"))
@@ -5398,8 +5710,8 @@ update_traits_measures <- function(new_data,
         colnames_measures <-
           dplyr::tbl(mydb, "followup_updates_traits_measures") %>%
           dplyr::select(-date_modified, -modif_type, -id_fol_up_traits_measures) %>%
-          dplyr::top_n(1) %>%
           dplyr::collect() %>%
+          dplyr::top_n(1) %>%
           colnames()
 
         all_rows_to_be_updated <-
@@ -5513,14 +5825,17 @@ add_individuals <- function(new_data ,
     dplyr::distinct(id_table_liste_plots_n) %>%
     dplyr::collect()
 
-  if(nrow(plots_already_in_db)>0) {
-    print(plots_already_in_db %>%
-            dplyr::left_join(dplyr::tbl(mydb, "data_liste_plots") %>%
-                               dplyr::select(plot_name, id_liste_plots) %>%
-                               dplyr::collect(),
-                             by=c("id_table_liste_plots_n"="id_liste_plots")) %>%
-            dplyr::pull(plot_name)
-          )
+  if (nrow(plots_already_in_db) > 0) {
+    print(
+      plots_already_in_db %>%
+        dplyr::left_join(
+          dplyr::tbl(mydb, "data_liste_plots") %>%
+            dplyr::select(plot_name, id_liste_plots) %>%
+            dplyr::collect(),
+          by = c("id_table_liste_plots_n" = "id_liste_plots")
+        ) %>%
+        dplyr::pull(plot_name)
+    )
     warning("data for some plots already in database")
 
   }
@@ -6870,6 +7185,7 @@ query_specimens <- function(collector = NULL,
 
   if (nrow(query) == 1 & show_previous_modif) {
 
+    ## get previous modifications of queried entries
     modif_backups <-
       dplyr::tbl(mydb, "followup_updates_specimens") %>%
       dplyr::filter(id_specimen == !!query$id_specimen) %>%
@@ -6932,105 +7248,124 @@ query_specimens <- function(collector = NULL,
 
     query_labels <-
       query %>%
-      tibble::add_column(INSTITUTION_CODE=rep("BRLU", nrow(.)),
-                 HERBARIUM=rep("BRLU", nrow(.)),
-                 TITLE=rep(project_title, nrow(.)),
-                 AUTHOR_OF_SPECIES=NA,
-                 INFRASPECIFIC_RANK=NA,
-                 INFRASPECIFIC_EPITHET=NA,
-                 AUTHOR_OF_INFRASPECIFIC_RANK=NA,
-                 COUNTY=NA,
-                 IMAGE_URL=NA,
-                 RELATED_INFORMATION=NA,
-                 LAT_DEGREE=as.double(lat_convert_deg),
-                 LAT_MINUTE=as.double(lat_convert_min),
-                 LAT_SECOND=as.double(lat_convert_sec),
-                 LON_DEGREE=as.double(long_convert_deg),
-                 LON_MINUTE=as.double(long_convert_min),
-                 LON_SECOND=as.double(long_convert_sec),
-                 LAT_FLAG=lat_flag,
-                 LON_FLAG=long_flag,
-                 REMARKS=NA,
-                 GEOREFERENCE_SOURCES=NA,
-                 PROJECT=NA,
-                 TYPE_STATUS=NA,
-                 PROCESSED_BY=NA,
-                 LOCAL_NAME=NA) %>%
-      dplyr::rename(GLOBAL_UNIQUE_IDENTIFIER=id_specimen,
-             COLLECTION_CODE=colnbr,
-             COLLECTOR=colnam,
-             ADDITIONAL_COLLECTOR=add_col,
-             COLLECTOR_NUMBER=specimens_code,
-             FAMILY=tax_fam,
-             GENUS=tax_gen,
-             SPECIES=tax_esp,
-             COUNTRY=country,
-             STATE_PROVINCE=majorarea,
-             LOCALITY=locality,
-             ELEVATION=elevation,
-             ATTRIBUTES=description,
-             IDENTIFIED_BY=detby,
-             FULL_NAME=full_name) %>%
-      dplyr::mutate(coly=ifelse(is.na(coly) | coly==0, "", coly),
-             colm=ifelse(is.na(colm) | colm==0, "", colm),
-             cold=ifelse(is.na(cold) | cold==0, "", cold)) %>%
-      dplyr::mutate(DATE_COLLECTED=paste(coly, colm, cold, sep="-"),
-             DATE_IDENTIFIED=paste(ifelse(is.na(dety) | dety==0, "", dety),
-                                   ifelse(is.na(detm) | detm==0, "", detm),
-                                   ifelse(is.na(detd) | detd==0, "", detd), sep="-"),
-             DATE_LASTMODIFIED=paste(data_modif_y, data_modif_m, data_modif_d , sep="-")) %>%
-      dplyr::select(INSTITUTION_CODE,
-                    HERBARIUM,
-                    TITLE,
-                    AUTHOR_OF_SPECIES,
-                    INFRASPECIFIC_RANK,
-                    INFRASPECIFIC_EPITHET,
-                    AUTHOR_OF_INFRASPECIFIC_RANK,
-                    FULL_NAME,
-                    COUNTY,
-                    IMAGE_URL,
-                    RELATED_INFORMATION,
-                    LAT_DEGREE,
-                    LAT_MINUTE,
-                    LAT_SECOND,
-                    LON_DEGREE,
-                    LON_MINUTE,
-                    LON_SECOND,
-                    LAT_FLAG,
-                    LON_FLAG,
-                    REMARKS,
-                    GEOREFERENCE_SOURCES,
-                    PROJECT,
-                    TYPE_STATUS,
-                    PROCESSED_BY,
-                    GLOBAL_UNIQUE_IDENTIFIER,
-                    COLLECTION_CODE,
-                    COLLECTOR,
-                    ADDITIONAL_COLLECTOR,
-                    COLLECTOR_NUMBER,
-                    FAMILY,
-                    GENUS,
-                    SPECIES,
-                    LOCAL_NAME,
-                    COUNTRY,
-                    STATE_PROVINCE,
-                    LOCALITY,
-                    ELEVATION,
-                    ATTRIBUTES,
-                    IDENTIFIED_BY,
-                    DATE_COLLECTED,
-                    DATE_IDENTIFIED,
-                    DATE_LASTMODIFIED)
+      dplyr::mutate(specimen_code_up =
+                      paste0(colnam,' ' , ifelse(!is.na(specimen_nbe_char), specimen_nbe_char, colnbr))) %>%
+      tibble::add_column(
+        INSTITUTION_CODE = rep("BRLU", nrow(.)),
+        HERBARIUM = rep("BRLU", nrow(.)),
+        TITLE = rep(project_title, nrow(.)),
+        AUTHOR_OF_SPECIES = NA,
+        INFRASPECIFIC_RANK = NA,
+        INFRASPECIFIC_EPITHET = NA,
+        AUTHOR_OF_INFRASPECIFIC_RANK = NA,
+        COUNTY = NA,
+        IMAGE_URL = NA,
+        RELATED_INFORMATION = NA,
+        LAT_DEGREE = as.double(lat_convert_deg),
+        LAT_MINUTE = as.double(lat_convert_min),
+        LAT_SECOND = as.double(lat_convert_sec),
+        LON_DEGREE = as.double(long_convert_deg),
+        LON_MINUTE = as.double(long_convert_min),
+        LON_SECOND = as.double(long_convert_sec),
+        LAT_FLAG = lat_flag,
+        LON_FLAG = long_flag,
+        REMARKS = NA,
+        GEOREFERENCE_SOURCES = NA,
+        PROJECT = NA,
+        TYPE_STATUS = NA,
+        PROCESSED_BY = NA,
+        LOCAL_NAME = NA
+      ) %>%
+      dplyr::rename(
+        GLOBAL_UNIQUE_IDENTIFIER = id_specimen,
+        COLLECTION_CODE = colnbr,
+        COLLECTOR = colnam,
+        ADDITIONAL_COLLECTOR = add_col,
+        COLLECTOR_NUMBER = specimen_code_up,
+        FAMILY = tax_fam,
+        GENUS = tax_gen,
+        SPECIES = tax_esp,
+        COUNTRY = country,
+        STATE_PROVINCE = majorarea,
+        LOCALITY = locality,
+        ELEVATION = elevation,
+        ATTRIBUTES = description,
+        IDENTIFIED_BY = detby,
+        FULL_NAME = full_name
+      ) %>%
+      dplyr::mutate(
+        coly = ifelse(is.na(coly) | coly == 0, "", coly),
+        colm = ifelse(is.na(colm) | colm == 0, "", colm),
+        cold = ifelse(is.na(cold) | cold == 0, "", cold)
+      ) %>%
+      dplyr::mutate(
+        DATE_COLLECTED = paste(coly, colm, cold, sep = "-"),
+        DATE_IDENTIFIED = paste(
+          ifelse(is.na(dety) | dety == 0, "", dety),
+          ifelse(is.na(detm) |
+                   detm == 0, "", detm),
+          ifelse(is.na(detd) |
+                   detd == 0, "", detd),
+          sep = "-"
+        ),
+        DATE_LASTMODIFIED = paste(data_modif_y, data_modif_m, data_modif_d , sep =
+                                    "-")
+      ) %>%
+      dplyr::select(
+        INSTITUTION_CODE,
+        HERBARIUM,
+        TITLE,
+        AUTHOR_OF_SPECIES,
+        INFRASPECIFIC_RANK,
+        INFRASPECIFIC_EPITHET,
+        AUTHOR_OF_INFRASPECIFIC_RANK,
+        FULL_NAME,
+        COUNTY,
+        IMAGE_URL,
+        RELATED_INFORMATION,
+        LAT_DEGREE,
+        LAT_MINUTE,
+        LAT_SECOND,
+        LON_DEGREE,
+        LON_MINUTE,
+        LON_SECOND,
+        LAT_FLAG,
+        LON_FLAG,
+        REMARKS,
+        GEOREFERENCE_SOURCES,
+        PROJECT,
+        TYPE_STATUS,
+        PROCESSED_BY,
+        GLOBAL_UNIQUE_IDENTIFIER,
+        COLLECTION_CODE,
+        COLLECTOR,
+        ADDITIONAL_COLLECTOR,
+        COLLECTOR_NUMBER,
+        FAMILY,
+        GENUS,
+        SPECIES,
+        LOCAL_NAME,
+        COUNTRY,
+        STATE_PROVINCE,
+        LOCALITY,
+        ELEVATION,
+        ATTRIBUTES,
+        IDENTIFIED_BY,
+        DATE_COLLECTED,
+        DATE_IDENTIFIED,
+        DATE_LASTMODIFIED
+      )
 
     herbarium_label(dat = query_labels,
-                    theme="GILLES", outfile = paste0(file_labels, ".rtf"))
+                    theme="GILLES",
+                    outfile = paste0(file_labels, ".rtf"))
 
   }
 
   nrow_query <-
     nrow(query)
 
-  if (nrow(query) == 1 & show_previous_modif ) {
+  if (nrow(query) == 1 & show_previous_modif) {
 
     if(nrow(modif_backups) > 0)
       query <-
@@ -7039,7 +7374,6 @@ query_specimens <- function(collector = NULL,
 
   }
 
-
   if(nrow(query) < 20)
   {
     res_html <-
@@ -7047,19 +7381,22 @@ query_specimens <- function(collector = NULL,
                                                 fix.empty.names = T)) %>%
       mutate_all(~ tidyr::replace_na(., ""))
 
-    if(show_previous_modif & nrow(modif_backups) > 0) {
-      for (i in ((nrow_query  + 2):(nrow(query)  + 1))) {
-        col_ <- colnames(res_html)[i]
-        var_new <-
-          rlang::parse_expr(rlang::quo_name(rlang::enquo(col_)))
+    if(nrow(query) == 1 & show_previous_modif) {
+      if(nrow(modif_backups) > 0) {
+        for (i in ((nrow_query  + 2):(nrow(query)  + 1))) {
 
-        res_html <-
-          res_html %>%
-          mutate(!!var_new :=
-                   kableExtra::cell_spec(!!var_new,
-                                         "html",
-                                         background = "grey",
-                                         color = "white", italic = T))
+          col_ <- colnames(res_html)[i]
+          var_new <-
+            rlang::parse_expr(rlang::quo_name(rlang::enquo(col_)))
+
+          res_html <-
+            res_html %>%
+            mutate(!!var_new :=
+                     kableExtra::cell_spec(!!var_new,
+                                           "html",
+                                           background = "grey",
+                                           color = "white", italic = T))
+        }
       }
     }
 
@@ -7393,90 +7730,6 @@ add_traits_measures <- function(new_data,
       dplyr::rename(id_liste_plots=id_table_liste_plots_n)
   }
 
-  if(is.null(id_plot_name) & is.null(plot_name_field)) {
-
-    new_data_renamed <-
-      new_data_renamed %>%
-      tibble::add_column(id_liste_plots = NA) %>%
-      dplyr::mutate(id_liste_plots = as.integer(id_liste_plots))
-
-  }
-
-### check for different census for concerned plots
-  multiple_census <- FALSE
-  census_check <- utils::askYesNo(msg = "Link trait measures to census ?")
-
-  if(census_check) {
-  unique_ids_plots <- unique(new_data_renamed$id_liste_plots)
-  censuses <-
-    dplyr::tbl(mydb, "data_liste_sub_plots") %>%
-    dplyr::filter(id_table_liste_plots %in% unique_ids_plots, id_type_sub_plot==27) %>%
-    dplyr::left_join(dplyr::tbl(mydb, "data_liste_plots") %>%
-                       dplyr::select(plot_name, id_liste_plots), by=c("id_table_liste_plots"="id_liste_plots")) %>%
-    dplyr::left_join(dplyr::tbl(mydb, "subplotype_list") %>%
-                       dplyr::select(type, id_subplotype), by=c("id_type_sub_plot"="id_subplotype")) %>%
-    dplyr::left_join(dplyr::tbl(mydb, "table_colnam") %>%
-                       dplyr::select(id_table_colnam, colnam), by=c("id_colnam"="id_table_colnam")) %>%
-    dplyr::collect()
-
-  if(nrow(censuses) > 0) { # & length(unique(censuses$typevalue))>1
-    message("\n multiple census for concerned plots")
-    censuses %>%
-      dplyr::select(plot_name, id_table_liste_plots, year, month, day, typevalue, type, colnam, additional_people) %>%
-      as.data.frame() %>%
-      print()
-    census_chosen <- readline(prompt="Choose census ")
-
-    chosen_ids_subplots <-
-      censuses %>%
-      dplyr::filter(typevalue == as.numeric(census_chosen)) %>%
-      dplyr::select(id_table_liste_plots, id_sub_plots)
-
-    if(nrow(chosen_ids_subplots) == 0) stop("chosen census not available")
-
-    missing_census <-
-      new_data_renamed %>%
-      dplyr::distinct(id_liste_plots) %>%
-      dplyr::filter(!id_liste_plots %in% chosen_ids_subplots$id_table_liste_plots) %>%
-      dplyr::filter(!is.na(id_liste_plots))
-
-    if(nrow(missing_census)) {
-      print(missing_census %>%
-              dplyr::left_join(dplyr::tbl(mydb, "data_liste_plots") %>%
-                                 dplyr::select(id_liste_plots, plot_name) %>%
-                                 dplyr::collect(),
-                               by=c("id_liste_plots"="id_liste_plots")) %>%
-              as.data.frame())
-      warning(paste("Missing census for", nrow(missing_census),"plots, census chosen :", census_chosen))
-    }
-
-    new_data_renamed <-
-      new_data_renamed %>%
-      dplyr::left_join(chosen_ids_subplots,
-                       by=c("id_liste_plots"="id_table_liste_plots"))
-    # %>%
-    #   filter(id_liste_plots==824) %>%
-    #   select(id_sub_plots)
-
-    if(as.numeric(census_chosen)>1) multiple_census <- TRUE
-
-  }else{
-      new_data_renamed <-
-        new_data_renamed %>%
-        tibble::add_column(id_sub_plots=NA) %>%
-        dplyr::mutate(id_sub_plots=as.integer(id_sub_plots))
-
-      multiple_census <- FALSE
-    }
-  }else{
-
-    new_data_renamed <-
-      new_data_renamed %>%
-      tibble::add_column(id_sub_plots = NA) %>%
-      dplyr::mutate(id_sub_plots = as.integer(id_sub_plots))
-
-  }
-
   ### linking individuals by id
   if(!is.null(id_tag_plot) & is.null(individual_plot_field)) {
 
@@ -7511,6 +7764,109 @@ add_traits_measures <- function(new_data,
       new_data_renamed %>%
       tibble::add_column(id_data_individuals = NA) %>%
       dplyr::mutate(id_data_individuals = as.integer(id_data_individuals))
+
+  }
+
+
+  if(is.null(id_plot_name) & is.null(plot_name_field)) {
+
+    if(!is.null(id_tag_plot) & is.null(individual_plot_field)) {
+
+      queried_individuals <-
+        query_plots(id_individual = new_data_renamed$id_data_individuals, remove_ids = F)
+
+      new_data_renamed <-
+        new_data_renamed %>%
+        left_join(queried_individuals %>%
+                    dplyr::select(id_n, id_table_liste_plots_n),
+                  by = c("id_data_individuals" = "id_n")) %>%
+        rename(id_liste_plots = id_table_liste_plots_n)
+
+    }else {
+
+      new_data_renamed <-
+        new_data_renamed %>%
+        tibble::add_column(id_liste_plots = NA) %>%
+        dplyr::mutate(id_liste_plots = as.integer(id_liste_plots))
+
+    }
+  }
+
+
+  ### check for different census for concerned plots
+  multiple_census <- FALSE
+  census_check <- utils::askYesNo(msg = "Link trait measures to census ?")
+
+  if(census_check) {
+    unique_ids_plots <- unique(new_data_renamed$id_liste_plots)
+    censuses <-
+      dplyr::tbl(mydb, "data_liste_sub_plots") %>%
+      dplyr::filter(id_table_liste_plots %in% unique_ids_plots, id_type_sub_plot==27) %>%
+      dplyr::left_join(dplyr::tbl(mydb, "data_liste_plots") %>%
+                         dplyr::select(plot_name, id_liste_plots), by=c("id_table_liste_plots"="id_liste_plots")) %>%
+      dplyr::left_join(dplyr::tbl(mydb, "subplotype_list") %>%
+                         dplyr::select(type, id_subplotype), by=c("id_type_sub_plot"="id_subplotype")) %>%
+      dplyr::left_join(dplyr::tbl(mydb, "table_colnam") %>%
+                         dplyr::select(id_table_colnam, colnam), by=c("id_colnam"="id_table_colnam")) %>%
+      dplyr::collect()
+
+    if(nrow(censuses) > 0) { # & length(unique(censuses$typevalue))>1
+
+      message("\n multiple census for concerned plots")
+      censuses %>%
+        dplyr::select(plot_name, id_table_liste_plots, year, month, day, typevalue, type, colnam, additional_people) %>%
+        as.data.frame() %>%
+        print()
+      census_chosen <- readline(prompt="Choose census ")
+
+      chosen_ids_subplots <-
+        censuses %>%
+        dplyr::filter(typevalue == as.numeric(census_chosen)) %>%
+        dplyr::select(id_table_liste_plots, id_sub_plots)
+
+      if(nrow(chosen_ids_subplots) == 0) stop("chosen census not available")
+
+      missing_census <-
+        new_data_renamed %>%
+        dplyr::distinct(id_liste_plots) %>%
+        dplyr::filter(!id_liste_plots %in% chosen_ids_subplots$id_table_liste_plots) %>%
+        dplyr::filter(!is.na(id_liste_plots))
+
+      if(nrow(missing_census)) {
+        print(missing_census %>%
+                dplyr::left_join(dplyr::tbl(mydb, "data_liste_plots") %>%
+                                   dplyr::select(id_liste_plots, plot_name) %>%
+                                   dplyr::collect(),
+                                 by=c("id_liste_plots"="id_liste_plots")) %>%
+                as.data.frame())
+        warning(paste("Missing census for", nrow(missing_census),"plots, census chosen :", census_chosen))
+      }
+
+      new_data_renamed <-
+        new_data_renamed %>%
+        dplyr::left_join(chosen_ids_subplots,
+                         by = c("id_liste_plots" = "id_table_liste_plots"))
+      # %>%
+      #   filter(id_liste_plots==824) %>%
+      #   select(id_sub_plots)
+
+      if (as.numeric(census_chosen) > 1)
+        multiple_census <- TRUE
+
+    } else {
+
+      new_data_renamed <-
+        new_data_renamed %>%
+        tibble::add_column(id_sub_plots = NA) %>%
+        dplyr::mutate(id_sub_plots = as.integer(id_sub_plots))
+      multiple_census <- FALSE
+    }
+  }else{
+
+    new_data_renamed <-
+      new_data_renamed %>%
+      tibble::add_column(id_sub_plots = NA) %>%
+      dplyr::mutate(id_sub_plots = as.integer(id_sub_plots))
 
   }
 
@@ -9066,6 +9422,7 @@ add_specimens <- function(new_data ,
 #'
 #' @export
 .find_ids <- function(dataset, col_new, id_col_nbr, type_data) {
+
   ids_new_data <-
     dataset %>%
     dplyr::select(!!col_new[id_col_nbr]) %>%
@@ -9083,13 +9440,19 @@ add_specimens <- function(new_data ,
 
       corresponding_data <-
         .get_trait_individuals_values(traits = col_new[-id_col_nbr])
+
       corresponding_data <- corresponding_data[[1]]
     }
 
     if(col_new[id_col_nbr] %in% c("id_trait_measures")) {
+
+      new_name <- col_new[-id_col_nbr]
+
       corresponding_data <-
         dplyr::tbl(mydb, "data_traits_measures") %>%
-        dplyr::select(id_trait_measures, !!col_new[-id_col_nbr])
+        dplyr::select(id_trait_measures, traitvalue) %>%
+        dplyr::collect() %>%
+        rename(!!new_name := traitvalue)
 
     }
   }
@@ -9125,6 +9488,7 @@ add_specimens <- function(new_data ,
     select_col_new <-
       dplyr::select(dataset, !!var_id, !!var) %>%
       dplyr::rename(!!var_new := !!var)
+
     id <- "id"
     select_col_new <-
       select_col_new %>%
@@ -9147,9 +9511,9 @@ add_specimens <- function(new_data ,
       matches %>%
       dplyr::filter(!!quo_var != !!quo_var_old)
 
-    if(nrow(matches)>0) {
-      matches[matches[,2] == -9999, 2] <- NA
-      matches[matches[,3] == -9999, 3] <- NA
+    if (nrow(matches) > 0) {
+      matches[matches[, 2] == -9999, 2] <- NA
+      matches[matches[, 3] == -9999, 3] <- NA
     }
 
     all_tb_update[[length(all_tb_update)+1]] <- matches
