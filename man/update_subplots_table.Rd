@@ -11,6 +11,8 @@ update_subplots_table(
   new_year = NULL,
   new_month = NULL,
   new_day = NULL,
+  new_colnam = NULL,
+  new_add_people = NULL,
   ask_before_update = TRUE,
   add_backup = TRUE,
   show_results = TRUE
@@ -28,6 +30,8 @@ update_subplots_table(
 \item{new_month}{integer new month of subplot}
 
 \item{new_day}{integer new day of subplot}
+
+\item{new_colnam}{character new colnam of subplot}
 
 \item{ask_before_update}{logical TRUE by default, ask for confirmation before updating}
 

@@ -7011,7 +7011,25 @@ delete_entry_dico_name <- function(id) {
 }
 
 
+#' Delete an entry in plot meta-data
+#'
+#' Delete an entry in plot meta-data table using id for selection
+#'
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#'
+#' @param id integer
+#'
+#' @return No values
+#' @export
+.delete_plot <- function(id) {
 
+  if(!exists("mydb")) call.mydb()
+
+  DBI::dbExecute(mydb,
+                 "DELETE FROM data_liste_plots WHERE id_liste_plots=$1", params=list(id)
+  )
+}
 
 
 
@@ -9542,6 +9560,7 @@ add_specimens <- function(new_data ,
 #'
 #' @export
 .rename_data <- function(dataset, col_old, col_new) {
+
   if (length(col_old) != length(col_new))
     stop("number of new columns names different of number of selected column names")
 
@@ -10944,6 +10963,7 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
 #' @param err.limit integer any measure of second diameter higher than err.limit standard deviation below the first measure will be excluded
 #' @param maxgrow numeric any growth in mm/year higher than maxgrow will be excluded
 #' @param method string either 'I' or 'E'
+#' @param export_ind_growth whether growth per individuals should be exported
 #'
 #' @return tibble
 #' @export
@@ -10952,7 +10972,8 @@ growth_computing <- function(dataset,
                              mindbh = NULL,
                              err.limit = 4, # any measure of second diameter higher than err.limit standard deviation below the first measure will be excluded
                              maxgrow = 75, # any growth (mm/year) higher than maxgrow will be excluded
-                             method = "I") {
+                             method = "I",
+                             export_ind_growth = TRUE) {
 
   if (!any(rownames(utils::installed.packages()) == "date")) {
     stop("date package needed, please install it")
@@ -10976,17 +10997,19 @@ growth_computing <- function(dataset,
 
   message(paste("Multiple census recorded for", length(all_ids_plot), "plots"))
 
-  full_results <- list()
+  full_results <-
+    full_results_ind <-
+    vector('list', length = length(all_ids_plot))
   for (plot in 1:length(all_ids_plot)) {
 
     message(plot_names[plot])
 
     selected_dataset <-
       dataset %>%
-      dplyr::filter(id_table_liste_plots_n==all_ids_plot[plot])
+      dplyr::filter(id_table_liste_plots_n == all_ids_plot[plot])
     selected_metadata_census <-
       metadata[[2]] %>%
-      dplyr::filter(id_table_liste_plots==all_ids_plot[plot])
+      dplyr::filter(id_table_liste_plots == all_ids_plot[plot])
 
     skipped_census_missing_dates <-
       selected_metadata_census %>%
@@ -10994,9 +11017,11 @@ growth_computing <- function(dataset,
 
     not_run <- FALSE
     if(nrow(skipped_census_missing_dates)>0) {
+
       message(paste("Census excluded because missing year and/or month"))
       print(skipped_census_missing_dates)
       not_run <- TRUE
+
     }
 
     if(length(unique(selected_metadata_census$year))==1 &
@@ -11008,6 +11033,7 @@ growth_computing <- function(dataset,
 
     selected_metadata_census <-
       selected_metadata_census %>%
+      dplyr::arrange(typevalue) %>%
       dplyr::mutate(date =
                       paste(ifelse(!is.na(month),
                                    month, 1), # if day is missing, by default 1
@@ -11020,12 +11046,13 @@ growth_computing <- function(dataset,
 
     arranged_sub_plots <-
       selected_metadata_census %>%
+      dplyr::arrange(typevalue) %>%
       dplyr::select(date_julian, id_sub_plots) %>%
       dplyr::arrange(date_julian) %>%
       dplyr::pull(id_sub_plots)
 
-    if(!paste(arranged_sub_plots, collapse = "_")==
-       paste(selected_metadata_census$id_sub_plots, collapse = "_")) {
+    if (!paste(arranged_sub_plots, collapse = "_") ==
+        paste(selected_metadata_census$id_sub_plots, collapse = "_")) {
       message(paste("Dates are not in chronological order"))
       not_run <- TRUE
     }
@@ -11035,7 +11062,7 @@ growth_computing <- function(dataset,
       dplyr::filter(!is.na(year) & !is.na(month))
 
     if(!not_run) {
-      for (i in 1:(nrow(selected_metadata_census)-1)) {
+      for (i in 1:(nrow(selected_metadata_census) - 1)) {
 
         splitted_census <-
           .split_censuses(meta = selected_metadata_census,
@@ -11091,7 +11118,7 @@ growth_computing <- function(dataset,
           dplyr::filter(is.na(stem_diameter_census_1) |
                           stem_diameter_census_1 == 0)
 
-        censuses <- .time_diff(splitted_census[[i]], splitted_census[[i+1]])
+        censuses <- .time_diff(census1 = splitted_census[[i]], census2 = splitted_census[[i+1]])
 
         censuses <- .trim.growth(censuses, err.limit = err.limit,
                                  maxgrow = maxgrow, mindbh = mindbh)
@@ -11112,7 +11139,44 @@ growth_computing <- function(dataset,
           censuses %>%
           tibble::add_column(growthrate = growthrate)
 
-        result <- list(
+        if (export_ind_growth) {
+
+          ind_growth <-
+            censuses %>%
+            left_join(
+              selected_dataset %>%
+                dplyr::select(
+                  id_n,
+                  id_diconame_final,
+                  full_name_no_auth,
+                  tax_fam,
+                  tax_gen,
+                  tax_esp,
+                  plot_name,
+                  sous_plot_name,
+                  ind_num_sous_plot,
+                  id_table_liste_plots_n
+                ),
+              by = c("id_n" = "id_n")
+            ) %>%
+            dplyr::relocate(plot_name,
+                            sous_plot_name,
+                            ind_num_sous_plot,
+                            full_name_no_auth,
+                            tax_fam,
+                            tax_gen,
+                            tax_esp,
+                            .before = date_census_1)
+
+          full_results_ind[[i]] <-
+            ind_growth
+
+        }
+
+
+
+        result <-
+          list(
           plot_name = selected_metadata_census$plot_name[1],
           censuses = paste(names(splitted_census[i]), names(splitted_census[i+1]), collapse = "_", sep = "_"),
           growthrate = mean(growthrate, na.rm = TRUE),
@@ -11133,8 +11197,10 @@ growth_computing <- function(dataset,
                                           na.rm = TRUE))
         )
 
-        full_results[[length(full_results)+1]] <-
+        full_results[[i]] <-
           result
+
+
 
       }
     }else{
@@ -11143,7 +11209,11 @@ growth_computing <- function(dataset,
     }
   }
 
-  return(full_results)
+  if(!export_ind_growth)
+    return(full_results)
 
+  if(export_ind_growth)
+    return(list(plot_results = full_results,
+                ind_results = full_results_ind))
 
 }

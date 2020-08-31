@@ -10,7 +10,8 @@ growth_computing(
   mindbh = NULL,
   err.limit = 4,
   maxgrow = 75,
-  method = "I"
+  method = "I",
+  export_ind_growth = TRUE
 )
 }
 \arguments{
@@ -25,6 +26,8 @@ growth_computing(
 \item{maxgrow}{numeric any growth in mm/year higher than maxgrow will be excluded}
 
 \item{method}{string either 'I' or 'E'}
+
+\item{export_ind_growth}{whether growth per individuals should be exported}
 }
 \value{
 tibble
