@@ -1268,6 +1268,7 @@ launch_stand_tax_app <- function() {
 #' @return The database is loaded
 #' #'
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @export
 call.mydb <- function(pass=NULL, user=NULL, offline = FALSE) {
 
   if(!exists("mydb")) {
@@ -3758,7 +3759,9 @@ update_plot_data <- function(team_lead = NULL,
                              new_elevation = NULL,
                              new_method = NULL,
                              new_province = NULL,
+                             new_data_provider = NULL,
                              add_backup = TRUE){
+
   if(!exists("mydb")) call.mydb()
 
   if(is.null(id_table_plot)) {
@@ -3772,57 +3775,104 @@ update_plot_data <- function(team_lead = NULL,
 
   if(nrow(quer_plots)==1) {
     new_values <-
-      dplyr::tibble(plot_name=ifelse(!is.null(new_plot_name), new_plot_name, quer_plots$plot_name),
-                    method=ifelse(!is.null(new_method), new_method, quer_plots$method),
-                    team_leader=ifelse(!is.null(new_team_leader), new_team_leader, quer_plots$team_leader),
-                    country=ifelse(!is.null(new_country), new_country, quer_plots$country),
-                    ddlat=ifelse(!is.null(new_ddlat), new_ddlat, quer_plots$ddlat),
-                    ddlon=ifelse(!is.null(new_ddlon), new_ddlon, quer_plots$ddlon),
-                    elevation=ifelse(!is.null(new_elevation), new_elevation, quer_plots$elevation),
-                    province = ifelse(!is.null(new_province), new_province, quer_plots$province)
-                         )
+      dplyr::tibble(
+        plot_name = ifelse(!is.null(new_plot_name), new_plot_name, quer_plots$plot_name),
+        method = ifelse(!is.null(new_method), new_method, quer_plots$method),
+        team_leader = ifelse(
+          !is.null(new_team_leader),
+          new_team_leader,
+          quer_plots$team_leader
+        ),
+        country = ifelse(!is.null(new_country), new_country, quer_plots$country),
+        ddlat = ifelse(!is.null(new_ddlat), new_ddlat, quer_plots$ddlat),
+        ddlon = ifelse(!is.null(new_ddlon), new_ddlon, quer_plots$ddlon),
+        elevation = ifelse(!is.null(new_elevation), new_elevation, quer_plots$elevation),
+        province = ifelse(!is.null(new_province), new_province, quer_plots$province),
+        data_provider = ifelse(!is.null(new_data_provider), new_data_provider, quer_plots$data_provider)
+      )
 
     ## trick to include NA values in comparison
     new_values <-
       new_values %>%
-      tidyr::replace_na(list(ddlat = -1000, ddlon = -1000, elevation = -1000, province = "none"))
+      tidyr::replace_na(list(
+        ddlat = -1000,
+        ddlon = -1000,
+        elevation = -1000,
+        province = "none"
+      ))
 
     quer_plots_sel <-
       quer_plots %>%
-      dplyr::select(plot_name, method, team_leader, country, ddlat, ddlon, elevation, province) %>%
-      tidyr::replace_na(list(ddlat = -1000, ddlon = -1000, elevation = -1000, team_leader = "none", province = "none"))
+      dplyr::select(plot_name,
+                    method,
+                    team_leader,
+                    country,
+                    ddlat,
+                    ddlon,
+                    elevation,
+                    province,
+                    data_provider) %>%
+      tidyr::replace_na(
+        list(
+          ddlat = -1000,
+          ddlon = -1000,
+          elevation = -1000,
+          team_leader = "none",
+          province = "none",
+          data_provider = "none"
+        )
+      )
 
-    if(new_values$ddlat==-1000 & quer_plots_sel$ddlat>-1000) new_values$ddlat=quer_plots_sel$ddlat
-    if(new_values$ddlon==-1000 & quer_plots_sel$ddlon>-1000) new_values$ddlon=quer_plots_sel$ddlon
-    if(new_values$elevation==-1000 & quer_plots_sel$elevation>-1000) new_values$elevation=quer_plots_sel$elevation
+    if (new_values$ddlat == -1000 &
+        quer_plots_sel$ddlat > -1000)
+      new_values$ddlat = quer_plots_sel$ddlat
 
-    if(new_values$ddlat==-1000 & quer_plots_sel$ddlat==-1000) new_values$ddlat=quer_plots_sel$ddlat=NA
-    if(new_values$ddlon==-1000 & quer_plots_sel$ddlon==-1000) new_values$ddlon=quer_plots_sel$ddlon=NA
-    if(new_values$elevation==-1000 & quer_plots_sel$elevation==-1000) new_values$elevation=quer_plots_sel$elevation=NA
+    if (new_values$ddlon == -1000 &
+        quer_plots_sel$ddlon > -1000)
+      new_values$ddlon = quer_plots_sel$ddlon
+
+    if (new_values$elevation == -1000 &
+        quer_plots_sel$elevation > -1000)
+      new_values$elevation = quer_plots_sel$elevation
+
+    if (new_values$ddlat == -1000 &
+        quer_plots_sel$ddlat == -1000)
+      new_values$ddlat = quer_plots_sel$ddlat = NA
+
+    if (new_values$ddlon == -1000 &
+        quer_plots_sel$ddlon == -1000)
+      new_values$ddlon = quer_plots_sel$ddlon = NA
+
+    if (new_values$elevation == -1000 &
+        quer_plots_sel$elevation == -1000)
+      new_values$elevation = quer_plots_sel$elevation = NA
 
     comp_values <- new_values != quer_plots_sel
     comp_values <- dplyr::as_tibble(comp_values)
     comp_values <- comp_values %>%
-      dplyr::select_if(~sum(!is.na(.)) > 0)
+      dplyr::select_if( ~ sum(!is.na(.)) > 0)
 
-    print(comp_values)
+    print(comp_values
+
+    )
 
     if(any(unlist(comp_values))) {
 
       col_sel <-
         comp_values %>%
-        dplyr::select_if(~sum(.) > 0) %>%
+        dplyr::select_if( ~ sum(.) > 0) %>%
         colnames()
-      print("Previous values")
+      cli::cli_h1("Previous values")
       print(quer_plots %>%
               dplyr::select(!!col_sel))
-      print("New values")
+      cli::cli_h1("New values")
       print(new_values %>%
               dplyr::select(!!col_sel))
 
       Q <- utils::askYesNo("Confirm these modifications?")
 
       if(Q) {
+
         modif_types <-
           paste0(colnames(as.matrix(comp_values))[which(as.matrix(comp_values))], sep="__")
 
@@ -3848,7 +3898,7 @@ update_plot_data <- function(team_lead = NULL,
         }
 
         rs <-
-          DBI::dbSendQuery(mydb, statement="UPDATE data_liste_plots SET plot_name = $2, method = $3, team_leader = $4, country = $5, ddlat = $6, ddlon = $7, elevation = $8, province = $9, data_modif_d=$10, data_modif_m=$11, data_modif_y=$12 WHERE id_liste_plots = $1",
+          DBI::dbSendQuery(mydb, statement="UPDATE data_liste_plots SET plot_name = $2, method = $3, team_leader = $4, country = $5, ddlat = $6, ddlon = $7, elevation = $8, province = $9, data_provider = $10, data_modif_d=$11, data_modif_m=$12, data_modif_y=$13 WHERE id_liste_plots = $1",
                       params=list(quer_plots$id_liste_plots, # $1
                                   new_values$plot_name, # $2
                                   new_values$method, # $3
@@ -3858,9 +3908,10 @@ update_plot_data <- function(team_lead = NULL,
                                   new_values$ddlon, # $7
                                   new_values$elevation, # $8
                                   new_values$province, # $9
-                                  lubridate::day(Sys.Date()), # $10
-                                  lubridate::month(Sys.Date()), # $11
-                                  lubridate::year(Sys.Date()))) # $12
+                                  new_values$data_provider, # $10
+                                  lubridate::day(Sys.Date()), # $11
+                                  lubridate::month(Sys.Date()), # $12
+                                  lubridate::year(Sys.Date()))) # $13
 
         # if(show_results) print(dbFetch(rs))
         DBI::dbClearResult(rs)
@@ -3869,12 +3920,13 @@ update_plot_data <- function(team_lead = NULL,
 
     }else{
 
-      cat("\n no update because no values differents from the entry")
+      cli::cli_alert_info("no update because no values differents from the entry")
+
     }
   }else{
-    if(nrow(quer_plots)>1) cat("\n More than 1 plot selected. Select only one.")
+    if(nrow(quer_plots)>1) cli::cli_alert_info("More than 1 plot selected. Select only one.")
 
-    if(nrow(quer_plots)==0) cat("\n No plot to be update found.")
+    if(nrow(quer_plots)==0) cli::cli_alert_info("No plot to be update found.")
   }
 }
 
@@ -10923,6 +10975,8 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
     dplyr::mutate(dbh_mm_census1 = stem_diameter_census_1*10) %>%
     dplyr::mutate(dbh_mm_census2 = stem_diameter_census_2*10)
 
+
+  ## get the standard deviation of linear model
   stdev.dbh1 <- slope * censuses$dbh_mm_census1 + intercept
   growth <- (censuses$dbh_mm_census2- censuses$dbh_mm_census1) / censuses$time_diff
   bad.neggrow <- which(censuses$dbh_mm_census2 <= (censuses$dbh_mm_census1 - err.limit *
@@ -10945,7 +10999,7 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
 
   censuses <-
     censuses %>%
-    tibble::add_column(excluded_growth = accept)
+    tibble::add_column(accepted_growth = accept)
   return(censuses)
 }
 
@@ -10995,14 +11049,15 @@ growth_computing <- function(dataset,
     dplyr::distinct(id_table_liste_plots, plot_name) %>%
     dplyr::pull(plot_name)
 
-  message(paste("Multiple census recorded for", length(all_ids_plot), "plots"))
+  cli::cli_alert_info(paste("Multiple census recorded for", length(all_ids_plot), "plots"))
 
   full_results <-
     full_results_ind <-
-    vector('list', length = length(all_ids_plot))
+    full_results_mortality <-
+    vector('list', length = length(all_ids_plot)*10)
   for (plot in 1:length(all_ids_plot)) {
 
-    message(plot_names[plot])
+    cli::cli_alert_info(plot_names[plot])
 
     selected_dataset <-
       dataset %>%
@@ -11024,9 +11079,9 @@ growth_computing <- function(dataset,
 
     }
 
-    if(length(unique(selected_metadata_census$year))==1 &
-       length(unique(selected_metadata_census$month))==1 &
-       length(unique(selected_metadata_census$day))==1) {
+    if (length(unique(selected_metadata_census$year)) == 1 &
+        length(unique(selected_metadata_census$month)) == 1 &
+        length(unique(selected_metadata_census$day)) == 1) {
       message(paste("Dates do not differ between censuses"))
       not_run <- TRUE
     }
@@ -11076,12 +11131,20 @@ growth_computing <- function(dataset,
           colnames() %>%
           strsplit(split = "_") %>%
           unlist()
-        select_census_1 <- select_census_1[length(select_census_1)]
+
+        select_census_1 <-
+          select_census_1[length(select_census_1)]
+
+        # splitted_census[[i]] <-
+        #   splitted_census[[i]] %>%
+        #   dplyr::rename_at(dplyr::vars(dplyr::ends_with(paste0("_", select_census_1))),
+        #                    funs(stringr::str_replace(., paste0("_", select_census_1), "_1")))
 
         splitted_census[[i]] <-
           splitted_census[[i]] %>%
           dplyr::rename_at(dplyr::vars(dplyr::ends_with(paste0("_", select_census_1))),
-                           funs(stringr::str_replace(., paste0("_", select_census_1), "_1")))
+                           list(~ stringr::str_replace(., paste0("_", select_census_1), "_1")))
+
 
         select_census_2 <-
           splitted_census[[i+1]] %>%
@@ -11091,11 +11154,18 @@ growth_computing <- function(dataset,
           unlist()
         select_census_2 <- select_census_2[length(select_census_2)]
 
+        # splitted_census[[i+1]] <-
+        #   splitted_census[[i+1]] %>%
+        #   dplyr::rename_at(dplyr::vars(dplyr::ends_with(paste0("_", select_census_2))),
+        #                    funs(stringr::str_replace(., paste0("_", select_census_2), "_2")))
+
         splitted_census[[i+1]] <-
           splitted_census[[i+1]] %>%
           dplyr::rename_at(dplyr::vars(dplyr::ends_with(paste0("_", select_census_2))),
-                           funs(stringr::str_replace(., paste0("_", select_census_2), "_2")))
+                           list(~ stringr::str_replace(., paste0("_", select_census_2), "_2")))
 
+
+        ### detecting dead stems by filtering either 0 stem diameter or NA
         deads <-
           splitted_census[[i]] %>%
           dplyr::select(id_n, stem_diameter_census_1) %>%
@@ -11120,20 +11190,26 @@ growth_computing <- function(dataset,
 
         censuses <- .time_diff(census1 = splitted_census[[i]], census2 = splitted_census[[i+1]])
 
-        censuses <- .trim.growth(censuses, err.limit = err.limit,
-                                 maxgrow = maxgrow, mindbh = mindbh)
+        censuses <- .trim.growth(censuses = censuses,
+                                 err.limit = err.limit,
+                                 maxgrow = maxgrow,
+                                 mindbh = mindbh)
 
         size1 <- censuses$dbh_mm_census1
         size2 <- censuses$dbh_mm_census2
 
         if (method == "I") {
+
           growthrate <- (size2 - size1) / censuses$time_diff
+
         } else if (method == "E") {
+
           growthrate <- (log(size2) - log(size1)) / censuses$time_diff
+
         }
 
         # setting NA to values considered to be problematic
-        growthrate[!censuses$excluded_growth] <- NA
+        growthrate[!censuses$accepted_growth] <- NA
 
         censuses <-
           censuses %>%
@@ -11168,10 +11244,35 @@ growth_computing <- function(dataset,
                             tax_esp,
                             .before = date_census_1)
 
-          full_results_ind[[i]] <-
+          full_results_ind[[length(full_results_ind[unlist(lapply(full_results_ind, function(x) !is.null(x)))]) + 1]] <-
             ind_growth
 
         }
+
+
+        ### growth computation
+
+        ## number of stems at the outset (first census) excluding "exclude" stems
+        N_outset <-
+          splitted_census[[i]] %>%
+          dplyr::left_join(censuses %>%
+                      dplyr::select(id_n, growthrate) %>%
+                      dplyr::filter(is.na(growthrate)) %>%
+                      dplyr::mutate(growthrate = stringr::str_replace_na(growthrate, "no")) %>%
+                      dplyr::rename(exclude = growthrate) %>%
+                        distinct(),
+                    by = c("id_n" = "id_n")) %>%
+          dplyr::filter(is.na(exclude)) %>%
+          nrow()
+
+        N_survivor <-
+          N_outset - nrow(deads)
+
+        averaged_time_diff <-
+          mean(censuses$time_diff)
+
+        mortality_rate <-
+          (log(N_outset)-log(N_survivor))/averaged_time_diff
 
 
 
@@ -11182,38 +11283,75 @@ growth_computing <- function(dataset,
           growthrate = mean(growthrate, na.rm = TRUE),
           nbe_dead = nrow(deads),
           dbhmean_deads = ifelse(nrow(deads)>0, mean(deads$stem_diameter_census_1), NA),
+          mortality_rate = mortality_rate,
           nbe_recruits = nrow(recruits),
-          dbhmean_recruits = ifelse(nrow(recruits)>0, mean(recruits$stem_diameter_census_2), NA),
-          dbhmax_recruits = ifelse(nrow(recruits)>0, max(recruits$stem_diameter_census_2), NA),
-          N = length(growthrate[!is.na(growthrate)]),
+          dbhmean_recruits = ifelse(nrow(recruits) > 0, mean(recruits$stem_diameter_census_2), NA),
+          dbhmax_recruits = ifelse(nrow(recruits) > 0, max(recruits$stem_diameter_census_2), NA),
+          N_survivor = N_survivor,
+          N_outset = N_outset,
           N_excluded = length(growthrate[is.na(growthrate)]),
-          sd = sd(growthrate, na.rm = TRUE),
-          dbhmean1 = mean(censuses$dbh_mm_census1[censuses$excluded_growth], na.rm = TRUE),
-          dbhmean2 = mean(censuses$dbh_mm_census2[censuses$excluded_growth], na.rm = TRUE),
-          nbe_days_intervall = mean(censuses$time_diff[censuses$excluded_growth], na.rm = TRUE)*365.25,
-          date1 = date::date.ddmmmyy(mean(censuses$date_census_julian_1[censuses$excluded_growth],
+          sd_growthrate = sd(growthrate, na.rm = TRUE),
+          dbhmean1 = mean(censuses$dbh_mm_census1[censuses$accepted_growth], na.rm = TRUE),
+          dbhmean2 = mean(censuses$dbh_mm_census2[censuses$accepted_growth], na.rm = TRUE),
+          nbe_days_intervall = mean(censuses$time_diff[censuses$accepted_growth], na.rm = TRUE)*365.25,
+          date1 = date::date.ddmmmyy(mean(censuses$date_census_julian_1[censuses$accepted_growth],
                                           na.rm = TRUE)),
-          date2 = date::date.ddmmmyy(mean(censuses$date_census_julian_2[censuses$excluded_growth],
+          date2 = date::date.ddmmmyy(mean(censuses$date_census_julian_2[censuses$accepted_growth],
                                           na.rm = TRUE))
         )
 
-        full_results[[i]] <-
+        full_results[[length(full_results[unlist(lapply(full_results, function(x) !is.null(x)))]) + 1]] <-
           result
 
+        deads <-  deads %>%
+          left_join(
+            selected_dataset %>%
+              dplyr::select(
+                id_n,
+                id_diconame_final,
+                full_name_no_auth,
+                tax_fam,
+                tax_gen,
+                tax_esp,
+                plot_name,
+                sous_plot_name,
+                ind_num_sous_plot,
+                id_table_liste_plots_n
+              ),
+            by = c("id_n" = "id_n")
+          )
 
+
+        full_results_mortality[[length(full_results_mortality[unlist(lapply(full_results_mortality, function(x) !is.null(x)))]) + 1]] <-
+          deads
 
       }
     }else{
-      message(paste("No growth analysis for",
-                    selected_metadata_census$plot_name[1], "because dates are not conform"))
+
+      cli::cli_alert_warning(paste(
+        "No growth analysis for",
+        selected_metadata_census$plot_name[1],
+        "because dates are not conform"
+      ))
     }
   }
 
+  full_results <-
+    full_results[unlist(lapply(full_results, function(x) !is.null(x)))]
+
+  full_results_ind <-
+    full_results_ind[unlist(lapply(full_results_ind, function(x) !is.null(x)))]
+
+  full_results_mortality <-
+    full_results_mortality[unlist(lapply(full_results_mortality, function(x) !is.null(x)))]
+
   if(!export_ind_growth)
-    return(full_results)
+    return(plot_results = full_results,
+           mortality = full_results_mortality)
 
   if(export_ind_growth)
     return(list(plot_results = full_results,
-                ind_results = full_results_ind))
+                ind_results = full_results_ind,
+                mortality = full_results_mortality))
 
 }
