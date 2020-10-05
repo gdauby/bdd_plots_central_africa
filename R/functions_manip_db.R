@@ -1294,7 +1294,7 @@ call.mydb <- function(pass=NULL, user=NULL, offline = FALSE) {
                              user = user,
                              password = pass)
 
-    }else{
+    } else {
 
       # mydb <-
       #   list(data_liste_plots = dplyr::tbl(mydb, "data_liste_plots"),
@@ -2058,7 +2058,8 @@ query_plots <- function(team_lead = NULL,
       dplyr::left_join(diconames_id %>%
                          dplyr::rename(id_diconame_good_n = id_good_n),
                        by = c("id_diconame_n" = "id_n")) %>%
-      dplyr::left_join(specimens_linked, by = c("id_specimen" = "id_specimen")) %>% # adding id_diconame for specimens
+      dplyr::left_join(specimens_linked,
+                       by = c("id_specimen" = "id_specimen")) %>% # adding id_diconame for specimens
       dplyr::mutate(id_diconame_final = ifelse(
         !is.na(id_dico_name_specimen),
         id_dico_name_specimen,
@@ -4046,12 +4047,16 @@ update_individuals <- function(new_data,
                           all_rows_to_be_updated, append = TRUE, row.names = FALSE)
       }
 
+      if(any(names(matches) == "id_diconame_n_new"))
+        matches <-
+        dplyr::mutate(id_diconame_n == as.integer(id_diconame_n))
+
       ## create a temporary table with new data
       DBI::dbWriteTable(mydb, "temp_table", matches,
                         overwrite=T, fileEncoding = "UTF-8", row.names=F)
 
       query_up <-
-        paste0("UPDATE data_individuals t1 SET (",field,", data_modif_d, data_modif_m, data_modif_y) = (t2.",var_new, ", t2.date_modif_d, t2.date_modif_m, t2.date_modif_y) FROM temp_table t2 WHERE t1.",id_db," = t2.id")
+        paste0("UPDATE data_individuals t1 SET (",field,", data_modif_d, data_modif_m, data_modif_y) = (t2.",var_new, ", t2.date_modif_d, t2.date_modif_m, t2.date_modif_y) FROM temp_table t2 WHERE t1.", id_db," = t2.id")
 
       rs <-
         DBI::dbSendStatement(mydb, query_up)
@@ -4122,51 +4127,80 @@ update_ident_specimens <- function(colnam = NULL,
       query_specimens(id_colnam = new_data_renamed$id_colnam,
                       number = number, subset_columns = FALSE)
 
-  }else{
+  } else {
 
     queried_speci <-
       query_specimens(id_search = id_speci, subset_columns = FALSE)
 
   }
 
-  if(nrow(queried_speci)>0) {
+  if (nrow(queried_speci) > 0) {
+    print(
+      queried_speci %>%
+        dplyr::select(
+          family_name,
+          surname,
+          colnbr,
+          detd,
+          detm,
+          dety,
+          detby,
+          cold,
+          colm,
+          coly,
+          country,
+          id_specimen
+        )
+    )
 
-    print(queried_speci %>%
-            dplyr::select(family_name, surname, colnbr, detd, detm, dety, detby, cold, colm, coly, country, id_specimen))
 
-
-    if(nrow(queried_speci)==1) {
+    if (nrow(queried_speci) == 1) {
       nbr_queried_speci_ok <- TRUE
-    }else{
+    } else{
       nbr_queried_speci_ok <- FALSE
     }
 
     if(nbr_queried_speci_ok)
       modif_types <- vector(mode = "character", length = nrow(queried_speci))
 
-    if(is.null(id_new_taxa)) {
-      query_new_taxa <- query_tax_all(genus_searched = new_genus, tax_esp_searched = new_species, tax_fam_searched = new_family, show_synonymies = F)
-    }else{
-      query_new_taxa <- query_tax_all(id_search = id_new_taxa, show_synonymies = F)
+    if (is.null(id_new_taxa)) {
+      query_new_taxa <-
+        query_tax_all(
+          genus_searched = new_genus,
+          tax_esp_searched = new_species,
+          tax_fam_searched = new_family,
+          show_synonymies = F
+        )
+    } else{
+
+      query_new_taxa <-
+        query_tax_all(id_search = id_new_taxa, show_synonymies = F)
+
     }
 
-    if(nrow(query_new_taxa)==1) {
+    if (nrow(query_new_taxa) == 1) {
       nbr_new_taxa_ok <- TRUE
-    }else{
+    } else{
       nbr_new_taxa_ok <- FALSE
     }
 
     if(nbr_new_taxa_ok & nbr_queried_speci_ok) {
 
       new_values <-
-        dplyr::tibble(id_diconame_n =
-                        ifelse(!is.null(new_genus) | !is.null(new_species) | !is.null(new_family | !is.null(id_new_taxa)),
-                                              query_new_taxa$id_n, queried_speci$id_diconame_n),
-                      detd = ifelse(!is.null(new_detd), as.numeric(new_detd), queried_speci$detd),
-                      detm = ifelse(!is.null(new_detm), as.numeric(new_detm), queried_speci$detm),
-                      dety = ifelse(!is.null(new_dety), as.numeric(new_dety), queried_speci$dety),
-                      detby = ifelse(!is.null(new_detby), new_detby, queried_speci$detby),
-                      detvalue = ifelse(!is.null(new_detvalue), new_detvalue, queried_speci$detvalue)
+        dplyr::tibble(
+          id_diconame_n =
+            ifelse(
+              !is.null(new_genus) |
+                !is.null(new_species) |
+                !is.null(new_family | !is.null(id_new_taxa)),
+              query_new_taxa$id_n,
+              queried_speci$id_diconame_n
+            ),
+          detd = ifelse(!is.null(new_detd), as.numeric(new_detd), queried_speci$detd),
+          detm = ifelse(!is.null(new_detm), as.numeric(new_detm), queried_speci$detm),
+          dety = ifelse(!is.null(new_dety), as.numeric(new_dety), queried_speci$dety),
+          detby = ifelse(!is.null(new_detby), new_detby, queried_speci$detby),
+          detvalue = ifelse(!is.null(new_detvalue), new_detvalue, queried_speci$detvalue)
         )
 
       ## correcting if NA is not well coded and null
@@ -4367,17 +4401,50 @@ update_ident_specimens <- function(colnam = NULL,
 #' @return A list with one tibble of logical and a html table
 #' @export
 .comp_print_vec <- function(vec_1, vec_2) {
+
+  # vec_2 <- vec_2 %>%
+  #   replace(., is.na(.), -9999)
+
+  vars_2_num <- names(vec_2)[unlist(lapply(vec_2, is.numeric))]
+  vars_2_char <- names(vec_2)[unlist(lapply(vec_2, is.character))]
+
   vec_2 <- vec_2 %>%
-    replace(., is.na(.), -9999)
+    mutate_at(vars(all_of(c(
+      vars_2_num
+    ))),
+    ~ tidyr::replace_na(. , -9999))
+
+  vec_2 <- vec_2 %>%
+    mutate_at(vars(all_of(c(
+      vars_2_char
+    ))),
+    ~ tidyr::replace_na(. , "-9999"))
+
+  vars_1_num <- names(vec_2)[unlist(lapply(vec_1, is.numeric))]
+  vars_1_char <- names(vec_2)[unlist(lapply(vec_1, is.character))]
 
   vec_1 <- vec_1 %>%
-    replace(., is.na(.), -9999)
+    mutate_at(vars(all_of(c(
+      vars_1_num
+    ))),
+    ~ tidyr::replace_na(. , -9999))
+  vec_1 <- vec_1 %>%
+    mutate_at(vars(all_of(c(
+      vars_1_char
+    ))),
+    ~ tidyr::replace_na(. , "-9999"))
 
-  vec_2_miss <- vec_2 %>%
-    replace(., .==-9999, TRUE)
+  vec_2_miss <- vec_2
+  vec_2_miss <- vec_2_miss %>%
+    mutate_if(is.character, list(~ if_else(. == "-9999", TRUE, FALSE)))
+  vec_2_miss <- vec_2_miss %>%
+    mutate_if(is.numeric, list(~ if_else(. == -9999, TRUE, FALSE)))
 
-  vec_1_miss <- vec_1 %>%
-    replace(., .==-9999, TRUE)
+  vec_1_miss <- vec_1
+  vec_1_miss <- vec_1_miss %>%
+    mutate_if(is.character, list(~ if_else(. == "-9999", TRUE, FALSE)))
+  vec_1_miss <- vec_1_miss %>%
+    mutate_if(is.numeric, list(~ if_else(. == -9999, TRUE, FALSE)))
 
   comp_val <-
     vec_1 != vec_2
@@ -4389,10 +4456,8 @@ update_ident_specimens <- function(colnam = NULL,
     comp_val %>%
     dplyr::select_if(~isTRUE(.))
 
-  if(ncol(comp_val)>1) {
-
-    if(any(colnames(vec_1) == "id_diconame_n")) {
-
+  if (ncol(comp_val) > 1) {
+    if (any(colnames(vec_1) == "id_diconame_n")) {
       old_tax <-
         query_tax_all(id_search = vec_2$id_diconame_n,
                       show_synonymies = F)
@@ -4403,34 +4468,39 @@ update_ident_specimens <- function(colnam = NULL,
 
       vec_1 <-
         vec_1 %>%
-        dplyr::left_join(new_tax %>%
-                           dplyr::select(tax_fam, tax_gen, tax_esp, id_n),
-                         by=c("id_diconame_n"="id_n"))
+        dplyr::left_join(
+          new_tax %>%
+            dplyr::select(tax_fam, tax_gen, tax_esp, id_n),
+          by = c("id_diconame_n" = "id_n")
+        )
 
       vec_2 <-
         vec_2 %>%
-        dplyr::left_join(old_tax %>%
-                           dplyr::select(tax_fam, tax_gen, tax_esp, id_n),
-                         by=c("id_diconame_n"="id_n"))
+        dplyr::left_join(
+          old_tax %>%
+            dplyr::select(tax_fam, tax_gen, tax_esp, id_n),
+          by = c("id_diconame_n" = "id_n")
+        )
 
     }
 
     comp_tb <-
-      tibble(cols = colnames(vec_1),
-             current = unlist(vec_1),
-             new = unlist(vec_2))
+      tibble(
+        cols = colnames(vec_1),
+        current = unlist(vec_1),
+        new = unlist(vec_2)
+      )
 
     comp_tb_html <- comp_tb
 
 
     comp_tb_html <-
       comp_tb_html %>%
-      replace(., is.na(.), -9999) %>%
+      replace(., is.na(.),"-9999") %>%
       mutate(new :=
                kableExtra::cell_spec(new, "html",
-                         color = ifelse(new != current, "red", "blue"))
-      ) %>%
-      replace(., .== -9999, NA)
+                                     color = ifelse(new != current, "red", "blue"))) %>%
+      replace(., . == "-9999", NA)
 
     comp_tb_html <-
       comp_tb_html %>%
@@ -4441,8 +4511,7 @@ update_ident_specimens <- function(colnam = NULL,
 
     return(list(comp_tb = comp_val, comp_html = comp_tb_html))
 
-  }else{
-
+  } else{
     return(list(comp_tb = FALSE, comp_html = NA))
   }
 
@@ -4648,11 +4717,15 @@ update_dico_name <- function(genus_searched = NULL,
     Q.syn <- TRUE
 
     ## checking if taxa selected is already a synonym of another taxa
-    if(!is.na(query_tax$id_good_n)) {
+    if(query_tax$id_good_n != query_tax$id_n) {
+
       if(query_tax$id_good_n != query_tax$id_n) {
+
         query_tax_all(id_search = query_tax$id_good_n)
+
         Q.syn <-
           utils::askYesNo("Taxa selected is already a synonym of this taxa. Are you sure you want to modify this?", default = FALSE)
+
       }
     }
 
@@ -4664,8 +4737,7 @@ update_dico_name <- function(genus_searched = NULL,
         filter(id_good_n == !!query_tax$id_n) %>%
         collect()
 
-
-      if(nrow(syn_of_new_syn)>0) {
+      if(nrow(syn_of_new_syn) > 0) {
 
         message("\n Some names are considered synonyms of the selected taxa:")
 
@@ -4683,7 +4755,8 @@ update_dico_name <- function(genus_searched = NULL,
         )
 
         Q.syn2 <-
-          utils::askYesNo("Do you confirm to also modify the synonymies of these selected names?", default = FALSE)
+          utils::askYesNo("Do you confirm to also modify the synonymies of these selected names?",
+                          default = FALSE)
 
         if(Q.syn2)
           ids_others_names_synonyms <-
@@ -4703,22 +4776,27 @@ update_dico_name <- function(genus_searched = NULL,
       new_syn <-
         query_tax_all(genus_searched = synonym_of$genus,
                       tax_esp_searched = synonym_of$species,
-                      id_search = synonym_of$id)
+                      id_search = synonym_of$id,
+                      show_synonymies = FALSE)
 
       if(nrow(new_syn) == 0) {
+
         cat("\n No taxa found for new synonymy. Select one.")
         Q.syn <- FALSE
+
       }
 
       if(nrow(new_syn) > 1) {
+
         cat("\n More than one taxa found for new synonymy. Select only one.")
         Q.syn <- FALSE
+
       }
 
       if(nrow(new_syn) == 1) {
 
-        message("\n synonym of:")
-        print(new_syn %>% as.data.frame())
+        # message("\n synonym of:")
+        # print(new_syn %>% as.data.frame())
 
         new_id_diconame_good <- new_syn$id_n
 
@@ -4738,7 +4816,7 @@ update_dico_name <- function(genus_searched = NULL,
 
   if(any(comp_vals) & Q.syn & nrow_query) {
 
-    cat(paste("\n Number of rows selected to be updated :", nrow(query_tax), "\n"))
+    cli::cli_alert_info(" Number of rows selected to be updated {nrow(query_tax)} ")
 
     if(ask_before_update) {
       Q <-
@@ -4825,7 +4903,7 @@ update_dico_name <- function(genus_searched = NULL,
       DBI::dbClearResult(rs)
 
       if(Q.syn2) {
-        message("\n updating synonymies for others taxa")
+        cli::cli_alert_info("Updating synonymies for others taxa")
         rs <-
           DBI::dbSendQuery(mydb, statement="UPDATE diconame SET id_good_n=$2 WHERE id_n = $1",
                            params= list(ids_others_names_synonyms, # $1
