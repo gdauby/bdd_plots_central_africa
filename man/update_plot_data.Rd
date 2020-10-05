@@ -19,6 +19,7 @@ update_plot_data(
   new_elevation = NULL,
   new_method = NULL,
   new_province = NULL,
+  new_data_provider = NULL,
   add_backup = TRUE
 )
 }
