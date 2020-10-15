@@ -23,6 +23,7 @@ query_plots(
   id_plot = NULL,
   id_diconame = NULL,
   show_multiple_census = FALSE,
+  show_all_coordinates = FALSE,
   remove_ids = TRUE,
   collapse_multiple_val = FALSE
 )

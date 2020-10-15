@@ -1424,13 +1424,16 @@ province_list <- function(country=NULL) {
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
 #' @export
 method_list <- function() {
+
   if(!exists("mydb")) call.mydb()
 
   nn <-
     dplyr::tbl(mydb, "data_liste_plots") %>%
+    dplyr::select(id_method) %>%
+    dplyr::left_join(dplyr::tbl(mydb, "methodslist")) %>%
     dplyr::group_by(method) %>%
     dplyr::summarise(n = n()) %>%
-    dplyr::mutate(n=as.integer(n)) %>%
+    dplyr::mutate(n = as.integer(n)) %>%
     dplyr::collect()
 
   # dbDisconnect(mydb)
@@ -1529,6 +1532,7 @@ query_plots <- function(team_lead = NULL,
                         id_plot = NULL,
                         id_diconame = NULL,
                         show_multiple_census = FALSE,
+                        show_all_coordinates = FALSE,
                         remove_ids = TRUE,
                         collapse_multiple_val = FALSE) {
 
@@ -1720,6 +1724,17 @@ query_plots <- function(team_lead = NULL,
       res %>%
       dplyr::select(-id_old)
 
+
+    ## link method
+    res <-
+      res %>%
+      dplyr::select(-method) %>% # remove old method
+      dplyr::left_join(dplyr::tbl(mydb, "methodslist") %>%
+                         dplyr::collect(),
+                       by = c("id_method" = "id_method")) %>%
+      dplyr::relocate(method, .after = data_provider)
+
+
   } else {
 
     cli::cli_rule(left = "Extracting from queried plot - id_plot")
@@ -1744,21 +1759,32 @@ query_plots <- function(team_lead = NULL,
   ## max census for each plot
   census_plots <-
     sub_plot_data %>%
-    dplyr::filter(id_type_sub_plot == 27) %>%
+    dplyr::filter(id_type_sub_plot == 27) %>% ### id of census information
     dplyr::group_by(id_table_liste_plots) %>%
     dplyr::summarise(number_of_census = max(typevalue, na.rm = T)) %>%
     dplyr::collect()
 
   census_features <-
     sub_plot_data %>%
-    dplyr::filter(id_type_sub_plot==27) %>%
+    dplyr::filter(id_type_sub_plot == 27) %>% ### id of census information
     dplyr::left_join(dplyr::tbl(mydb, "table_colnam"),
-                     by = c("id_colnam"="id_table_colnam")) %>%
-    dplyr::left_join(dplyr::tbl(mydb, "data_liste_plots") %>%
-                       dplyr::select(plot_name, id_liste_plots),
-                     by=c("id_table_liste_plots"="id_liste_plots")) %>%
-    dplyr::select(year, month, day, typevalue, plot_name, colnam,
-                  additional_people, id_sub_plots, id_table_liste_plots) %>%
+                     by = c("id_colnam" = "id_table_colnam")) %>%
+    dplyr::left_join(
+      dplyr::tbl(mydb, "data_liste_plots") %>%
+        dplyr::select(plot_name, id_liste_plots),
+      by = c("id_table_liste_plots" = "id_liste_plots")
+    ) %>%
+    dplyr::select(
+      year,
+      month,
+      day,
+      typevalue,
+      plot_name,
+      colnam,
+      additional_people,
+      id_sub_plots,
+      id_table_liste_plots
+    ) %>%
     dplyr::collect()
 
   all_sub_type <-
@@ -1766,24 +1792,29 @@ query_plots <- function(team_lead = NULL,
     dplyr::distinct(id_type_sub_plot) %>%
     dplyr::left_join(dplyr::tbl(mydb, "subplotype_list") %>%
                        dplyr::select(type, valuetype, typedescription, id_subplotype),
-                     by=c("id_type_sub_plot"="id_subplotype")) %>%
-    dplyr::filter(type != "census") %>%
+                     by=c("id_type_sub_plot"= "id_subplotype")) %>%
     dplyr::collect()
 
+  all_sub_type_to_summarise <-
+    all_sub_type %>%
+    dplyr::filter(type != "census",
+                  !grepl("ddlat", type),
+                  !grepl("ddlon", type))
+
   ## if any plots features others than census, adding them to metadata
-  if(nrow(all_sub_type) > 0) {
-    for (i in 1:nrow(all_sub_type)) {
+  if(nrow(all_sub_type_to_summarise) > 0) {
+
+    for (i in 1:nrow(all_sub_type_to_summarise)) {
 
       id_sub_plot <-
-        all_sub_type %>%
+        all_sub_type_to_summarise %>%
         dplyr::slice(i) %>%
         dplyr::pull(id_type_sub_plot)
 
       type_sub_plot <-
-        all_sub_type %>%
+        all_sub_type_to_summarise %>%
         dplyr::slice(i) %>%
         dplyr::pull(valuetype)
-
 
       if(type_sub_plot == "numeric") {
 
@@ -1795,7 +1826,7 @@ query_plots <- function(team_lead = NULL,
           dplyr::collect()
 
          subplot_name <-
-           all_sub_type %>%
+           all_sub_type_to_summarise %>%
            dplyr::slice(i) %>%
            dplyr::pull(type)
 
@@ -1824,7 +1855,7 @@ query_plots <- function(team_lead = NULL,
                                typevalue_char
                              ))
         subplot_name <-
-          all_sub_type %>%
+          all_sub_type_to_summarise %>%
           dplyr::slice(i) %>%
           dplyr::pull(type)
 
@@ -1839,15 +1870,126 @@ query_plots <- function(team_lead = NULL,
         dplyr::left_join(summarized_subplot_data, by = c("id_liste_plots"="id_table_liste_plots"))
 
     }
+
   } else {
 
     cli::cli_alert_info("No sub_type (other than census) for selected plot(s)")
 
   }
 
+  if(show_all_coordinates) {
+    ### getting id subplot features for coordinates types
+
+    all_ids_subplot_coordinates <- c(all_sub_type %>%
+                                       filter(grepl("ddlon", type)) %>%
+                                       pull(id_type_sub_plot),
+                                     all_sub_type %>%
+                                       filter(grepl("ddlat", type)) %>%
+                                       pull(id_type_sub_plot))
+
+    cli::cli_alert_info('Extracting coordinates')
+
+    all_coordinates_subplots <-
+      sub_plot_data %>%
+      dplyr::filter(id_type_sub_plot %in% !!all_ids_subplot_coordinates) %>% ### id of census information
+      dplyr::left_join(dplyr::tbl(mydb, "table_colnam"),
+                       by = c("id_colnam" = "id_table_colnam")) %>%
+      dplyr::left_join(
+        dplyr::tbl(mydb, "data_liste_plots") %>%
+          dplyr::select(plot_name, id_liste_plots),
+        by = c("id_table_liste_plots" = "id_liste_plots")
+      ) %>%
+      dplyr::select(
+        year,
+        typevalue,
+        plot_name,
+        colnam,
+        id_sub_plots,
+        id_table_liste_plots,
+        id_type_sub_plot
+      ) %>%
+      left_join(dplyr::tbl(mydb, "subplotype_list") %>%
+                  dplyr::select(type, valuetype, typedescription, id_subplotype),
+                by=c("id_type_sub_plot"= "id_subplotype")) %>%
+      dplyr::collect() %>%
+      dplyr::relocate(c("typevalue", "type", "plot_name", "typedescription", "valuetype"), .before = year)
+
+    all_coordinates_subplots_rf <-
+      all_coordinates_subplots %>%
+      mutate(coord2 = unlist(lapply(strsplit(type, "_"), function(x) x[length(x)])),
+             coord1 = unlist(lapply(strsplit(type, "_"), function(x) x[length(x)-1])),
+             coord3 = unlist(lapply(strsplit(type, "_"), function(x) x[1])),
+             coord4 = unlist(lapply(strsplit(type, "_"), function(x) x[2]))) %>%
+      dplyr::select(coord1, coord2, coord3, coord4, type, typevalue, plot_name) %>%
+      arrange(coord2)
+
+
+    all_plots_coord <- unique(all_coordinates_subplots_rf$plot_name)
+
+    coordinates_subplots_plot <- vector('list', length(all_plots_coord))
+    coordinates_subplots_plot_sf <- vector('list', length(all_plots_coord))
+    for (j in 1:length(all_plots_coord)) {
+
+      coordinates_subplots <-
+        tidyr::pivot_wider(all_coordinates_subplots_rf %>%
+                           dplyr::select(-type) %>%
+                           dplyr::filter(plot_name == all_plots_coord[j]),
+                         names_from = coord3,
+                         values_from = typevalue)
+
+      coordinates_subplots <- coordinates_subplots %>%
+        mutate(Xrel = as.numeric(coord1) - min(as.numeric(coord1)),
+               Yrel = as.numeric(coord2) - min(as.numeric(coord2)))
+
+      if(all(coordinates_subplots$coord4 == 'plot')) {
+        cor_coord <-
+          BIOMASS::correctCoordGPS(
+            longlat = coordinates_subplots[, c("ddlon", "ddlat")],
+            rangeX = c(0, 100),
+            rangeY = c(0, 100),
+            coordRel = coordinates_subplots %>%
+              dplyr::select(Xrel, Yrel),
+            drawPlot = F,
+            rmOutliers = T
+          )
+
+        poly_plot <- as(cor_coord$polygon, 'sf')
+        sf::st_crs(poly_plot) <- cor_coord$codeUTM
+
+        poly_plot <- sf::st_transform(poly_plot, 4326)
+
+        poly_plot <-
+          poly_plot %>%
+          dplyr::mutate(plot_name = all_plots_coord[j]) %>%
+          left_join(res %>%
+                      dplyr::select(plot_name, id_liste_plots),
+                    by = c("plot_name" = "plot_name"))
+
+        coordinates_subplots_plot_sf[[j]] <-
+          poly_plot
+      }
+
+      coordinates_subplots_plot[[j]] <-
+        coordinates_subplots
+
+    }
+
+
+    coordinates_subplots <-
+      bind_rows(coordinates_subplots_plot[[1]])
+
+
+    coordinates_subplots_plot_sf <-
+      do.call('rbind', coordinates_subplots_plot_sf)
+
+  }
+
+
+
   res <-
     res %>%
     dplyr::select(-date)
+
 
   if(nrow(census_features) > 1) {
     cli::cli_rule(left = "Attaching census informations")
@@ -1969,6 +2111,13 @@ query_plots <- function(team_lead = NULL,
 
       print(map_type)
       outputmap <-  mapview::mapview(data_sf, map.types = map_types)
+
+      if(show_all_coordinates) {
+        if(!is.null(unlist(coordinates_subplots_plot_sf)))
+          outputmap <- outputmap +
+            mapview::mapview(coordinates_subplots_plot_sf, map.types = map_types)
+      }
+
     }
 
     print(outputmap)
@@ -2158,15 +2307,26 @@ query_plots <- function(team_lead = NULL,
 
   # dbDisconnect(mydb)
 
-  if(show_multiple_census & !extract_individuals) {
 
-    return(list(res, census_features))
+  res_list <- list(extract = NA, census_features = NA, coordinates = NA, coordinates_sf = NA)
+  res_list$extract <- res
 
-  }else{
+  if(show_multiple_census)
+    res_list$census_features <- census_features
 
-    return(res)
+  if (show_all_coordinates)
+    res_list$coordinates <- coordinates_subplots
 
-  }
+  if (show_all_coordinates)
+    res_list$coordinates_sf <- coordinates_subplots_plot_sf
+
+  res_list <- res_list[!is.na(res_list)]
+
+  if (length(res_list) == 1)
+    res_list <- res_list[[1]]
+
+  return(res_list)
+
 }
 
 
@@ -3393,20 +3553,35 @@ add_plots <- function(new_data,
       stop("ERREUR dans ddlat, latitude provided impossible")
 
   ## Checking if names plot are already in the database
-  if(any(colnames(new_data_renamed)=="plot_name")) {
+  if(any(colnames(new_data_renamed) == "plot_name")) {
     found_plot <-
       dplyr::tbl(mydb, "data_liste_plots") %>%
       dplyr::filter(plot_name %in% !!new_data_renamed$plot_name) %>%
       dplyr::collect()
 
-    if(nrow(found_plot)>0) {
+    if (nrow(found_plot) > 0) {
       print(found_plot)
       stop("Some plot_name in new data already in the plot list table. No duplicate allowed.")
     }
   }
 
+  ## Checking method
+  if(!any(names(new_data_renamed) == "method")) {
+    stop("missing method information")
+  } else {
+
+    stop("complete method id retreveing")
+    new_data_renamed$method
+
+
+  }
+
+
+
+
   ## Checking coordinates
-  if(any(new_data_renamed$ddlat>90) | any(new_data_renamed$ddlon< -90))
+  if (any(new_data_renamed$ddlat > 90) |
+      any(new_data_renamed$ddlon < -90))
     stop("ERREUR dans ddlat, latitude provided impossible")
 
   new_data_renamed <-
@@ -3761,24 +3936,40 @@ update_plot_data <- function(team_lead = NULL,
                              new_method = NULL,
                              new_province = NULL,
                              new_data_provider = NULL,
-                             add_backup = TRUE){
+                             add_backup = TRUE,
+                             ask_before_update = TRUE) {
 
   if(!exists("mydb")) call.mydb()
 
-  if(is.null(id_table_plot)) {
+  if (is.null(id_table_plot)) {
     quer_plots <-
-      query_plots(team_lead = team_lead, plot_name = plot_name,
-                  country = country, method = method, date_y = date_y, remove_ids = FALSE)
-  }else{
+      query_plots(
+        team_lead = team_lead,
+        plot_name = plot_name,
+        country = country,
+        method = method,
+        date_y = date_y,
+        remove_ids = FALSE
+      )
+  } else{
+
     quer_plots <-
       query_plots(id_plot = id_table_plot, remove_ids = FALSE)
+
   }
 
-  if(nrow(quer_plots)==1) {
+  if (nrow(quer_plots) == 1) {
+
+    if(!is.null(new_method)) {
+
+      id_new_method <- .link_method(method = new_method)
+
+    }
+
     new_values <-
       dplyr::tibble(
         plot_name = ifelse(!is.null(new_plot_name), new_plot_name, quer_plots$plot_name),
-        method = ifelse(!is.null(new_method), new_method, quer_plots$method),
+        id_method  = ifelse(!is.null(new_method), id_new_method, quer_plots$id_method),
         team_leader = ifelse(
           !is.null(new_team_leader),
           new_team_leader,
@@ -3792,90 +3983,76 @@ update_plot_data <- function(team_lead = NULL,
         data_provider = ifelse(!is.null(new_data_provider), new_data_provider, quer_plots$data_provider)
       )
 
-    ## trick to include NA values in comparison
-    new_values <-
-      new_values %>%
-      tidyr::replace_na(list(
-        ddlat = -1000,
-        ddlon = -1000,
-        elevation = -1000,
-        province = "none"
-      ))
+    # quer_plots_sel <-
+    #   quer_plots
 
-    quer_plots_sel <-
-      quer_plots %>%
-      dplyr::select(plot_name,
-                    method,
-                    team_leader,
-                    country,
-                    ddlat,
-                    ddlon,
-                    elevation,
-                    province,
-                    data_provider) %>%
-      tidyr::replace_na(
-        list(
-          ddlat = -1000,
-          ddlon = -1000,
-          elevation = -1000,
-          team_leader = "none",
-          province = "none",
-          data_provider = "none"
-        )
-      )
+    comp_res <- .comp_print_vec(vec_1 = quer_plots  %>%
+                                  dplyr::select(!!colnames(new_values)),
+                                vec_2 = new_values)
 
-    if (new_values$ddlat == -1000 &
-        quer_plots_sel$ddlat > -1000)
-      new_values$ddlat = quer_plots_sel$ddlat
+    print(comp_res$comp_html)
 
-    if (new_values$ddlon == -1000 &
-        quer_plots_sel$ddlon > -1000)
-      new_values$ddlon = quer_plots_sel$ddlon
+    comp_values <- comp_res$comp_tb
+#
+#     if (new_values$ddlat == -1000 &
+#         quer_plots_sel$ddlat > -1000)
+#       new_values$ddlat = quer_plots_sel$ddlat
+#
+#     if (new_values$ddlon == -1000 &
+#         quer_plots_sel$ddlon > -1000)
+#       new_values$ddlon = quer_plots_sel$ddlon
+#
+#     if (new_values$elevation == -1000 &
+#         quer_plots_sel$elevation > -1000)
+#       new_values$elevation = quer_plots_sel$elevation
+#
+#     if (new_values$ddlat == -1000 &
+#         quer_plots_sel$ddlat == -1000)
+#       new_values$ddlat = quer_plots_sel$ddlat = NA
+#
+#     if (new_values$ddlon == -1000 &
+#         quer_plots_sel$ddlon == -1000)
+#       new_values$ddlon = quer_plots_sel$ddlon = NA
+#
+#     if (new_values$elevation == -1000 &
+#         quer_plots_sel$elevation == -1000)
+#       new_values$elevation = quer_plots_sel$elevation = NA
+#
+#     comp_values <- new_values != quer_plots_sel
+#     comp_values <- dplyr::as_tibble(comp_values)
+#     comp_values <- comp_values %>%
+#       dplyr::select_if( ~ sum(!is.na(.)) > 0)
+#
+#     print(comp_values)
 
-    if (new_values$elevation == -1000 &
-        quer_plots_sel$elevation > -1000)
-      new_values$elevation = quer_plots_sel$elevation
+    if(any(comp_values %>% pull())) {
 
-    if (new_values$ddlat == -1000 &
-        quer_plots_sel$ddlat == -1000)
-      new_values$ddlat = quer_plots_sel$ddlat = NA
+      # col_sel <-
+      #   comp_values %>%
+      #   dplyr::select_if( ~ sum(.) > 0) %>%
+      #   colnames()
+      # cli::cli_h1("Previous values")
+      # print(quer_plots %>%
+      #         dplyr::select(!!col_sel))
+      # cli::cli_h1("New values")
+      # print(new_values %>%
+      #         dplyr::select(!!col_sel))
 
-    if (new_values$ddlon == -1000 &
-        quer_plots_sel$ddlon == -1000)
-      new_values$ddlon = quer_plots_sel$ddlon = NA
+      if(ask_before_update) {
 
-    if (new_values$elevation == -1000 &
-        quer_plots_sel$elevation == -1000)
-      new_values$elevation = quer_plots_sel$elevation = NA
+        Q <- utils::askYesNo("Confirm these modifications?")
 
-    comp_values <- new_values != quer_plots_sel
-    comp_values <- dplyr::as_tibble(comp_values)
-    comp_values <- comp_values %>%
-      dplyr::select_if( ~ sum(!is.na(.)) > 0)
+      } else {
 
-    print(comp_values
+        Q <- TRUE
 
-    )
+      }
 
-    if(any(unlist(comp_values))) {
-
-      col_sel <-
-        comp_values %>%
-        dplyr::select_if( ~ sum(.) > 0) %>%
-        colnames()
-      cli::cli_h1("Previous values")
-      print(quer_plots %>%
-              dplyr::select(!!col_sel))
-      cli::cli_h1("New values")
-      print(new_values %>%
-              dplyr::select(!!col_sel))
-
-      Q <- utils::askYesNo("Confirm these modifications?")
 
       if(Q) {
 
         modif_types <-
-          paste0(colnames(as.matrix(comp_values))[which(as.matrix(comp_values))], sep="__")
+          paste0(names(comp_values), sep="__")
 
         if(add_backup) {
 
@@ -3899,10 +4076,10 @@ update_plot_data <- function(team_lead = NULL,
         }
 
         rs <-
-          DBI::dbSendQuery(mydb, statement="UPDATE data_liste_plots SET plot_name = $2, method = $3, team_leader = $4, country = $5, ddlat = $6, ddlon = $7, elevation = $8, province = $9, data_provider = $10, data_modif_d=$11, data_modif_m=$12, data_modif_y=$13 WHERE id_liste_plots = $1",
+          DBI::dbSendQuery(mydb, statement="UPDATE data_liste_plots SET plot_name = $2, id_method = $3, team_leader = $4, country = $5, ddlat = $6, ddlon = $7, elevation = $8, province = $9, data_provider = $10, data_modif_d=$11, data_modif_m=$12, data_modif_y=$13 WHERE id_liste_plots = $1",
                       params=list(quer_plots$id_liste_plots, # $1
                                   new_values$plot_name, # $2
-                                  new_values$method, # $3
+                                  new_values$id_method, # $3
                                   new_values$team_leader, # $4
                                   new_values$country, # $5
                                   new_values$ddlat, # $6
@@ -3924,10 +4101,14 @@ update_plot_data <- function(team_lead = NULL,
       cli::cli_alert_info("no update because no values differents from the entry")
 
     }
-  }else{
-    if(nrow(quer_plots)>1) cli::cli_alert_info("More than 1 plot selected. Select only one.")
 
-    if(nrow(quer_plots)==0) cli::cli_alert_info("No plot to be update found.")
+  } else {
+
+    if (nrow(quer_plots) > 1)
+      cli::cli_alert_info("More than 1 plot selected. Select only one.")
+
+    if (nrow(quer_plots) == 0)
+      cli::cli_alert_info("No plot to be update found.")
   }
 }
 
@@ -4456,7 +4637,8 @@ update_ident_specimens <- function(colnam = NULL,
     comp_val %>%
     dplyr::select_if(~isTRUE(.))
 
-  if (ncol(comp_val) > 1) {
+  if (ncol(comp_val) > 0) {
+
     if (any(colnames(vec_1) == "id_diconame_n")) {
       old_tax <-
         query_tax_all(id_search = vec_2$id_diconame_n,
@@ -4493,7 +4675,6 @@ update_ident_specimens <- function(colnam = NULL,
 
     comp_tb_html <- comp_tb
 
-
     comp_tb_html <-
       comp_tb_html %>%
       replace(., is.na(.),"-9999") %>%
@@ -4507,12 +4688,12 @@ update_ident_specimens <- function(colnam = NULL,
       kableExtra::kable(format = "html", escape = F) %>%
       kableExtra::kable_styling("striped", full_width = F)
 
-
-
     return(list(comp_tb = comp_val, comp_html = comp_tb_html))
 
   } else{
+
     return(list(comp_tb = FALSE, comp_html = NA))
+
   }
 
   # print(comp_tb_html)
@@ -5996,7 +6177,8 @@ add_individuals <- function(new_data ,
     ids_plot %>%
     dplyr::left_join(
       dplyr::tbl(mydb, "data_liste_plots") %>%
-        dplyr::select(plot_name, id_liste_plots, method) %>%
+        dplyr::select(plot_name, id_liste_plots, id_method) %>%
+        dplyr::left_join(dplyr::tbl(mydb, "methodslist")) %>%
         dplyr::collect(),
       by = c("id_liste_plots" = "id_liste_plots")
     ) %>%
@@ -6036,7 +6218,7 @@ add_individuals <- function(new_data ,
     dplyr::filter(is.na(id_good_n)) %>%
     dplyr::pull(id_diconame_n)
 
-  if(length(unmatch_id_diconame)>0)
+  if (length(unmatch_id_diconame) > 0)
     stop(paste("id_diconame not found in diconame", unmatch_id_diconame))
 
   ## checking DBH
@@ -6233,15 +6415,72 @@ add_individuals <- function(new_data ,
 
 
   if (any(colnames(new_data_renamed) == "herbarium_nbe_type")) {
+
     all_herb_type <-
       new_data_renamed %>%
       dplyr::distinct(herbarium_nbe_type) %>%
       dplyr::filter(!is.na(herbarium_nbe_type))
 
     if (nrow(all_herb_type) != nrow(all_herb_ref)) {
+
       print(all_herb_type)
       print(all_herb_ref)
-      stop("Number of herbarium specimen type and reference are not identical")
+      cli::cli_alert_warning("Number of herbarium specimen type and reference are not identical")
+
+      missing_herb_ref <- all_herb_type %>%
+        filter(!herbarium_nbe_type %in% all_herb_ref$herbarium_nbe_char)
+
+      if(nrow(missing_herb_ref) > 0) {
+        print(missing_herb_ref)
+        stop("Specimen in type not found in reference specimens")
+      }
+
+      missing_herb_type <- all_herb_ref %>%
+        filter(!herbarium_nbe_char %in% all_herb_type$herbarium_nbe_type)
+
+
+      if(nrow(missing_herb_type) > 0) {
+
+        cli::cli_alert_danger("Some specimens type not represented in specimens links")
+
+        complete_type_specimen <-
+          askYesNo(msg = "Complete automatically type specimen by taking the first individual?")
+
+        if(complete_type_specimen) {
+
+          new_data_renamed <-
+            new_data_renamed %>%
+            mutate(id_temp = 1:nrow(.))
+
+          for (i in 1:nrow(missing_herb_type)) {
+
+            id_selected <-
+              new_data_renamed %>%
+              filter(herbarium_nbe_char == missing_herb_type$herbarium_nbe_char[i]) %>%
+              arrange(ind_num_sous_plot, id_table_liste_plots_n) %>%
+              dplyr::slice(1) %>%
+              dplyr::select(id_temp)
+
+            new_data_renamed <-
+              new_data_renamed %>%
+              mutate(herbarium_nbe_type = replace(herbarium_nbe_type,
+                                                  id_temp == id_selected$id_temp,
+                                                  missing_herb_type$herbarium_nbe_char[i]))
+            # %>%
+            #   filter(herbarium_nbe_char == missing_herb_type$herbarium_nbe_char[i]) %>%
+            #   dplyr::select(herbarium_nbe_type)
+
+
+
+
+          }
+
+          new_data_renamed <-
+            new_data_renamed %>%
+            dplyr::select(-id_temp)
+
+        }
+      }
     }
 
     herb_type_dups <-
@@ -6265,6 +6504,7 @@ add_individuals <- function(new_data ,
         nrow(herb_type_dups),
         "specimen"
       ))
+
       new_data_renamed %>%
         dplyr::filter(herbarium_nbe_type %in% dplyr::pull(herb_type_dups, herbarium_nbe_type))
 
@@ -6300,7 +6540,7 @@ add_individuals <- function(new_data ,
       dplyr::select(herbarium_nbe_char, original_tax_name, id_diconame_n) %>%
       dplyr::distinct()
 
-    if(nrow(herb_ref_multiple_taxa)>0) {
+    if(nrow(herb_ref_multiple_taxa) > 0) {
       logs <-
         dplyr::bind_rows(logs,
                          dplyr::tibble(
@@ -6321,9 +6561,11 @@ add_individuals <- function(new_data ,
 
   new_data_renamed <-
     new_data_renamed %>%
-    tibble::add_column(data_modif_d=lubridate::day(Sys.Date()),
-               data_modif_m=lubridate::month(Sys.Date()),
-               data_modif_y=lubridate::year(Sys.Date()))
+    tibble::add_column(
+      data_modif_d = lubridate::day(Sys.Date()),
+      data_modif_m = lubridate::month(Sys.Date()),
+      data_modif_y = lubridate::year(Sys.Date())
+    )
 
   if(launch_adding_data) {
 
@@ -6622,14 +6864,14 @@ add_entry_dico_name <- function(tax_gen = NULL,
     # if(!is.na(tax_fam) & !is.na(tax_gen) & !is.na(tax_esp))
     #   tax_rankesp <- "ESP"
 
-    if (!is.null(tax_gen) &
-        !is.null(tax_esp))
+    if (!is.na(tax_gen) &
+        !is.na(tax_esp))
       paste_taxa <- paste(tax_gen, tax_esp)
-    if (!is.null(tax_gen) &
-        is.null(tax_esp))
+    if (!is.na(tax_gen) &
+        is.na(tax_esp))
       paste_taxa <- tax_gen
-    if (!is.null(tax_fam) &
-        is.null(tax_gen))
+    if (!is.na(tax_fam) &
+        is.na(tax_gen))
       paste_taxa <- tax_fam
 
     new_rec <-
@@ -6649,7 +6891,8 @@ add_entry_dico_name <- function(tax_gen = NULL,
         full_name = full_name,
         id_good = NA,
         id = NA
-      )
+      ) %>%
+      dplyr::mutate(id_good = as.numeric(id_good))
 
     seek_dup <-
       tbl(mydb, "diconame")
@@ -6717,9 +6960,9 @@ add_entry_dico_name <- function(tax_gen = NULL,
 
     launch_adding_data <- TRUE
 
-    if(nrow(seek_dup)>0) {
+    if (nrow(seek_dup) > 0) {
 
-      message("\n new entry fit to one entry already in table_taxa")
+      cli::cli_alert_info("New entry fit to one entry already in table_taxa")
       print(as.data.frame(seek_dup))
       launch_adding_data <- FALSE
 
@@ -6733,7 +6976,7 @@ add_entry_dico_name <- function(tax_gen = NULL,
                            data_modif_m = lubridate::month(Sys.Date()),
                            data_modif_y = lubridate::year(Sys.Date()))
 
-      message("\n Adding new entry")
+      cli::cli_alert_info("Adding new entry")
       DBI::dbWriteTable(mydb, "diconame", new_rec, append = TRUE, row.names = FALSE)
 
       new_entry <-
@@ -6789,18 +7032,32 @@ add_entry_dico_name <- function(tax_gen = NULL,
         # )
 
       }else{
-        # update_dico_name(new_id_diconame_good = new_entry$id_n, id_search = new_entry$id_n,
-        #                  ask_before_update = FALSE, add_backup = FALSE, show_results = FALSE)
+
+        rs <-
+          DBI::dbSendQuery(mydb, statement="UPDATE diconame SET id_good_n=$2 WHERE id_n = $1",
+                           params=list(new_entry$id_n, new_entry$id_n)) # $10
+
+        DBI::dbClearResult(rs)
+
       }
 
       # print(dplyr::tbl(mydb, "table_taxa") %>%
       #         dplyr::collect() %>%
       #         dplyr::filter(idtax_n == max(idtax_n)))
 
-      print(dplyr::tbl(mydb, "diconame") %>%
-              dplyr::filter(id_n == !!new_entry$id_n) %>%
-              collect() %>%
-              as.data.frame())
+      res_selected <- dplyr::tbl(mydb, "diconame") %>%
+        dplyr::filter(id_n == !!new_entry$id_n) %>%
+        collect()
+
+      res_selected <- as_tibble(cbind(
+        columns = names(res_selected),
+        record = t(res_selected)
+      )) %>%
+        kableExtra::kable(format = "html", escape = F) %>%
+        kableExtra::kable_styling("striped", full_width = F)
+
+      print(res_selected)
+
     }
 
   }else{
@@ -10031,6 +10288,69 @@ add_specimens <- function(new_data ,
 #'
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
 #' @param data_stand tibble
+#' @param trait string vector
+#'
+#' @export
+.link_method <- function(method) {
+
+  all_method <-
+    dplyr::tbl(mydb, "methodslist") %>%
+    dplyr::collect()
+
+  if(any(all_method$method == method)) {
+
+    selected_id <- all_method %>%
+      filter(method == !!method) %>%
+      pull(id_method)
+
+  } else {
+
+    sorted_matches <-
+      .find_similar_string(input = method,
+                           compared_table = all_method, column_name = "method")
+    print(method)
+
+    selected_name <- ""
+    slide <- 0
+    while (selected_name == "") {
+      slide <- slide + 1
+      sorted_matches %>%
+        tibble::add_column(ID = seq(1, nrow(.), 1)) %>%
+        dplyr::select(ID, method, description_method) %>%
+        dplyr::slice((1 + (slide - 1) * 10):((slide) * 10)) %>%
+        print()
+      selected_name <-
+        readline(prompt = "Choose ID whose method fit (if none enter 0): ")
+      if (slide * 10 > nrow(sorted_matches))
+        slide <- 0
+    }
+
+    selected_name <- as.integer(selected_name)
+
+    if(is.na(selected_name))
+      stop("Provide integer value for standardizing method name")
+
+    selected_id <-
+      sorted_matches %>%
+      dplyr::slice(selected_name) %>%
+      dplyr::select(id_method) %>%
+      dplyr::pull()
+
+  }
+
+  return(selected_id)
+}
+
+
+
+#' Internal function
+#'
+#' Compute
+#'
+#' @return vector
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @param data_stand tibble
 #' @param subplotype string vector
 #'
 #' @export
@@ -10056,7 +10376,12 @@ add_specimens <- function(new_data ,
       tibble::add_column(ID=seq(1, nrow(.), 1)) %>%
       dplyr::select(ID, type, typedescription) %>%
       dplyr::slice((1+(slide-1)*10):((slide)*10)) %>%
+      kableExtra::kable(format = "html", escape = F) %>%
+      kableExtra::kable_styling("striped", full_width = F) %>%
       print()
+
+    print(subplotype)
+
     selected_name <-
       readline(prompt="Choose ID whose type fit (if none enter 0): ")
     if(slide*10>nrow(sorted_matches)) slide <- 0
