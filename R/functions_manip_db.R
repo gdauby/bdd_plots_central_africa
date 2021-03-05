@@ -1607,17 +1607,30 @@ query_plots <- function(team_lead = NULL,
             replacement = paste0(" locality_name ILIKE '%", locality_name, "%' AND MMM"),
             x = query
           )
-      } else{
+      } else {
+
+        id_liste_plots_match <- vector('list', length(locality_name))
+        for (i in 1:length(locality_name)) {
+          query_loc <-
+            paste0("SELECT * FROM data_liste_plots WHERE locality_name ILIKE '%", locality_name[i], "%'")
+
+          rs_loc <- DBI::dbSendQuery(mydb, query_loc)
+          res_loc <- DBI::dbFetch(rs_loc)
+          DBI::dbClearResult(rs_loc)
+          res_loc <- dplyr::as_tibble(res_loc)
+          id_liste_plots_match[[i]] <- res_loc$id_liste_plots
+        }
+
         query <-
           gsub(
-            pattern = "MMM",
-            replacement = paste0(
-              "locality_name IN ('",
-              paste(locality_name, collapse = "', '"),
-              "') AND MMM"
-            ),
-            x = query
-          )
+          pattern = "MMM",
+          replacement = paste0(
+            "id_liste_plots IN ('",
+            paste(unlist(id_liste_plots_match), collapse = "', '"),
+            "') AND MMM"
+          ),
+          x = query
+        )
       }
     }
 
@@ -1653,7 +1666,7 @@ query_plots <- function(team_lead = NULL,
             x = query_method
           )
 
-      } else{
+      } else {
         query_method <-
           gsub(
             pattern = "MMM",
@@ -1698,7 +1711,7 @@ query_plots <- function(team_lead = NULL,
             replacement = paste0(" plot_name ILIKE '%", plot_name, "%' AND MMM"),
             x = query
           )
-      } else{
+      } else {
         query <-
           gsub(
             pattern = "MMM",
@@ -1851,7 +1864,7 @@ query_plots <- function(team_lead = NULL,
           dplyr::summarise(sum_sub_plot =
                              ifelse(
                                length(unique(typevalue_char)) > 1,
-                               stringr::str_flatten(typevalue_char, collapse = "|"),
+                               stringr::str_flatten(typevalue_char, collapse = " | "),
                                typevalue_char
                              ))
         subplot_name <-
@@ -1908,6 +1921,7 @@ query_plots <- function(team_lead = NULL,
           colnam,
           id_sub_plots,
           id_table_liste_plots,
+          id_sub_plots,
           id_type_sub_plot
         ) %>%
         left_join(dplyr::tbl(mydb, "subplotype_list") %>%
@@ -1922,7 +1936,7 @@ query_plots <- function(team_lead = NULL,
                coord1 = unlist(lapply(strsplit(type, "_"), function(x) x[length(x)-1])),
                coord3 = unlist(lapply(strsplit(type, "_"), function(x) x[1])),
                coord4 = unlist(lapply(strsplit(type, "_"), function(x) x[2]))) %>%
-        dplyr::select(coord1, coord2, coord3, coord4, type, typevalue, plot_name) %>%
+        dplyr::select(coord1, coord2, coord3, coord4, type, typevalue, plot_name, id_sub_plots, id_table_liste_plots) %>%
         arrange(coord2)
 
 
@@ -1934,21 +1948,22 @@ query_plots <- function(team_lead = NULL,
 
         coordinates_subplots <-
           tidyr::pivot_wider(all_coordinates_subplots_rf %>%
-                               dplyr::select(-type) %>%
+                               dplyr::select(-type, -id_table_liste_plots) %>%
                                dplyr::filter(plot_name == all_plots_coord[j]),
                              names_from = coord3,
-                             values_from = typevalue)
+                             values_from = c(typevalue, id_sub_plots))
 
         if (nrow(coordinates_subplots) > 0) {
 
-          coordinates_subplots <- coordinates_subplots %>%
+          coordinates_subplots <-
+            coordinates_subplots %>%
             mutate(Xrel = as.numeric(coord1) - min(as.numeric(coord1)),
                    Yrel = as.numeric(coord2) - min(as.numeric(coord2)))
 
           if(all(coordinates_subplots$coord4 == 'plot')) {
             cor_coord <-
               BIOMASS::correctCoordGPS(
-                longlat = coordinates_subplots[, c("ddlon", "ddlat")],
+                longlat = coordinates_subplots[, c("typevalue_ddlon", "typevalue_ddlat")],
                 rangeX = c(0, 100),
                 rangeY = c(0, 100),
                 coordRel = coordinates_subplots %>%
@@ -1985,10 +2000,8 @@ query_plots <- function(team_lead = NULL,
 
       }
 
-
       coordinates_subplots <-
-        bind_rows(coordinates_subplots_plot[[1]])
-
+        bind_rows(coordinates_subplots_plot)
 
       coordinates_subplots_plot_sf <-
         do.call('rbind', coordinates_subplots_plot_sf)
@@ -2434,7 +2447,9 @@ query_subplots <- function(team_lead = NULL,
                   year,
                   type,
                   valuetype,
-                  typevalue)
+                  typevalue,
+                  typevalue_char,
+                  original_subplot_name)
 
   return(extracted_data)
 
@@ -3585,16 +3600,23 @@ add_plots <- function(new_data,
 
   ## Checking method
   if(!any(names(new_data_renamed) == "method")) {
+
     stop("missing method information")
+
   } else {
 
-    stop("complete method id retreveing")
-    new_data_renamed$method
+    new_data_renamed <-
+      new_data_renamed %>%
+      mutate(id_method = .link_method(method = unique(new_data_renamed$method)))
 
+    new_data_renamed <-
+      new_data_renamed %>%
+     dplyr::select(-method)
+
+    col_names_corresp[which(col_names_corresp == "method")] <-
+      "id_method"
 
   }
-
-
 
 
   ## Checking coordinates
@@ -3767,7 +3789,7 @@ add_subplot_features <- function(new_data,
   }
 
   ### preparing dataset to add for each trait
-  list_add_data <- list()
+  list_add_data <- vector('list', length(subplottype_field))
   for (i in 1:length(subplottype_field)) {
 
     subplottype <- subplottype_field[i]
@@ -3782,7 +3804,7 @@ add_subplot_features <- function(new_data,
       "subplottype"
     data_subplottype <-
       data_subplottype %>%
-      dplyr::rename_at(dplyr::vars(subplottype), ~ subplottype_name)
+      dplyr::rename_at(dplyr::all_of(dplyr::vars(subplottype)), ~ subplottype_name)
 
     data_subplottype <-
       data_subplottype %>%
@@ -3836,7 +3858,7 @@ add_subplot_features <- function(new_data,
 
     }
 
-    list_add_data[[length(list_add_data)+1]] <-
+    list_add_data[[i]] <-
       data_to_add
 
     ## check if new data already exist in database
@@ -10133,90 +10155,115 @@ replace_NA <- function(vec, inv = FALSE) {
       dplyr::tbl(mydb, "table_colnam") %>%
       dplyr::collect()
 
-    if(!any(all_colnames$colnam==ifelse(!is.na(dplyr::pull(all_names_collector)[i]),
-                                        dplyr::pull(all_names_collector)[i],
-                                        "kk"))) {
-      print(dplyr::pull(all_names_collector)[i])
-      sorted_matches <-
-        .find_similar_string(input = dplyr::pull(all_names_collector)[i],
-                             compared_table = all_colnames, column_name = "colnam")
+    sorted_matches <-
+      .find_cat(
+        value_to_search = dplyr::pull(all_names_collector)[i],
+        compared_table = all_colnames,
+        column_name = "colnam",
+        prompt_message = "Choose corresponding name (G for searching a pattern, 0 if none corresponding): "
+      )
 
-      selected_name <- ""
-      slide <- 0
-      while(selected_name=="") {
-        print(dplyr::pull(all_names_collector)[i])
-        slide <- slide + 1
-        sorted_matches %>%
-          tibble::add_column(ID=seq(1, nrow(.), 1)) %>%
-          dplyr::select(-id_table_colnam) %>%
-          dplyr::select(ID, colnam, family_name, surname, nationality) %>%
-          dplyr::slice((1+(slide-1)*10):((slide)*10)) %>%
-          print()
-        selected_name <-
-          readline(prompt="Choose ID whose name fit (if none enter 0): ")
-        if(slide*10>nrow(sorted_matches)) slide <- 0
-      }
+    if(sorted_matches$selected_name == 0) {
 
-      selected_name <- as.integer(selected_name)
+      add <- utils::askYesNo(msg = "Add a new name?")
 
-      if(is.na(selected_name))
-        stop("Provide integer value for standardizing collector name")
+      if(add) {
+        new_colname <-
+          readline(prompt="Provide a new collector name following same format: ")
 
-      if(selected_name==0) {
+        new_family_name <-
+          readline(prompt="Provide a new family_name name following same format: ")
 
-        add <- utils::askYesNo(msg = "Add a new name?")
+        new_surname <-
+          readline(prompt="Provide a new surname name following same format: ")
 
-        if(add) {
-          new_colname <-
-            readline(prompt="Provide a new collector name following same format: ")
+        new_nationality <-
+          readline(prompt="Provide a nationality following same format: ")
 
-          new_family_name <-
-            readline(prompt="Provide a new family_name name following same format: ")
+        new_rec <- tibble::tibble(
+          colnam = new_colname,
+          family_name = new_family_name,
+          surname = new_surname,
+          nationality = new_nationality
+        )
 
-          new_surname <-
-            readline(prompt="Provide a new surname name following same format: ")
+        DBI::dbWriteTable(mydb, "table_colnam", new_rec, append = TRUE,
+                          row.names = FALSE)
 
-          new_nationality <-
-            readline(prompt="Provide a nationality following same format: ")
-
-          new_rec <- tibble::tibble(colnam=new_colname,
-                                    family_name=new_family_name,
-                                    surname=new_surname,
-                                    nationality=new_nationality)
-
-          DBI::dbWriteTable(mydb, "table_colnam", new_rec, append = TRUE,
-                            row.names = FALSE)
-
-          selected_name_id <-
-            dplyr::tbl(mydb, "table_colnam") %>%
-            dplyr::filter(colnam==new_colname) %>%
-            dplyr::select(id_table_colnam) %>%
-            dplyr::collect() %>%
-            dplyr::pull()
-        }else{
-          selected_name_id <- NA
-        }
-
-      }
-
-      if(selected_name>0) {
         selected_name_id <-
-          sorted_matches %>%
-          dplyr::slice(selected_name) %>%
+          dplyr::tbl(mydb, "table_colnam") %>%
+          dplyr::filter(colnam == new_colname) %>%
           dplyr::select(id_table_colnam) %>%
+          dplyr::collect() %>%
           dplyr::pull()
+
+      } else {
+
+        selected_name_id <- NA
+
       }
 
-    }else{
-      selected_name <-
-        which(all_colnames$colnam==dplyr::pull(all_names_collector)[i])
+    } else {
 
       selected_name_id <-
-        all_colnames %>%
-        dplyr::slice(selected_name) %>%
-        dplyr::select(id_table_colnam) %>%
-        dplyr::pull()
+        sorted_matches$sorted_matches %>%
+        slice(sorted_matches$selected_name) %>%
+        pull(id_table_colnam)
+
     }
+
+    # if(!any(all_colnames$colnam==ifelse(!is.na(dplyr::pull(all_names_collector)[i]),
+    #                                     dplyr::pull(all_names_collector)[i],
+    #                                     "kk"))) {
+    #   print(dplyr::pull(all_names_collector)[i])
+    #   sorted_matches <-
+    #     .find_similar_string(input = dplyr::pull(all_names_collector)[i],
+    #                          compared_table = all_colnames, column_name = "colnam")
+    #
+    #   selected_name <- ""
+    #   slide <- 0
+    #   while(selected_name=="") {
+    #     print(dplyr::pull(all_names_collector)[i])
+    #     slide <- slide + 1
+    #     sorted_matches %>%
+    #       tibble::add_column(ID=seq(1, nrow(.), 1)) %>%
+    #       dplyr::select(-id_table_colnam) %>%
+    #       dplyr::select(ID, colnam, family_name, surname, nationality) %>%
+    #       dplyr::slice((1+(slide-1)*10):((slide)*10)) %>%
+    #       print()
+    #     selected_name <-
+    #       readline(prompt="Choose ID whose name fit (if none enter 0): ")
+    #     if(slide*10>nrow(sorted_matches)) slide <- 0
+    #   }
+    #
+    #   selected_name <- as.integer(selected_name)
+    #
+    #   if(is.na(selected_name))
+    #     stop("Provide integer value for standardizing collector name")
+    #
+
+    #
+    #   if(selected_name>0) {
+    #     selected_name_id <-
+    #       sorted_matches %>%
+    #       dplyr::slice(selected_name) %>%
+    #       dplyr::select(id_table_colnam) %>%
+    #       dplyr::pull()
+    #   }
+    #
+    # }else{
+    #   selected_name <-
+    #     which(all_colnames$colnam==dplyr::pull(all_names_collector)[i])
+    #
+    #   selected_name_id <-
+    #     all_colnames %>%
+    #     dplyr::slice(selected_name) %>%
+    #     dplyr::select(id_table_colnam) %>%
+    #     dplyr::pull()
+    # }
+
+
+
 
     id_colname[data_stand$col_name==dplyr::pull(all_names_collector[i,1])] <-
       selected_name_id
@@ -10498,45 +10545,92 @@ replace_NA <- function(vec, inv = FALSE) {
     dplyr::collect()
 
   sorted_matches <-
-    .find_similar_string(input = subplotype,
-                         compared_table = all_subplotype,
-                         column_name = "type")
+    .find_cat(
+      value_to_search = subplotype,
+      compared_table = all_subplotype,
+      column_name = "type",
+      prompt_message = "Choose subplot feature (G for pattern searching): "
+    )
 
-  print(subplotype)
+  # sorted_matches <-
+  #   .find_similar_string(input = subplotype,
+  #                        compared_table = all_subplotype,
+  #                        column_name = "type")
+  #
+  # print(subplotype)
+  #
+  #
+  # selected_name <- "S"
+  # slide <- 0
+  # while(any(selected_name == c("", "G", "S"))) {
+  #
+  #   slide <- slide + 1
+  #
+  #   if(any(selected_name == c("S"))) {
+  #     slide = 1
+  #     sorted_matches <-
+  #       .find_similar_string(input = subplotype,
+  #                            compared_table = all_subplotype,
+  #                            column_name = "type")
+  #   }
+  #
+  #
+  #   if (any(selected_name == c("G"))) {
+  #
+  #     slide = 1
+  #     grep_name <-
+  #       readline(prompt = "Which string to look for:")
+  #     sorted_matches <-
+  #       all_subplotype %>%
+  #       filter(grepl(grep_name, type))
+  #
+  #   }
+  #
+  #   if(nrow(sorted_matches) > 0) {
+  #
+  #     sorted_matches_print <-
+  #       sorted_matches %>%
+  #       tibble::add_column(ID=seq(1, nrow(.), 1)) %>%
+  #       dplyr::select(ID, type, typedescription) %>%
+  #       dplyr::slice((1+(slide-1)*10):((slide)*10))
+  #
+  #   } else {
+  #     sel_loc <-
+  #       sorted_matches
+  #   }
+  #
+  #
+  #   # print(sel_loc)
+  #
+  #   sorted_matches_print <-
+  #     sorted_matches_print %>%
+  #     kableExtra::kable(format = "html", escape = F) %>%
+  #     kableExtra::kable_styling("striped", full_width = F) %>%
+  #
+  #   print(sorted_matches_print)
+  #
+  #   print(subplotype)
+  #
+  #   selected_name <-
+  #     readline(prompt="Choose ID whose type names fit : ")
+  #
+  #   if (slide * 10 > nrow(sorted_matches))
+  #     slide <- 0
+  # }
 
-  selected_name <- ""
-  slide <- 0
-  while(selected_name=="") {
-    if(slide >0) print(subplotype)
-    slide <- slide + 1
-    sorted_matches %>%
-      tibble::add_column(ID=seq(1, nrow(.), 1)) %>%
-      dplyr::select(ID, type, typedescription) %>%
-      dplyr::slice((1+(slide-1)*10):((slide)*10)) %>%
-      kableExtra::kable(format = "html", escape = F) %>%
-      kableExtra::kable_styling("striped", full_width = F) %>%
-      print()
-
-    print(subplotype)
-
-    selected_name <-
-      readline(prompt="Choose ID whose type fit (if none enter 0): ")
-    if(slide*10>nrow(sorted_matches)) slide <- 0
-  }
-
-  selected_name <- as.integer(selected_name)
+  selected_name <- as.integer(sorted_matches$selected_name)
 
   if(is.na(selected_name))
     stop("Provide integer value for standardizing subplotype name")
 
   selected_type_id <-
-    sorted_matches %>%
+    sorted_matches$sorted_matches %>%
     dplyr::slice(selected_name) %>%
     dplyr::select(id_subplotype) %>%
     dplyr::pull()
 
   select_type_features <-
-    sorted_matches %>%
+    sorted_matches$sorted_matches %>%
     dplyr::slice(selected_name)
 
   if(select_type_features$valuetype == "numeric") {
@@ -10568,15 +10662,15 @@ replace_NA <- function(vec, inv = FALSE) {
     }
   }
 
-  issues[issues==""] <- NA
+  issues[issues == ""] <- NA
 
   data_stand <-
     data_stand %>%
-    tibble::add_column(id_subplottype = rep(selected_type_id, nrow(.)))
+    dplyr::mutate(id_subplottype = rep(selected_type_id, nrow(.)))
 
   data_stand <-
     data_stand %>%
-    tibble::add_column(issue = issues)
+    dplyr::mutate(issue = issues)
 
   return(data_stand)
 }
@@ -10715,7 +10809,7 @@ replace_NA <- function(vec, inv = FALSE) {
 #'
 #' @return A list with two tibbles
 #' @export
-process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
+process_trimble_data <- function(PATH = NULL, plot_name = NULL, format = "dbf") {
 
   if (!any(rownames(utils::installed.packages()) == "foreign"))
     stop("foreign package needed, please install it")
@@ -10731,18 +10825,36 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
 
   regexp <- "[[:digit:]]+"
 
-  files_prop <-
-    dplyr::tibble(dirs = all_dirs,
-           number = as.numeric(stringr::str_extract(all_dirs, regexp)),
-           gps = grepl("GPS", all_dirs))
+  if(format == "dbf") {
+    files_prop <-
+      dplyr::tibble(dirs = all_dirs,
+                    number = as.numeric(stringr::str_extract(all_dirs, regexp)),
+                    gps = grepl("GPS", all_dirs))
 
-  count_nbe_file <-
-    files_prop %>%
-    dplyr::filter(!is.na(number)) %>%
-    dplyr::group_by(number) %>%
-    dplyr::count()
-  if (any(count_nbe_file$n != 2))
-    stop("some plot do not have two directories!")
+    count_nbe_file <-
+      files_prop %>%
+      dplyr::filter(!is.na(number)) %>%
+      dplyr::group_by(number) %>%
+      dplyr::count()
+    if (any(count_nbe_file$n != 2))
+      stop("some plot do not have two directories!")
+
+  }
+
+  if(format == "excell") {
+    files_prop <-
+      dplyr::tibble(dirs = all_dirs,
+                    number = as.numeric(stringr::str_extract(all_dirs, regexp)))
+
+    count_nbe_file <-
+      files_prop %>%
+      dplyr::filter(!is.na(number)) %>%
+      dplyr::group_by(number) %>%
+      dplyr::count()
+
+  }
+
+
 
   ncol_list <- list()
   nbe_herb <- list()
@@ -10752,23 +10864,42 @@ process_trimble_data <- function(PATH =NULL, plot_name = NULL) {
   logs_process <- list()
   gps_plot_list <- list()
   for (j in sort(unique(files_prop$number))) {
+
     logs_tb <-
-      dplyr::tibble(plot_name = as.character(), field = as.character(), issue = as.character(), id = as.character())
+      dplyr::tibble(plot_name = as.character(),
+                    field = as.character(),
+                    issue = as.character(),
+                    id = as.character())
     # print(j)
     select_plot_dir <-
       files_prop %>%
-      dplyr::filter(number==j)
+      dplyr::filter(number == j)
 
-    occ_data_dir <- select_plot_dir %>%
-      dplyr::filter(gps==FALSE) %>%
-      dplyr::select(dirs) %>%
-      dplyr::pull()
+    if(format == "dbf") {
+      occ_data_dir <-
+        select_plot_dir %>%
+        dplyr::filter(gps == FALSE) %>%
+        dplyr::select(dirs) %>%
+        dplyr::pull()
+    } else {
 
-    gps_data_dir <-
-      select_plot_dir %>%
-      dplyr::filter(gps==TRUE) %>%
-      dplyr::select(dirs) %>%
-      dplyr::pull()
+      occ_data_dir <-
+        select_plot_dir %>%
+        dplyr::select(dirs) %>%
+        dplyr::pull()
+
+    }
+
+    if(format == "dbf") {
+      gps_data_dir <-
+        select_plot_dir %>%
+        dplyr::filter(gps==TRUE) %>%
+        dplyr::select(dirs) %>%
+        dplyr::pull()
+    } else {
+
+    }
+
 
     ## gps data
     data.gps <-
@@ -11895,3 +12026,109 @@ growth_computing <- function(dataset,
                 mortality = full_results_mortality))
 
 }
+
+
+
+
+
+#' Internal function
+#'
+#' Semi automatic matching with a table for comparison
+#'
+#' @return vector
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @param value_to_search string vector of one element
+#' @param compared_table tibble with one column where the value should be compared
+#' @param column_name string name of the column of compared_table
+#'
+#' @export
+.find_cat <- function(value_to_search, compared_table, column_name, prompt_message = "Choose") {
+
+  print(value_to_search)
+
+  compared_table <- .rename_data(dataset = compared_table,
+                                 col_old = column_name,
+                                 col_new = "comp_value")
+
+  compared_table <-
+    compared_table %>%
+    mutate(perfect_match = comp_value == value_to_search)
+
+
+  if(any(compared_table$perfect_match)) {
+
+    sorted_matches <-
+      compared_table
+
+    selected_name <- which(compared_table$perfect_match)
+
+  } else {
+    selected_name <- "S"
+    slide <- 0
+    while(any(selected_name == c("", "G", "S"))) {
+
+      slide <- slide + 1
+
+      if(any(selected_name == c("S"))) {
+        slide = 1
+        sorted_matches <-
+          .find_similar_string(input = value_to_search,
+                               compared_table = compared_table,
+                               column_name = "comp_value")
+      }
+
+
+      if (any(selected_name == c("G"))) {
+
+        # var <- rlang::parse_expr(rlang::quo_name(rlang::enquo(column_name)))
+
+        slide = 1
+        grep_name <-
+          readline(prompt = "Which string to look for:")
+        sorted_matches <-
+          compared_table %>%
+          filter(grepl(grep_name, comp_value))
+
+      }
+
+      if(nrow(sorted_matches) > 0) {
+        sel_loc <-
+          sorted_matches %>%
+          tibble::add_column(ID = seq(1, nrow(.), 1)) %>%
+          dplyr::slice((1 + (slide - 1) * 10):((slide) * 10))
+      } else {
+        sel_loc <-
+          sorted_matches
+      }
+
+
+      # print(sel_loc)
+
+      sel_loc_html <-
+        sel_loc %>%
+        kableExtra::kable(format = "html", escape = F) %>%
+        kableExtra::kable_styling("striped", full_width = F)
+
+      print(sel_loc_html)
+
+      print(value_to_search)
+
+      selected_name <-
+        readline(prompt = prompt_message)
+
+      if (slide * 10 > nrow(sorted_matches))
+        slide <- 0
+    }
+
+    selected_name <- as.integer(selected_name)
+
+  }
+
+
+
+  return(list(selected_name = selected_name,
+              sorted_matches = sorted_matches))
+
+}
+

@@ -4,7 +4,7 @@
 \alias{process_trimble_data}
 \title{Process trimble data}
 \usage{
-process_trimble_data(PATH = NULL, plot_name = NULL)
+process_trimble_data(PATH = NULL, plot_name = NULL, format = "dbf")
 }
 \arguments{
 \item{PATH}{string path to trimble data}
