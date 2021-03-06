@@ -6,6 +6,7 @@
 \usage{
 .get_trait_individuals_values(
   traits,
+  src_individuals = NULL,
   id_individuals = NULL,
   ids_plot = NULL,
   skip_dates = TRUE,

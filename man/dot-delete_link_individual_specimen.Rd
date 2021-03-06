@@ -10,13 +10,22 @@
 \item{id_ind}{integer}
 
 \item{id_specimen}{integer}
+
+\item{id}{integer}
 }
 \value{
 No values
+Delete an entry in trait measurement table
+
+Delete an entry in trait measurement table using id for selection
+
+No values
 }
 \description{
-Delete an entry in trait measurement table using id for selection
+Delete an entry in diconame table using id for selection
 }
 \author{
+Gilles Dauby, \email{gilles.dauby@ird.fr}
+
 Gilles Dauby, \email{gilles.dauby@ird.fr}
 }

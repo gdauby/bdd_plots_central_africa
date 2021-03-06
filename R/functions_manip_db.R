@@ -1,7 +1,150 @@
 
-#' Launch shiny app for taxa
+# launch_query_tax_app <- function() {
+#
+#   app <- list(ui = ui <- fluidPage(
+#
+#     # Application title
+#     titlePanel("Query plots"),
+#
+#     sidebarPanel(
+#       textInput("genus",
+#                 "Enter genus name", value=NULL),
+#
+#       textInput("species",
+#                 "Enter species name", value=NULL),
+#
+#       textInput("family",
+#                 "Enter family name", value=NULL),
+#
+#       checkboxInput("extract_ind", "Extract individuals?"),
+#       actionButton("launch_extract", "Extract", color = "#0040FF")
+#       # ,
+#       #
+#       # actionButton("do", "Launch query")
+#
+#     ),
+#
+#
+#     mainPanel(
+#       DT::DTOutput("table"),
+#
+#       verbatimTextOutput("test"),
+#
+#       plotOutput(outputId = "plots_allo", brush = "plot_brush"),
+#
+#       tableOutput("data_brush")
+#
+#     )
+#   ),
+#
+#   server = function(input, output, session) {
+#     # stop the serveur in the end of the session
+#     session$onSessionEnded(function() {
+#       stopApp()
+#     })
+#
+#     extract <- reactiveValues(df = NULL)
+#
+#     plot_dbh_h <- reactiveValues(df = NULL)
+#
+#     ids_selected <- reactiveValues(df = NULL)
+#
+#     data_height_dbh <- reactiveValues(df = NULL)
+#
+#     # all_val <- reactiveValues(val=NULL)
+#     # all_val$val <-
+#     #   paste(input$genus , input$species)
+#
+#     # xxchange <- reactive({
+#     #   paste(input$genus , input$species , input$family)
+#     # })
+#
+#     observeEvent(input$launch_extract, {
+#       # req(input$genus)
+#
+#       output$table <- DT::renderDataTable({
+#         extract$df <-
+#           query_tax_all(
+#             genus_searched = input$genus,
+#             tax_esp_searched = input$species,
+#             extract_individuals = input$extract_ind,
+#             tax_fam_searched = input$family,
+#             verbose = FALSE
+#           )
+#         extract$df
+#
+#       })
+#     })
+#
+#     observeEvent(input$launch_extract, {
+#       #
+#       # output$test <- renderPrint({
+#       #
+#       #   print(input$genus)
+#       #   print(input$species)
+#       #   print(data_height_dbh$df)
+#       #   # print(ids_selected$df)
+#       #
+#       # })
+#
+#       output$plots_allo <-
+#         renderPlot({
+#           # ids_selected$df <-
+#           #   query_tax_all(
+#           #     genus_searched = input$genus,
+#           #     tax_esp_searched = input$species,
+#           #     tax_fam_searched = input$family,
+#           #     verbose = FALSE
+#           #   ) %>%
+#           #   dplyr::select(id_n) %>%
+#           #   dplyr::pull()
+#
+#           # ids$vec <- id
+#           if (length(ids_selected$df) > 0) {
+#             # out_all <-
+#             #   explore_allometric_taxa(id_search = ids_selected$df)
+#             #
+#             # data_height_dbh$df <-
+#             #   out_all$data_height_dbh
+#             #
+#             # plot_dbh_h$df <- out_all$plot_height_dbh
+#             # #
+#             # plot_dbh_h$df
+#
+#           } else{
+#             return()
+#           }
+#         })
+#
+#
+#       output$data_brush <-
+#         renderTable({
+#           n <-
+#             nrow(brushedPoints(data_height_dbh$df, brush = input$plot_brush))
+#
+#           if (n == 0) {
+#             return()
+#           } else{
+#             brushedPoints(data_height_dbh$df, brush = input$plot_brush)
+#           }
+#
+#         })
+#
+#     })
+#
+#     # }
+#     # )
+#   })
+#   shiny::runApp(app, launch.browser = TRUE)
+#
+# }
+
+
+
+
+#' Launch shiny app for taxonomic standardization
 #'
-#' Allow exploring the database by taxa - export individuals or taxa list and plot stem diameter and tree height
+#' Tool for standardizing taxonomy according to the taxonomic backbone (step needed before importing data to databases)
 #'
 #' @return Launch in web browser the app
 #'
@@ -12,142 +155,1229 @@
 launch_query_tax_app <- function() {
 
   app <- list(ui = ui <- fluidPage(
+    titlePanel("Standardisation de noms d'especes vegetales pour l'Afrique tropicale - correction des erreurs orthographiques et homogeneisation de la synonymie"),
 
-    # Application title
-    titlePanel("Query plots"),
+    # shinybusy::use_busy_bar(color = "#01DF01", height = "15px"),
+    shinybusy::use_busy_spinner(spin = "fading-circle"),
 
     sidebarPanel(
-      textInput("genus",
-                "Enter genus name", value=NULL),
+      fileInput(inputId = "data1",
+                label = "Ajoutez votre fichier de donnees - format excel"),
 
-      textInput("species",
-                "Enter species name", value=NULL),
+      uiOutput("Box_match"),
 
-      textInput("family",
-                "Enter family name", value=NULL),
+      uiOutput("Box4"),
 
-      checkboxInput("extract_ind", "Extract individuals?"),
-      actionButton("launch_extract", "Extract", color = "#0040FF")
-      # ,
-      #
-      # actionButton("do", "Launch query")
+      uiOutput("Box5"),
 
+      h4("   "),
+
+      radioButtons("dico.choix", "Utiliser le dictionnaire par defaut",
+                   c("oui","choisir un autre dictionnaire"),
+                   selected = "oui"),
+      # textInput("champ.nom", "Quel est le nom du champs contenant les noms a standardiser?",
+      #              value = "Code"),
+      uiOutput("Dico")
+      # fileInput(inputId = "data2", label = "Ajoutez votre dictionnaire - format csv")
     ),
 
-
     mainPanel(
-      DT::DTOutput("table"),
+      h4("Avancement et nombre de noms sans correspondance"),
+      htmlOutput("summary"),
 
       verbatimTextOutput("test"),
 
-      plotOutput(outputId = "plots_allo", brush = "plot_brush"),
+      h4("Observations"),
+      verbatimTextOutput("view"),
 
-      tableOutput("data_brush")
+      h4("Propostion de correspondance par ressemblance orthographique"),
+      verbatimTextOutput("list.match"),
+
+      uiOutput("Box7"),
+
+      uiOutput("Box9"),
+
+      # uiOutput("BoxChoixNom"),
+
+      uiOutput("Box1"),
+
+      uiOutput("Box2"),
+
+      uiOutput("Box3"),
+
+      uiOutput("Box10"),
+
+      uiOutput("Box6"),
+
+      uiOutput("Box8"),
+
+      h4("Nom choisi"),
+
+      tableOutput("list.sp.m"),
+
+      tableOutput("table_chosen_sp"),
+
+      uiOutput("Action1"),
+
+      h4("   "),
+      uiOutput("Action2"),
+
+      # uiOutput("Action3"),
+
+      h4("   "),
+      uiOutput("go.back.one"),
+
+      # Button
+      h4("   "),
+      downloadButton("downloadData", "Exporter une table incorporant les resultats")
 
     )
-  ),
+  ) ,
 
   server = function(input, output, session) {
+
     # stop the serveur in the end of the session
     session$onSessionEnded(function() {
       stopApp()
     })
 
-    extract <- reactiveValues(df = NULL)
+    options(shiny.maxRequestSize=30*1024^2)
 
-    plot_dbh_h <- reactiveValues(df = NULL)
+    if(!exists("mydb")) call.mydb()
 
-    ids_selected <- reactiveValues(df = NULL)
+    observeEvent(input$data1, {
+      shinybusy::show_spinner()
 
-    data_height_dbh <- reactiveValues(df = NULL)
+      DicoNames1 <-
+        dplyr::tbl(mydb, "table_taxa") %>%
+        mutate(tax_sp_level = ifelse(!is.na(tax_esp), paste(tax_gen, tax_esp), NA)) %>%
+        mutate(tax_infra_level = ifelse(!is.na(tax_esp),
+                                        paste0(tax_gen,
+                                               " ",
+                                               tax_esp,
+                                               ifelse(!is.na(tax_rank01), paste0(" ", tax_rank01), ""),
+                                               ifelse(!is.na(tax_nam01), paste0(" ", tax_nam01), ""),
+                                               ifelse(!is.na(tax_rank02), paste0(" ", tax_rank02), ""),
+                                               ifelse(!is.na(tax_nam02), paste0(" ", tax_nam02), "")),
+                                        NA)) %>%
+        mutate(tax_infra_level_auth = ifelse(!is.na(tax_esp),
+                                             paste0(tax_gen,
+                                                    " ",
+                                                    tax_esp,
+                                                    ifelse(!is.na(author1), paste0(" ", author1), ""),
+                                                    ifelse(!is.na(tax_rank01), paste0(" ", tax_rank01), ""),
+                                                    ifelse(!is.na(tax_nam01), paste0(" ", tax_nam01), ""),
+                                                    ifelse(!is.na(author2), paste0(" ", author2), ""),
+                                                    ifelse(!is.na(tax_rank02), paste0(" ", tax_rank02), ""),
+                                                    ifelse(!is.na(tax_nam02), paste0(" ", tax_nam02), ""),
+                                                    ifelse(!is.na(author3), paste0(" ", author3), "")),
+                                             NA)) %>%
+        dplyr::collect()
 
-    # all_val <- reactiveValues(val=NULL)
-    # all_val$val <-
-    #   paste(input$genus , input$species)
+      DicoNames$df <- DicoNames1
 
-    # xxchange <- reactive({
-    #   paste(input$genus , input$species , input$family)
+      # shinybusy::update_busy_bar(100)
+      shinybusy::hide_spinner()
+
+    })
+
+
+
+
+    # observeEvent(input$do, {
+    #   shinybusy::update_busy_bar(10)
+    #
+    #   DicoNames1 <-
+    #     dplyr::tbl(mydb, "table_taxa") %>%
+    #     dplyr::collect()
+    #   DicoNames$df <- DicoNames1
+    #
+    #   shinybusy::update_busy_bar(100)
+    #
     # })
 
-    observeEvent(input$launch_extract, {
-      # req(input$genus)
+    # %>%
+    #   filter(taxook!=4)
 
-      output$table <- DT::renderDataTable({
-        extract$df <-
-          query_tax_all(
-            genus_searched = input$genus,
-            tax_esp_searched = input$species,
-            extract_individuals = input$extract_ind,
-            tax_fam_searched = input$family,
-            verbose = FALSE
-          )
-        extract$df
+    # values <- reactiveValues(n = 1) ### Pointeur
+
+    val.nom.chosen <- reactiveValues(n = 1) ### Pointeur pour le nom a standardiser
+
+    # val.kind.name <- reactiveValues(n = 1)
+
+    data.to.standardize.reac <- reactiveValues(df = NULL) ### reactive value destine a stocker la table des individus qui sera mise a jour
+    original.data <- reactiveValues(df = NULL) ### reactive value destine a stocker la table des individus originale (pas mise a jour)
+    original.list.name <- reactiveValues(df = NULL) ### reactive value destine a stocker un vecteur contenant la liste des noms original
+    stand.list.name <- reactiveValues(df = NULL) ### vecteur des noms devant etre standardise
+    list.match.reac <- reactiveValues(df = NULL)
+
+    test_dat <- reactiveValues(df = NULL)
+
+
+
+    DicoNames <- reactiveValues(df = NULL) ### reactive value destine a stocker la table des individus
+
+
+    ### Choix de la colonne de la table originale a standardiser
+    output$Box_match = renderUI({
+      req(input$data1)
+
+      checkboxInput("authors", "Matching with authors name ?", TRUE)
+
+    })
+
+    ### Choix de la colonne de la table originale a standardiser
+    output$Box4 = renderUI({
+      req(input$data1)
+
+      DATA.col <- original.data$df
+      colnames(DATA.col) <- seq(1, ncol(original.data$df), 1)
+
+      selectInput("champ.nom",
+                  "Selectionner le nom de la colonne a standardiser",
+                  c(colnames(original.data$df[, as.numeric(colnames(dplyr::select_if(DATA.col, is.character)))])))
+
+
+    })
+
+    observeEvent(input$data1, {
+      dataset <- input$data1
+
+      file.rename(input$data1$datapath,
+                  paste(input$data1$datapath, ".xlsx", sep=""))
+
+      DATA <- readxl::read_excel(paste(input$data1$datapath, ".xlsx", sep=""), 1)
+
+      if(!any(colnames(DATA) == "id_data")) {
+        DATA <-
+          DATA %>%
+          tibble::add_column(id_data = seq(1, nrow(DATA), 1))
+      }
+
+      ### Save table des individus original
+      original.data$df <- DATA
+
+    })
+
+
+    observeEvent(input$champ.nom, { #  input$data1
+
+      file.rename(input$data1$datapath,
+                  paste(input$data1$datapath, ".xlsx", sep=""))
+
+      DATA <-
+        readxl::read_excel(paste(input$data1$datapath, ".xlsx", sep=""), 1)
+
+
+      ### adding a temporary id in the dataset
+      if(!any(colnames(DATA) == "id_data")) {
+
+        DATA <-
+          DATA %>%
+          tibble::add_column(id_data = seq(1, nrow(DATA), 1))
+
+      }
+
+      # original.list.name$df <- dplyr::distinct(DATA[,input$champ.nom])
+
+      champ.nom <-
+        input$champ.nom
+
+      original.list.name$df <-
+        DATA %>%
+        dplyr::distinct(!!rlang::sym(champ.nom))
+
+
+      ### Ajout de colonnes destinees a la mise a jour
+      if (!any(colnames(DATA) == "found.name")) {
+        ## Ajout de found.name si pas deja present
+
+        DATA <- DATA %>% tibble::add_column(found.name = "")
+
+      }
+
+      if(!any(colnames(DATA)=="ID.dico.name")) { ## Ajout de ID.dico.name si pas deja present
+
+        DATA <- DATA %>% tibble::add_column(ID.dico.name = 0)
+
+      }else{
+
+        DATA <- DATA %>%
+          mutate(ID.dico.name = as.numeric(ID.dico.name))
+
+      }
+
+      if(!any(colnames(DATA)=="ID.dico.name.good")) { ## Ajout de ID.dico.name.good si pas deja present
+
+        DATA <- DATA %>% tibble::add_column(ID.dico.name.good = 0)
+
+      } else{
+
+        DATA <- DATA %>%
+          mutate(ID.dico.name.good = as.numeric(ID.dico.name.good))
+
+      }
+
+      if(!any(colnames(DATA) == "corrected.name")) { ## Ajout de corrected.name si pas deja present
+
+        DATA <- DATA %>% tibble::add_column(corrected.name = "")
+
+      }
+
+      if (any(colnames(DATA) == "found.name")) {
+        if (length(which(is.na(DATA$found.name))) > 0)
+          DATA$found.name[which(is.na(DATA$found.name))] <-
+            "" ### Si des observations de found.name sont en NA, les mettre en ""
+      }
+
+      # if(any(colnames(DATA)=="detvalue")) {
+      #   if(length(which(is.na(DATA$detvalue)))>0) DATA$found.name[which(is.na(DATA$detvalue))] <- 0 ### Si des observations de detvalue sont en NA, les mettre a 0
+      # }
+
+
+      ### Procedure de matching des noms --> noms correspondant a des noms du referentiel
+
+      # select code and id_data
+      DATA.selected <-
+        DATA %>%
+        dplyr::select(!!rlang::sym(champ.nom), id_data) %>%
+        dplyr::rename(Code =!!rlang::sym(champ.nom)) %>%
+        dplyr::filter(!is.na(Code))
+
+      # matching based on full_name_no_auth
+
+      if(!input$authors)
+        join.table <-
+        DATA.selected %>%
+        dplyr::left_join(DicoNames$df %>%
+                           dplyr::select(idtax_n, tax_infra_level),
+                         by=c("Code" = "tax_infra_level"))
+
+      if(input$authors)
+        join.table <-
+        dplyr::left_join(DATA.selected,
+                         dplyr::select(DicoNames$df, idtax_n, tax_infra_level_auth),
+                         by=c("Code" = "tax_infra_level_auth"))
+
+
+      # if(!input$authors)
+      #   join.table <-
+      #   dplyr::left_join(DATA.selected,
+      #                    dplyr::select(DicoNames1, idtax_n, idtax_good_n, tax_gen, tax_infra_level, tax_infra_level_auth ),
+      #                    by=c("Code" = "tax_infra_level"))
+      #
+      # if(input$authors)
+      #   join.table <-
+      #   dplyr::left_join(DATA.selected,
+      #                    dplyr::select(DicoNames1, idtax_n, idtax_good_n, tax_gen, tax_infra_level, tax_infra_level_auth ),
+      #                    by=c("Code" = "tax_infra_level_auth"))
+
+
+      ### Matching with genus for those missing
+      join.table_not_match <-
+        join.table %>%
+        dplyr::filter(is.na(idtax_n)) %>%
+        dplyr::select(-idtax_n)
+
+      join.table_genus <-
+        join.table_not_match %>%
+        left_join(DicoNames$df %>%
+                    dplyr::filter(is.na(tax_esp), !is.na(tax_gen)) %>%
+                    dplyr::select(idtax_n,
+                                  idtax_good_n,
+                                  tax_gen),
+                  by = c("Code" = "tax_gen")) %>%
+        filter(!is.na(idtax_n))
+
+      ## Matching with family for those missing
+      join.table_not_match <-
+        join.table %>%
+        dplyr::filter(is.na(idtax_n)) %>%
+        dplyr::select(-idtax_n)
+
+      join.table_family <-
+        join.table_not_match %>%
+        left_join(DicoNames$df %>%
+                    dplyr::filter(is.na(tax_esp), is.na(tax_gen), !is.na(tax_fam)) %>%
+                    dplyr::select(idtax_n,
+                                  idtax_good_n,
+                                  tax_fam),
+                  by = c("Code" = "tax_fam")) %>%
+        filter(!is.na(idtax_n))
+
+
+      # join.table %>%
+      #   mutate(idtax_n = case_when(
+      #     id_data  %in% join.table_genus$id_data
+      #   ))
+
+      join.table <-
+        join.table %>%
+        left_join(join.table_genus %>%
+                    dplyr::select(idtax_n, id_data) %>%
+                    dplyr::rename(idtax_n_genus = idtax_n),
+                  by = c("id_data" = "id_data")) %>%
+        dplyr::mutate(idtax_n = ifelse(is.na(idtax_n), idtax_n_genus, idtax_n)) %>%
+        dplyr::select(-idtax_n_genus)
+
+      join.table <-
+        join.table %>%
+        left_join(join.table_family %>%
+                    dplyr::select(idtax_n, id_data) %>%
+                    dplyr::rename(idtax_n_fam = idtax_n),
+                  by = c("id_data" = "id_data")) %>%
+        dplyr::mutate(idtax_n = ifelse(is.na(idtax_n), idtax_n_fam, idtax_n)) %>%
+        dplyr::select(-idtax_n_fam)
+
+      join.table <-
+        join.table %>%
+        left_join(DicoNames$df %>%
+                    dplyr::select(idtax_n, idtax_good_n, tax_gen, tax_infra_level, tax_infra_level_auth),
+                  by = c("idtax_n" = "idtax_n"))
+
+
+      # if more than one matching by name, take the first
+      join.table <-
+        join.table %>%
+        dplyr::group_by(id_data) %>%
+        dplyr::summarise(idtax_n = dplyr::first(idtax_n),
+                         idtax_good_n = dplyr::first(idtax_good_n),
+                         Code = dplyr::first(Code))
+
+      # excluding names with no matching
+      join.table_sel <-
+        join.table %>%
+        dplyr::filter(!is.na(idtax_n)) %>%
+        dplyr::select(Code, id_data, idtax_n, idtax_good_n)
+
+      # combining matched names with DATA, adding found.name
+      DATA <-
+        DATA %>%
+        dplyr::left_join(dplyr::select(join.table_sel, Code, id_data),
+                         by=c("id_data"="id_data")) %>%
+        dplyr::mutate(found.name = Code) %>%
+        dplyr::select(-Code)
+
+      # adding ID.dico.name
+      DATA <-
+        DATA %>%
+        dplyr::left_join(dplyr::select(join.table_sel, idtax_n, id_data),
+                         by = c("id_data" = "id_data")) %>%
+        dplyr::mutate(ID.dico.name = ifelse(is.na(idtax_n), ID.dico.name, idtax_n)) %>%
+        dplyr::select(-idtax_n)
+
+      # adding ID.dico.name.good
+      DATA <-
+        DATA %>%
+        dplyr::left_join(dplyr::select(join.table_sel, idtax_good_n, id_data),
+                         by = c("id_data" = "id_data")) %>%
+        dplyr::mutate(ID.dico.name.good = ifelse(is.na(idtax_good_n), ID.dico.name.good, idtax_good_n)) %>%
+        dplyr::select(-idtax_good_n)
+
+      # finding good names
+      join.corrected.names <-
+        dplyr::left_join(
+          DATA %>%
+            dplyr::select(ID.dico.name.good),
+          DicoNames$df %>% dplyr::select(idtax_n, tax_infra_level),
+          by = c("ID.dico.name.good" = "idtax_n")
+        )
+
+      # adding good names
+      DATA$corrected.name <-
+        join.corrected.names$tax_infra_level
+
+      # adding detvalue
+      if (!any(colnames(DATA) == "detvalue")) {
+        DATA <-
+          DATA %>%
+          tibble::add_column(detvalue = rep(0, nrow(.)))
+      }
+
+      # %>%
+      #   dplyr::mutate(detvalue=as.integer(detvalue))
+
+      test <-
+        DATA %>%
+        dplyr::filter(ID.dico.name == 0) %>%
+        dplyr::distinct(!!rlang::sym(champ.nom), found.name) %>%
+        dplyr::filter(!is.na(!!rlang::sym(champ.nom))) %>%
+        dplyr::arrange(!!rlang::sym(champ.nom)) %>%
+        tibble::add_column(id_tax_search = seq(1, nrow(.), 1)) %>%
+        dplyr::mutate(id_tax_search = as.character(id_tax_search))
+
+      DATA <-
+        DATA %>%
+        dplyr::left_join(test %>%
+                           dplyr::select(!!rlang::sym(champ.nom), id_tax_search))
+
+      test <-
+        test %>%
+        dplyr::rename(Code = 1)
+
+      stand.list.name$df <-
+        test %>%
+        dplyr::select(Code, id_tax_search) %>%
+        dplyr::filter(!is.na(Code))
+
+      data.to.standardize.reac$df <-
+        DATA
+
+
+
+
+    })
+
+    ### Une fois une colonne choisi, proposer de commencer la standardisation
+    observeEvent(input$champ.nom, {
+
+      output$Box5 = renderUI({
+        req(input$champ.nom)
+        req(input$data1)
+
+        actionButton("do", "Commencer la standardisation")
+      })
+    }
+    )
+
+    output$summary <- renderUI({
+
+      req(input$champ.nom)
+
+      TXT2 <- paste("Nombre total de noms : ", nrow(unique(original.data$df[,input$champ.nom])))
+
+      TXT <- paste("Nombre total de noms a standardiser : ", nrow(stand.list.name$df))
+
+      TXT3 <- paste("NOMBRE DE NOMS RESTANT : ", nrow(stand.list.name$df)-(val.nom.chosen$n-1))
+
+      HTML(paste(TXT2, TXT, TXT3, sep = '<br/>'))
+    })
+
+    ### Une fois la confirmation du debut de standardisation
+    observeEvent(input$do, {
+
+      output$Box7 = renderUI( {
+        if (is.null(input$sector) || input$sector == "Selectionner un nom a standardiser") {
+          return()
+        }else{
+
+          radioButtons("nbe_choice", "Nombre de noms similaires propose",
+                       c("Top 10", "Top 20", "Tous"),
+                       selected = "Top 10")
+
+        }
+      })
+
+      output$Box9 = renderUI( {
+        if (is.null(input$sector) || input$sector == "Selectionner un nom a standardiser") {
+          return()
+        }else{
+
+          radioButtons("sort", "Trier les propositions",
+                       c("ressemblance","alphabetique"),
+                       selected = "ressemblance")
+
+        }
+      })
+
+      output$Box1 = renderUI({
+        req(input$data1)
+        if(input$dico.choix!="oui") req(input$data2)
+
+        ### 'truc' pour eviter de mal afficher les noms avec caracteres speciaux
+
+        id.names <- as.list(stand.list.name$df$id_tax_search)
+        names(id.names) <- enc2utf8(dplyr::pull(stand.list.name$df, Code))
+
+        # Encoding(names(id.names)) <-  "UTF-8"
+
+        selectInput("sector","Selectionner un nom a standardiser",
+                    choices=id.names, selected=val.nom.chosen$n)
 
       })
-    })
+      #
 
-    observeEvent(input$launch_extract, {
+      output$Box3 = renderUI( {
+        if (is.null(input$sector) || input$sector == "Selectionner un nom a standardiser") {
+          return()
+
+        }else{
+
+          radioButtons("choice.kind", "Chercher une correspondance dans",
+                       c("Noms sans auteurs","Noms avec auteurs"),
+                       selected = "Noms sans auteurs")
+        }
+      })
+
+      output$Box10 = renderUI( {
+        if (is.null(input$sector) || input$sector == "Selectionner un nom a standardiser") {
+          return()
+
+        }else{
+
+          radioButtons("choice.kind3", "Afficher les taxas infra-specifiques",
+                       c("oui", "non"),
+                       selected = "oui")
+
+        }
+      })
+
+
+
+      output$Box6 = renderUI( {
+        if (is.null(input$sector) || input$sector == "Choisir") {
+          return()
+        }else{
+          radioButtons("choice.kind2", "Chercher une correspondance dans",
+                       c("les taxa", "les genres", "les classes"), #
+                       selected = "les taxa")
+
+        }
+      })
+
+
+      output$Box8 = renderUI( {
+        if (is.null(input$sector) || input$sector == "Choisir") {
+          return()
+        }else{
+          radioButtons("cf", "Identification certaine ou pas (cf)",
+                       c("ok","cf"),
+                       selected = "ok")
+
+        }
+      })
+
+
+      output$Box2 = renderUI( {
+
+        if (is.null(input$sector) || input$sector == "Selectionner un nom a standardiser") {
+          return()
+        }else{
+
+          req(input$data1)
+          if(input$dico.choix!="oui") req(input$data2)
+
+          # Name1 <- original.list.name$df[as.numeric(input$sector)]
+          Name1 <-
+            stand.list.name$df %>%
+            dplyr::filter(id_tax_search == as.numeric(input$sector)) %>%
+            dplyr::pull(Code)
+
+
+          if(input$choice.kind == "Noms sans auteurs" & input$choice.kind2 == "les taxa") {
+
+            if(input$choice.kind3 == "oui") {
+
+              dist. <-
+                RecordLinkage::levenshteinSim(tolower(Name1), tolower(DicoNames$df$tax_infra_level))
+
+            }
+
+            if(input$choice.kind3 == "non") {
+
+              subset_dico <-
+                DicoNames$df %>%
+                dplyr::filter(is.na(tax_rank01) & is.na(tax_nam01))
+
+              dist. <-
+                RecordLinkage::levenshteinSim(tolower(Name1), tolower(subset_dico$tax_infra_level))
+            }
+          }
+
+
+          if(input$choice.kind == "Noms avec auteurs" & input$choice.kind2 == "les taxa") {
+
+            if(input$choice.kind3 == "oui") {
+
+              dist. <-
+                RecordLinkage::levenshteinSim(tolower(Name1), tolower(DicoNames$df$tax_infra_level_auth))
+
+            }
+
+            if(input$choice.kind3 == "non") {
+
+              subset_dico <-
+                DicoNames$df %>%
+                dplyr::filter(is.na(tax_rank01) & is.na(tax_nam01))
+
+              dist. <-
+                RecordLinkage::levenshteinSim(tolower(Name1), tolower(subset_dico$tax_infra_level_auth))
+            }
+
+
+          }
+
+          # dist. <-
+          # RecordLinkage::levenshteinSim(tolower(Name1), tolower(DicoNames1$tax_infra_level_auth))
+
+          if(input$choice.kind2 == "les genres") {
+
+            dico_genus <-
+              DicoNames$df %>%
+              dplyr::filter(is.na(tax_esp))
+
+            dist. <-
+              RecordLinkage::levenshteinSim(tolower(Name1), tolower(dico_genus$tax_gen))
+
+          }
+
+          if(input$choice.kind2 == "les classes") {
+
+            dico_classes <-
+              DicoNames$df %>%
+              dplyr::filter(is.na(tax_esp), is.na(tax_fam), is.na(tax_order)) %>%
+              dplyr::filter(!is.na(tax_famclass))
+
+            dist. <-
+              RecordLinkage::levenshteinSim(tolower(Name1), tolower(dico_classes$tax_famclass))
+
+          }
+
+          if (input$nbe_choice == "Top 10")
+            nbe.match <-
+            10 ### Nombre de proposition pour la correspondance a afficher
+          if (input$nbe_choice == "Top 20")
+            nbe.match <-
+            20 ### Nombre de proposition pour la correspondance a afficher
+          if (input$nbe_choice == "Tous")
+            nbe.match <-
+            length(dist.[!is.na(dist.)]) ### Nombre de proposition pour la correspondance a afficher
+
+          # test_dat$df <- dico_genus[order(dist., decreasing = T),]
+
+          if (input$choice.kind2 == "les genres") {
+
+            matches. <-
+              dico_genus[order(dist., decreasing = T)[1:nbe.match],]
+
+            # if(input$sort=="alphabetique")
+
+          } else {
+
+            if (input$choice.kind2 == "les classes") {
+
+              if(nrow(dico_classes) < nbe.match)
+                nbe.match_class <- nrow(dico_classes)
+
+              matches. <-
+                dico_classes[order(dist., decreasing = T)[1:nbe.match_class],]
+
+            } else {
+
+              if (input$choice.kind3 == "oui") {
+
+                matches. <-
+                  DicoNames$df[order(dist., decreasing = T)[1:nbe.match],]
+
+              }
+
+              if(input$choice.kind3 == "non") {
+
+                subset_dico <-
+                  DicoNames$df %>%
+                  dplyr::filter(is.na(tax_rank01) & is.na(tax_nam01))
+
+                matches. <-
+                  subset_dico[order(dist., decreasing = T)[1:nbe.match],]
+
+              }
+            }
+          }
+
+          matches. <-
+            dplyr::select(matches., tax_infra_level,
+                          tax_infra_level_auth,
+                          idtax_n, idtax_good_n, tax_gen, tax_esp, tax_famclass)
+
+          if (input$choice.kind == "Noms sans auteurs" &
+              input$choice.kind2 == "les taxa") {
+
+            selected.field <- "tax_infra_level"
+            list.match <-
+              matches. %>%
+              dplyr::select(!!rlang::sym(selected.field), idtax_n)
+            # list.match <- c(matches.[,c(selected.field)])
+
+          }
+
+          if (input$choice.kind == "Noms avec auteurs" &
+              input$choice.kind2 == "les taxa") {
+            selected.field <- "tax_infra_level_auth"
+            list.match <-
+              matches. %>%
+              dplyr::select(!!rlang::sym(selected.field), idtax_n)
+            # list.match <- c(matches.[,c(selected.field)])
+          }
+
+
+          if(input$choice.kind2 == "les genres") {
+            selected.field <- "tax_gen"
+            list.match <-
+              matches. %>%
+              dplyr::select(!!rlang::sym(selected.field), idtax_n, tax_esp)
+            # list.match <- c(unique(matches.[,c(selected.field)]))
+          }
+
+          if(input$choice.kind2 == "les classes") {
+            selected.field <- "tax_famclass"
+            list.match <-
+              matches. %>%
+              dplyr::select(!!rlang::sym(selected.field), idtax_n, tax_esp)
+            # list.match <- c(unique(matches.[,c(selected.field)]))
+          }
+
+          if(input$sort == "alphabetique")
+            list.match <-
+            list.match %>%
+            arrange(!!rlang::sym(selected.field))
+
+          list.match.reac$df <- list.match
+
+          id.names <- as.list(seq(1, nrow(list.match.reac$df), 1))
+          names(id.names) <- enc2utf8(dplyr::pull(list.match.reac$df, 1))
+
+          # Encoding(names(id.names)) <-  "UTF-8"
+
+          selectInput("stock",
+                      "Choisir le nom correct si present",
+                      choices = id.names,
+                      selected = 1)
+
+
+
+        }
+      })
+
+
+      output$Action1 = renderUI({
+        if (is.null(input$stock) || input$stock == "Choisir le nom correct si present") {
+
+          return()
+
+        }else{
+
+          Name2 <-
+            list.match.reac$df %>%
+            dplyr::slice(as.numeric(input$stock)) %>%
+            dplyr::pull(1)
+
+          actionButton(inputId="confirm.name", label=paste("Choisir", Name2))
+
+        }
+      })
+
+
+      output$Action2 = renderUI({
+        if (is.null(input$stock) || input$stock == "Choisir le nom correct si present") {
+          return()
+        }else{
+          actionButton(inputId="no.match", label="Pas de correspondance, passer au nom suivant")
+        }
+      })
+
+      output$list.sp.m <- renderTable({ # renderTable
+
+        req(input$data1)
+        if(input$dico.choix!="oui") req(input$data2)
+
+        if (is.null(input$stock) || input$stock == " ") {
+          return()
+        }else{
+
+          Name1 <-
+            stand.list.name$df %>%
+            dplyr::filter(id_tax_search == as.numeric(input$sector)) %>%
+            dplyr::pull(Code)
+
+          id_Name2 <-
+            list.match.reac$df %>%
+            dplyr::slice(as.numeric(input$stock)) %>%
+            dplyr::pull(2)
+
+          Name2 <-
+            list.match.reac$df %>%
+            dplyr::slice(as.numeric(input$stock)) %>%
+            dplyr::pull(1)
+
+
+          if (input$choice.kind == "Noms sans auteurs" &
+              input$choice.kind2 == "les taxa")
+            selected.field <- "tax_infra_level"
+          if (input$choice.kind == "Noms avec auteurs" &
+              input$choice.kind2 == "les taxa")
+            selected.field <- "tax_infra_level_auth"
+          if (input$choice.kind2 == "les genres")
+            selected.field <- "tax_gen"
+          if (input$choice.kind2 == "les classes")
+            selected.field <- "tax_famclass"
+
+          test_syn <-
+            DicoNames$df %>%
+            dplyr::filter(idtax_n == id_Name2) %>%
+            dplyr::select(idtax_n, idtax_good_n)
+
+          if(!is.na(test_syn$idtax_good_n)) if(test_syn$idtax_n != test_syn$idtax_good_n)
+            syn_check <- TRUE
+          if(!is.na(test_syn$idtax_good_n)) if(test_syn$idtax_n == test_syn$idtax_good_n)
+            syn_check <- FALSE
+          if(is.na(test_syn$idtax_good_n)) syn_check <- FALSE
+
+          if(syn_check) {
+
+            id_good <-
+              DicoNames$df %>%
+              # filter(!!rlang::sym(selected.field)==Name2) %>%
+              dplyr::filter(idtax_n == !!id_Name2) %>%
+              dplyr::select(idtax_good_n) %>%
+              dplyr::pull()
+
+            good_name <-
+              DicoNames$df %>%
+              dplyr::filter(idtax_n == !!id_good) %>%
+              mutate(tax_infra_level_auth = ifelse(!is.na(tax_esp),
+                                                   paste0(tax_gen,
+                                                          " ",
+                                                          tax_esp,
+                                                          ifelse(!is.na(author1), paste0(" ", author1), ""),
+                                                          ifelse(!is.na(tax_rank01), paste0(" ", tax_rank01), ""),
+                                                          ifelse(!is.na(tax_nam01), paste0(" ", tax_nam01), ""),
+                                                          ifelse(!is.na(author2), paste0(" ", author2), ""),
+                                                          ifelse(!is.na(tax_rank02), paste0(" ", tax_rank02), ""),
+                                                          ifelse(!is.na(tax_nam02), paste0(" ", tax_nam02), ""),
+                                                          ifelse(!is.na(author3), paste0(" ", author3), "")),
+                                                   NA)) %>%
+              dplyr::select(tax_infra_level_auth) %>%
+              dplyr::pull()
+
+            data_to_print <-
+              dplyr::tibble('Nom cherche' = Name1,
+                            "Nom propose" = Name2,
+                            "Est considere synonyme de" = good_name
+              )
+
+
+            test_dat$df <-
+              good_name
+
+            data_to_print
+
+            # print("Considere comme synonyme de")
+            # print(DicoNames$df$full_name_no_auth[which(DicoNames$df$id_n==DicoNames$df$id_good_n[which(DicoNames$df$full_name_no_auth %in% Name2)])])
+          }else{
+
+            dplyr::tibble('Nom cherche'=Name1, "Nom propose" = Name2)
+
+          }
+
+        }
+      })
+
+
+      output$table_chosen_sp <- renderTable({ # renderTable
+
+        req(input$data1)
+        if(input$dico.choix!="oui") req(input$data2)
+
+        if (is.null(input$stock) || input$stock == " ") {
+          return()
+        }else{
+
+          Name1 <-
+            stand.list.name$df %>%
+            dplyr::filter(id_tax_search == as.numeric(input$sector)) %>%
+            dplyr::pull(Code)
+
+          id_Name2 <-
+            list.match.reac$df %>%
+            dplyr::slice(as.numeric(input$stock)) %>%
+            dplyr::pull(2)
+
+          Name2 <-
+            list.match.reac$df %>%
+            dplyr::slice(as.numeric(input$stock)) %>%
+            dplyr::pull(1)
+
+
+          # if(input$choice.kind=="Noms sans auteurs" & input$choice.kind2=="les taxa")
+          #   selected.field <- "tax_infra_level"
+          # if(input$choice.kind=="Noms avec auteurs" & input$choice.kind2=="les taxa")
+          #   selected.field <- "tax_infra_level_auth"
+          # if(input$choice.kind2=="les genres")  selected.field <- "tax_gen"
+
+          test_syn <-
+            DicoNames$df %>%
+            dplyr::filter(idtax_n == !!id_Name2) %>%
+            dplyr::select(idtax_n, idtax_good_n)
+
+          if(!is.na(test_syn$idtax_good_n)) if(test_syn$idtax_n != test_syn$idtax_good_n)
+            syn_check <- TRUE
+          if(!is.na(test_syn$idtax_good_n)) if(test_syn$idtax_n == test_syn$idtax_good_n)
+            syn_check <- FALSE
+          if(is.na(test_syn$idtax_good_n)) syn_check <- FALSE
+
+          if(syn_check) {
+
+            id_good <-
+              DicoNames$df %>%
+              dplyr::filter(idtax_n == !!id_Name2) %>%
+              dplyr::select(idtax_good_n) %>%
+              dplyr::pull()
+
+            DicoNames$df %>%
+              dplyr::filter(idtax_n == !!id_good) %>%
+              mutate(tax_infra_level_auth = ifelse(!is.na(tax_esp),
+                                                   paste0(tax_gen,
+                                                          " ",
+                                                          tax_esp,
+                                                          ifelse(!is.na(author1), paste0(" ", author1), ""),
+                                                          ifelse(!is.na(tax_rank01), paste0(" ", tax_rank01), ""),
+                                                          ifelse(!is.na(tax_nam01), paste0(" ", tax_nam01), ""),
+                                                          ifelse(!is.na(author2), paste0(" ", author2), ""),
+                                                          ifelse(!is.na(tax_rank02), paste0(" ", tax_rank02), ""),
+                                                          ifelse(!is.na(tax_nam02), paste0(" ", tax_nam02), ""),
+                                                          ifelse(!is.na(author3), paste0(" ", author3), "")),
+                                                   NA)) %>%
+              dplyr::select(tax_fam,
+                            tax_gen,
+                            tax_esp,
+                            tax_rank01,
+                            tax_nam01,
+                            tax_rank02,
+                            author1,
+                            author2)
+
+          }else{
+
+            DicoNames$df %>%
+              dplyr::filter(idtax_n == id_Name2) %>%
+              mutate(tax_infra_level_auth = ifelse(!is.na(tax_esp),
+                                                   paste0(tax_gen,
+                                                          " ",
+                                                          tax_esp,
+                                                          ifelse(!is.na(author1), paste0(" ", author1), ""),
+                                                          ifelse(!is.na(tax_rank01), paste0(" ", tax_rank01), ""),
+                                                          ifelse(!is.na(tax_nam01), paste0(" ", tax_nam01), ""),
+                                                          ifelse(!is.na(author2), paste0(" ", author2), ""),
+                                                          ifelse(!is.na(tax_rank02), paste0(" ", tax_rank02), ""),
+                                                          ifelse(!is.na(tax_nam02), paste0(" ", tax_nam02), ""),
+                                                          ifelse(!is.na(author3), paste0(" ", author3), "")),
+                                                   NA)) %>%
+              dplyr::select(tax_fam,
+                            tax_gen,
+                            tax_esp,
+                            tax_rank01,
+                            tax_nam01,
+                            tax_rank02,
+                            author1,
+                            author2)
+
+          }
+        }
+      })
+
+      observeEvent(input$confirm.name, {
+
+        req(input$data1)
+        if(input$dico.choix!="oui") req(input$data2)
+
+        Name1 <-
+          stand.list.name$df %>%
+          dplyr::filter(id_tax_search == as.numeric(input$sector)) %>%
+          dplyr::pull(id_tax_search)
+
+        id_Name2 <-
+          list.match.reac$df %>%
+          dplyr::slice(as.numeric(input$stock)) %>%
+          dplyr::pull(2)
+
+
+        if (input$choice.kind == "Noms sans auteurs" &
+            input$choice.kind2 == "les taxa")
+          selected.field <- "tax_infra_level"
+        if (input$choice.kind == "Noms avec auteurs" &
+            input$choice.kind2 == "les taxa")
+          selected.field <- "tax_infra_level_auth"
+        if (input$choice.kind2 == "les genres")
+          selected.field <- "tax_gen"
+        if (input$choice.kind2 == "les classes")
+          selected.field <- "tax_famclass"
+
+
+        Name2 <-
+          DicoNames$df %>%
+          dplyr::filter(idtax_n == id_Name2) %>%
+          dplyr::select(!!rlang::sym(selected.field)) %>%
+          dplyr::pull()
+
+        # complete found.name based on found_taxa
+        data.to.standardize.reac$df <-
+          data.to.standardize.reac$df %>%
+          dplyr::mutate(found.name = replace(found.name, id_tax_search == Name1, Name2))
+
+        Encoding(Name2) <- "UTF-8"
+
+        found_taxa <-
+          DicoNames$df %>%
+          dplyr::filter(idtax_n == !!id_Name2)
+
+        ### in case of duplicates in diconames
+        if(nrow(found_taxa)>1) {
+          found_taxa <-
+            found_taxa %>%
+            dplyr::group_by(!!rlang::sym(selected.field)) %>%
+            dplyr::summarise(idtax_good_n = dplyr::first(idtax_good_n), tax_infra_level = dplyr::first(tax_infra_level), idtax_n=dplyr::first(idtax_n))
+        }
+
+
+        # complete ID.dico.name based on found_taxa
+        data.to.standardize.reac$df <-
+          data.to.standardize.reac$df %>%
+          dplyr::mutate(ID.dico.name = replace(ID.dico.name, id_tax_search == Name1, found_taxa$idtax_n))
+
+        # complete ID.dico.name.good based on found_taxa
+        data.to.standardize.reac$df <-
+          data.to.standardize.reac$df %>%
+          dplyr::mutate(ID.dico.name.good = replace(ID.dico.name.good, id_tax_search == Name1, found_taxa$idtax_good_n))
+
+
+        # complete detvalue based on buttons cf
+        # if(input$cf=="cf") {
+        #   data.to.standardize.reac$df <-
+        #     data.to.standardize.reac$df %>%
+        #     dplyr::mutate(detvalue=replace(detvalue, id_tax_search==Name1, 3))
+        # }
+
+
+        ### checking for synonymies
+        if(!is.na(found_taxa$idtax_good_n)) {
+          if(found_taxa$idtax_n != found_taxa$idtax_good_n) {
+            found_correc_taxa <-
+              DicoNames$df %>%
+              dplyr::filter(idtax_n == found_taxa$idtax_good_n)
+
+            data.to.standardize.reac$df <-
+              data.to.standardize.reac$df %>%
+              dplyr::mutate(corrected.name = replace(corrected.name, id_tax_search == Name1, found_correc_taxa$tax_infra_level))
+          }else{
+            data.to.standardize.reac$df <-
+              data.to.standardize.reac$df %>%
+              dplyr::mutate(corrected.name = replace(corrected.name, id_tax_search == Name1, found_taxa$tax_infra_level))
+          }
+        }else{
+          data.to.standardize.reac$df <-
+            data.to.standardize.reac$df %>%
+            dplyr::mutate(corrected.name = replace(corrected.name, id_tax_search == Name1, found_taxa$tax_infra_level))
+        }
+
+      })
+
+      observeEvent(input$confirm.name, {
+        Name1 <-
+          stand.list.name$df %>%
+          dplyr::filter(id_tax_search == as.numeric(input$sector)) %>%
+          dplyr::pull(id_tax_search)
+        # Encoding(Name1) <- "UTF-8"
+
+        id.orig <- which(stand.list.name$df$id_tax_search == Name1)
+        if(length(id.orig)>0) val.nom.chosen$n <- id.orig + 1
+
+      }
+      )
+
+      # observeEvent(input$confirm.name, {
       #
-      # output$test <- renderPrint({
-      #
-      #   print(input$genus)
-      #   print(input$species)
-      #   print(data_height_dbh$df)
-      #   # print(ids_selected$df)
-      #
+      #   # values$n <- values$n + 1
+      #   # if(values$n>nrow(stand.list.name$df))   values$n <- nrow(stand.list.name$df)
       # })
 
-      output$plots_allo <-
-        renderPlot({
-          # ids_selected$df <-
-          #   query_tax_all(
-          #     genus_searched = input$genus,
-          #     tax_esp_searched = input$species,
-          #     tax_fam_searched = input$family,
-          #     verbose = FALSE
-          #   ) %>%
-          #   dplyr::select(id_n) %>%
-          #   dplyr::pull()
+      observeEvent(input$no.match, {
+        req(input$data1)
+        if(input$dico.choix!="oui") req(input$data2)
 
-          # ids$vec <- id
-          if (length(ids_selected$df) > 0) {
-            # out_all <-
-            #   explore_allometric_taxa(id_search = ids_selected$df)
-            #
-            # data_height_dbh$df <-
-            #   out_all$data_height_dbh
-            #
-            # plot_dbh_h$df <- out_all$plot_height_dbh
-            # #
-            # plot_dbh_h$df
+        Name1 <-
+          stand.list.name$df %>%
+          dplyr::filter(id_tax_search == as.numeric(input$sector)) %>%
+          dplyr::pull(id_tax_search)
+        # Encoding(Name1) <- "UTF-8"
 
-          } else{
-            return()
-          }
-        })
+        id.orig <- which(stand.list.name$df$id_tax_search == Name1)
+        if(length(id.orig)>0) val.nom.chosen$n <- id.orig + 1
+
+        data.to.standardize.reac$df <-
+          data.to.standardize.reac$df %>%
+          dplyr::mutate(ID.dico.name = replace(ID.dico.name, id_tax_search == Name1, 0))
+
+        data.to.standardize.reac$df <-
+          data.to.standardize.reac$df %>%
+          dplyr::mutate(found.name = replace(found.name, id_tax_search == Name1, ""))
+
+        data.to.standardize.reac$df <-
+          data.to.standardize.reac$df %>%
+          dplyr::mutate(ID.dico.name.good = replace(ID.dico.name.good, id_tax_search == Name1, 0))
+
+        data.to.standardize.reac$df <-
+          data.to.standardize.reac$df %>%
+          dplyr::mutate(corrected.name = replace(corrected.name, id_tax_search == Name1, ""))
+
+        # data.to.standardize.reac$df[which(data.to.standardize.reac$df[,input$champ.nom][[1]]==Name1),"found.name"] <- ""
+        # data.to.standardize.reac$df[which(data.to.standardize.reac$df[,input$champ.nom][[1]]==Name1),"ID.dico.name"] <- 0
+        # data.to.standardize.reac$df[which(data.to.standardize.reac$df[,input$champ.nom][[1]]==Name1),"ID.dico.name.good"] <- 0
+        # data.to.standardize.reac$df[which(data.to.standardize.reac$df[,input$champ.nom][[1]]==Name1),"corrected.name"] <- ""
+      })
+
+      # Downloadable csv of selected dataset ----
+      output$downloadData <- downloadHandler(
 
 
-      output$data_brush <-
-        renderTable({
-          n <-
-            nrow(brushedPoints(data_height_dbh$df, brush = input$plot_brush))
+        filename = function() {
 
-          if (n == 0) {
-            return()
-          } else{
-            brushedPoints(data_height_dbh$df, brush = input$plot_brush)
-          }
+          paste("standardized.taxo",".csv", sep="")
 
-        })
+        },
+        content = function(file) {
 
-    })
+          readr::write_excel_csv(data.to.standardize.reac$df %>%
+                                   dplyr::select(-id_tax_search,
+                                                 -id_data),
+                                 file)
 
-    # }
-    # )
-  })
+        }
+      )
+
+      output$go.back.one = renderUI({
+        if (val.nom.chosen$n>1) {
+          actionButton(inputId="go.back", label="Revenir au nom precedent")
+        }
+      })
+
+      observeEvent(input$go.back, {
+        # values$n <- values$n - 1
+        Name1 <-
+          stand.list.name$df %>%
+          dplyr::filter(id_tax_search == as.numeric(input$sector)) %>%
+          dplyr::pull(id_tax_search)
+
+        id.orig <- which(stand.list.name$df[,"id_tax_search"]==Name1)
+        #
+        if(length(id.orig)==0) val.nom.chosen$n <- val.nom.chosen$n - 1
+        if(length(id.orig)>0) val.nom.chosen$n <- id.orig - 1
+
+      })
+    }
+    )
+
+    # output$view <- renderPrint({
+    #
+    #   print(test_dat$df)
+    #
+    # })
+  }
+  )
+
   shiny::runApp(app, launch.browser = TRUE)
 
 }
+
 
 
 #' Internal function
@@ -196,276 +1426,6 @@ launch_query_tax_app <- function() {
   return(dist.)
 }
 
-
-
-#' Launch shiny app for standardizing people names
-#'
-#' Application for standardizing people names, especially specimens collectors
-#'
-#' @return Launch in web browser the app
-#'
-#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
-#'
-#' @import shiny
-#' @export
-launch_stand_people_app <- function() {
-  app <- list(ui = ui <- fluidPage(
-
-    # Application title
-    titlePanel("Standardisation des noms de collecteurs"),
-
-    sidebarPanel(
-      fileInput(inputId = "data1", label = "Ajoutez votre fichier de donnees - format excel"),
-
-      uiOutput("Box4"),
-
-      uiOutput("Box5")
-    ),
-
-    mainPanel(
-      h4("Avancement et nombre de noms sans correspondance"),
-      textOutput("summary"),
-
-      uiOutput("Box1"),
-
-      uiOutput("Box2"),
-
-      uiOutput("Action1"),
-
-      h4("   "),
-      downloadButton("downloadData", "Exporter une table incorporant les resultats")
-    )
-
-  ),
-
-  server = function(input, output) {
-
-    if(!exists("mydb")) call.mydb()
-    all_colnames <-
-      dplyr::tbl(mydb, "table_colnam") %>%
-      dplyr::collect()
-
-    all_colnames.reac <- reactiveValues(df = NULL) ### reactive value destine e stocker la table des noms
-    all_colnames.reac$df <- all_colnames
-
-    original.data <- reactiveValues(df = NULL) ### reactive value destine e stocker la table originale des noms (pas mise e jour)
-
-    original.list.name <- reactiveValues(df = NULL) ### reactive value destine e stocker un vecteur contenant la liste des noms original
-
-    stand.list.name <- reactiveValues(df = NULL) ### vecteur des noms devant être standardise
-
-    data.to.standardize.reac <- reactiveValues(df = NULL) ### reactive value destine e stocker la table des individus qui sera mise e jour
-
-    stand.list.name <- reactiveValues(df = NULL) ### vecteur des noms devant être standardise
-
-    val.nom.chosen <- reactiveValues(n = 1) ### Pointeur pour le nom e standardiser
-
-    test <- reactiveValues(df = NULL)
-
-    ### Choix de la colonne de la table originale e standardiser
-    output$Box4 = renderUI({
-      req(input$data1)
-
-      DATA.col <- original.data$df
-      colnames(DATA.col) <- seq(1, ncol(original.data$df), 1)
-
-      selectInput("champ.nom","Selectionner le nom de la colonne a standardiser",
-                  c(colnames(original.data$df[,as.numeric(colnames(dplyr::select_if(DATA.col, is.character)))])))
-
-
-    })
-
-    observeEvent(input$data1, {
-      dataset <- input$data1
-
-      file.rename(input$data1$datapath,
-                  paste(input$data1$datapath, ".xlsx", sep=""))
-
-      DATA <- readxl::read_excel(paste(input$data1$datapath, ".xlsx", sep=""), 1)
-
-      ### Save table des individus original
-      original.data$df <- DATA
-
-    })
-
-
-    observeEvent(input$champ.nom, { #  input$data1
-
-      file.rename(input$data1$datapath,
-                  paste(input$data1$datapath, ".xlsx", sep=""))
-
-      DATA <- readxl::read_excel(paste(input$data1$datapath, ".xlsx", sep=""), 1)
-
-      original.list.name$df <- dplyr::distinct(DATA[,input$champ.nom])
-
-      ### Ajout de colonnes destinees e la mise e jour
-      if(!any(colnames(DATA)=="found.colname")) { ## Ajout de found.name si pas deja present
-        DATA <- DATA %>%
-          tibble::add_column(found.colname = "")
-      }
-
-      if(!any(colnames(DATA)=="ID.colnam")) { ## Ajout de ID.dico.name si pas deja present
-        DATA <- DATA %>%
-          tibble::add_column(ID.colnam = 0)
-      }
-
-      DATA.selected <- DATA[,input$champ.nom]
-      colnames(DATA.selected) <- "Code"
-
-      stand.list.name$df <-
-        DATA.selected %>%
-        dplyr::select(Code) %>%
-        dplyr::distinct(Code) %>%
-        dplyr::arrange(Code)
-
-      data.to.standardize.reac$df <- DATA
-
-    })
-
-
-
-    ### Une fois une colonne choisi, proposer de commencer la standardisation
-    observeEvent(input$champ.nom, {
-
-      output$Box5 = renderUI({
-        req(input$champ.nom)
-        req(input$data1)
-
-        actionButton("do", "Commencer la standardisation")
-      })
-    }
-    )
-
-
-    # observeEvent(input$champ.nom, {
-    #
-    #   output$Box5 = renderUI({
-    #     req(input$champ.nom)
-    #     req(input$data1)
-    #
-    #     actionButton("do", "Commencer la standardisation")
-    #   })
-    # }
-    # )
-
-    ### Une fois une colonne choisi, proposer de commencer la standardisation
-    observeEvent(input$champ.nom, {
-
-      output$Box5 = renderUI({
-        req(input$champ.nom)
-        req(input$data1)
-
-        actionButton("do", "Commencer la standardisation")
-      })
-    }
-    )
-
-    ### Une fois la confirmation du debut de standardisation
-    observeEvent(input$do, {
-
-      output$Box1 = renderUI({
-        req(input$data1)
-
-        ### 'truc' pour eviter de mal afficher les noms avec caracteres speciaux
-
-        id.names <- as.list(seq(1, nrow(stand.list.name$df), 1))
-        names(id.names) <- enc2native(dplyr::pull(stand.list.name$df, Code))
-
-        selectInput("sector","Selectionner un nom a standardiser",
-                    choices=id.names, selected=val.nom.chosen$n)
-
-      })
-
-      output$Box2 = renderUI( {
-
-        req(input$data1)
-
-        # Name1 <- original.list.name$df[as.numeric(input$sector)]
-        Name1 <-
-          stand.list.name$df %>%
-          dplyr::slice(as.numeric(input$sector)) %>%
-          dplyr::pull(Code)
-
-        test$df <- input$sector
-
-        list.match <-
-          .find_similar_string(input = Name1, compared_table = all_colnames, column_name = colnam)
-
-        selectInput("stock",
-                    "Choisir le nom correct si present",
-                    list.match$colnam,
-                    " ")
-
-      })
-
-      output$Action1 = renderUI({
-        if (is.null(input$stock) || input$stock == "Choisir le nom correct si present") {
-          return()
-        }else{
-          actionButton(inputId="confirm.name", label=paste("Choisir", input$stock))
-        }
-      })
-
-      observeEvent(input$confirm.name, {
-
-        req(input$data1)
-
-        Name1 <- stand.list.name$df %>%
-          dplyr::slice(as.numeric(input$sector)) %>%
-          dplyr::pull(Code)
-
-        Name2 <- input$stock ### nom corrige
-        selected.field <- "colnam"
-
-        data.to.standardize.reac$df[which(data.to.standardize.reac$df[,input$champ.nom][[1]]==Name1),"found.colname"] <-
-          Name2
-        data.to.standardize.reac$df[which(data.to.standardize.reac$df[,input$champ.nom][[1]]==Name1),"ID.colnam"] <-
-          dplyr::filter(all_colnames.reac$df, colnam==Name2) %>%
-          dplyr::select(id_table_colnam) %>%
-          dplyr::pull()
-
-      })
-
-      observeEvent(input$confirm.name, {
-        Name1 <- stand.list.name$df %>%
-          dplyr::slice(as.numeric(input$sector)) %>%
-          dplyr::pull(Code)
-        # Encoding(Name1) <- "UTF-8"
-
-        id.orig <- which(stand.list.name$df$Code==Name1)
-        if(length(id.orig)>0) val.nom.chosen$n <- id.orig + 1
-
-      }
-      )
-
-      # Downloadable csv of selected dataset ----
-      output$downloadData <- downloadHandler(
-        filename = function() {
-          paste("standardized.colnam",".csv", sep="")
-        },
-        content = function(file) {
-          # readr::write_excel_csv(data.to.standardize.reac$df, file)
-          readr::write_excel_csv(data.to.standardize.reac$df, file, na = "")
-        }
-      )
-
-
-    }
-    )
-
-    output$summary <- renderPrint({
-
-      # req(input$champ.nom)
-      # print(data.to.standardize.reac$df)
-
-    })
-
-  }
-
-  )
-
-  shiny::runApp(app, launch.browser = TRUE)
-}
 
 
 
@@ -1348,7 +2308,6 @@ call.mydb <- function(pass=NULL, user=NULL, offline = FALSE) {
 #'
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
 #' @export
-###
 country_list <- function() {
 
   if(!exists("mydb")) call.mydb() # mydb <-
@@ -1559,18 +2518,23 @@ query_plots <- function(team_lead = NULL,
   if(!is.null(id_diconame))
   {
 
-    cli::cli_rule(left = "Extracting from queried taxa - id_diconame")
+    cli::cli_rule(left = "Extracting from queried taxa - idtax_n")
     extract_individuals <- TRUE
 
     if(!is.null(id_plot))
-      cli::cli_alert_warning("id_plot not null replaced by id_plot where id_diconame are found")
+      cli::cli_alert_warning("id_plot not null replaced by id_plot where idtax_n are found")
 
     id_plot <-
-      query_tax_all(id_search = id_diconame, extract_individuals = T, verbose = FALSE, simple_ind_extract = T) %>%
+      merge_individuals_taxa() %>%
+      filter(idtax_individual_f == !!id_diconame) %>%
       pull(id_table_liste_plots_n)
 
-  }
+    # id_plot <-
+    #   tbl(mydb, "data_individuals") %>%
+    #   query_tax_all(id_search = id_diconame, extract_individuals = T, verbose = FALSE, simple_ind_extract = T) %>%
+    #   pull(id_table_liste_plots_n)
 
+  }
 
   if(is.null(id_plot)) {
 
@@ -2015,8 +2979,6 @@ query_plots <- function(team_lead = NULL,
 
   }
 
-
-
   res <-
     res %>%
     dplyr::select(-date)
@@ -2163,22 +3125,9 @@ query_plots <- function(team_lead = NULL,
     #   collect()
 
 
-    # getting taxo identification from specimens
-    specimens_id_diconame <-
-      dplyr::tbl(mydb, "specimens") %>%
-      dplyr::select(id_specimen, id_diconame_n)
 
-    # getting all ids from diconames
-    diconames_id <-
-      dplyr::tbl(mydb, "diconame") %>%
-      dplyr::select(id_n, id_good_n)
-
-    # getting correct id_diconame considering synonymies
-    specimens_linked <-
-      specimens_id_diconame %>%
-      dplyr::left_join(diconames_id, by = c("id_diconame_n" = "id_n")) %>%
-      dplyr::rename(id_dico_name_specimen = id_good_n) %>%
-      dplyr::select(id_specimen, id_dico_name_specimen)
+    #   dplyr::rename(id_dico_name_specimen = id_good_n) %>%
+    #   dplyr::select(id_specimen, id_dico_name_specimen)
 
     # test <-
     #   tbl(mydb, "data_individuals") %>%
@@ -2204,59 +3153,13 @@ query_plots <- function(team_lead = NULL,
                     data_provider, id_liste_plots,
                     dplyr::contains("date_census"))
 
-    if (!is.null(id_individual)) {
-
-      res_individuals_full <-
-        dplyr::tbl(mydb, "data_individuals") %>%
-        dplyr::filter(id_n %in% id_individual)
-
-    } else{
-
-      res_individuals_full <-
-        dplyr::tbl(mydb, "data_individuals")
-
-    }
-
-    ### getting links to specimens -
-    ## TO BE e_dED POTENTIALLY IF MORE THAN ONE SPECIMEN IS LINKED TO ONE INDIVIDUAL
-    ## CODE TO EXTRACT THE "BEST" IDENTIFICATION IF DIFFERENT TO BE IMPLEMENETED
-    links_specimens <-
-      dplyr::tbl(mydb, "data_link_specimens") %>%
-      dplyr::select(id_n, id_specimen) %>%
-      dplyr::group_by(id_n) %>%
-      dplyr::summarise(id_specimen = max(id_specimen, na.rm = T))
-
     res_individuals_full <-
-      res_individuals_full %>%
-      dplyr::select(-id_specimen) %>%
-      dplyr::left_join(links_specimens,
-                by=c("id_n"="id_n"))
+      merge_individuals_taxa(id_individual = id_individual, id_plot = selec_plot_tables$id_liste_plots)
 
-    res_individuals_full <-
-      res_individuals_full %>%
-      dplyr::filter(id_table_liste_plots_n %in% !!res$id_liste_plots) %>%  #filtering for selected plots
-      dplyr::left_join(diconames_id %>%
-                         dplyr::rename(id_diconame_good_n = id_good_n),
-                       by = c("id_diconame_n" = "id_n")) %>%
-      dplyr::left_join(specimens_linked,
-                       by = c("id_specimen" = "id_specimen")) %>% # adding id_diconame for specimens
-      dplyr::mutate(id_diconame_final = ifelse(
-        !is.na(id_dico_name_specimen),
-        id_dico_name_specimen,
-        id_diconame_good_n
-      )) %>% #### selecting id_dico_name from specimens if any
-      dplyr::left_join(
-        dplyr::tbl(mydb, "diconame") %>%
-          dplyr::select(-data_modif_d, -data_modif_m, -data_modif_y),
-        by = c("id_diconame_final" = "id_n")
-      ) ## getting taxa information based on id_diconame_final
-
-
-    if(!is.null(id_diconame))
+    if (!is.null(id_diconame))
       res_individuals_full <-
       res_individuals_full %>%
-      dplyr::filter(id_diconame_final %in% !!id_diconame)
-
+      dplyr::filter(idtax_f %in% !!id_diconame)
 
     res_individuals_full <-
       res_individuals_full %>%
@@ -2339,7 +3242,13 @@ query_plots <- function(team_lead = NULL,
   # dbDisconnect(mydb)
 
 
-  res_list <- list(extract = NA, census_features = NA, coordinates = NA, coordinates_sf = NA)
+  res_list <-
+    list(
+      extract = NA,
+      census_features = NA,
+      coordinates = NA,
+      coordinates_sf = NA
+    )
   res_list$extract <- res
 
   if(show_multiple_census)
@@ -2474,263 +3383,262 @@ query_subplots <- function(team_lead = NULL,
 #' @param simple_ind_extract logical if TRUE only report IDs from individuals table
 #'
 #' @return A tibble of taxa or individuals if extract_individuals is TRUE
-#' @export
-query_tax_all <- function(genus_searched = NULL,
-                          tax_esp_searched = NULL,
-                          tax_fam_searched = NULL,
-                          tax_name1_searched = NULL,
-                          id_search = NULL,
-                          show_synonymies = TRUE,
-                          extract_individuals = FALSE,
-                          simple_ind_extract = FALSE,
-                          verbose = TRUE) {
-
-  if(!exists("mydb")) call.mydb()
-
-  if(is.null(id_search)) {
-
-    query <- 'SELECT * FROM diconame WHERE MMM'
-
-    if(!is.null(genus_searched))
-      query <- gsub(pattern = "MMM", replacement = paste0(" tax_gen ILIKE '", genus_searched, "%' AND MMM"), x=query)
-
-    if(!is.null(tax_esp_searched))
-      query <- gsub(pattern = "MMM", replacement = paste0(" tax_esp ILIKE '", tax_esp_searched, "%' AND MMM"), x=query)
-
-    if(!is.null(tax_fam_searched))
-      query <- gsub(pattern = "MMM", replacement = paste0(" tax_fam ILIKE '%", tax_fam_searched, "%' AND MMM"), x=query)
-
-    if(!is.null(tax_name1_searched))
-      query <- gsub(pattern = "MMM", replacement = paste0(" tax_name1 ILIKE '%", tax_name1_searched, "%' AND MMM"), x=query)
-
-    query <- gsub(pattern = "AND MMM", replacement = "", query)
-
-    rs <- DBI::dbSendQuery(mydb, query)
-    res <- DBI::dbFetch(rs)
-    DBI::dbClearResult(rs)
-
-  }else{
-
-    if(!is.null(genus_searched) | !is.null(tax_esp_searched) | !is.null(tax_fam_searched))
-      cli::cli_alert_info("Query for tax based on ID, others entries ignored")
-
-    res <-
-      dplyr::tbl(mydb, "diconame") %>%
-      dplyr::filter(id_n %in% id_search) %>%
-      dplyr::collect()
-
-  }
-
-  if (nrow(res) == 1 & show_synonymies) {
-
-    taxa_syn <-
-      dplyr::tbl(mydb, "diconame") %>%
-      dplyr::filter(id_good_n == !!res$id_n, id_n != !!res$id_n) %>%
-      dplyr::collect()
-
-  } else {
-    if (show_synonymies) {
-      cli::cli_alert_warning("synonyms are not shown when multiple taxa are found in query")
-    }
-  }
-
-  # dbDisconnect(mydb)
-
-  res <-
-    res %>%
-    dplyr::select(-id, -id_good)
-
-  if (show_synonymies & nrow(res) == 1) {
-    res <-
-      res %>%
-      bind_rows(taxa_syn %>%
-                  dplyr::select(-id,-id_good))
-  }
-
-  if(extract_individuals & nrow(res) > 0) {
-
-    # getting taxo identification from specimens
-    specimens_id_diconame <-
-      dplyr::tbl(mydb, "specimens") %>%
-      dplyr::select(id_specimen, id_diconame_n)
-
-    # getting all ids from diconames
-    diconames_id <-
-      dplyr::tbl(mydb, "diconame") %>%
-      dplyr::select(id_n, id_good_n)
-
-    # getting correct id_diconame considering synonymies
-    specimens_linked <-
-      specimens_id_diconame %>%
-      dplyr::left_join(diconames_id, by = c("id_diconame_n" = "id_n")) %>%
-      dplyr::rename(id_dico_name_specimen = id_good_n) %>%
-      dplyr::select(id_specimen, id_dico_name_specimen)
-
-    ## getting all metadata
-    selec_plot_tables <-
-      tbl(mydb, "data_liste_plots") %>%
-      dplyr::select(plot_name, team_leader, country, locality_name,
-                    data_provider, id_liste_plots) %>%
-      collect()
-
-    res_individuals_full <-
-      dplyr::tbl(mydb, "data_individuals")
-
-    ### getting links to specimens -
-    ## TO BE e_dED POTENTIALLY IF MORE THAN ONE SPECIMEN IS LINKED TO ONE INDIVIDUAL
-    ## CODE TO EXTRACT THE "BEST" IDENTIFICATION IF DIFFERENT TO BE IMPLEMENETED
-    links_specimens <-
-      dplyr::tbl(mydb, "data_link_specimens") %>%
-      dplyr::select(id_n, id_specimen) %>%
-      dplyr::group_by(id_n) %>%
-      dplyr::summarise(id_specimen = max(id_specimen, na.rm = T))
-
-    res_individuals_full <-
-      res_individuals_full %>%
-      dplyr::select(-id_specimen) %>%
-      dplyr::left_join(links_specimens,
-                       by = c("id_n" = "id_n"))
-
-    res_individuals_full <-
-      res_individuals_full %>%
-      # dplyr::filter(id_table_liste_plots_n %in% !!res$id_liste_plots) %>%  #filtering for selected plots
-      dplyr::left_join(diconames_id %>%
-                         dplyr::rename(id_diconame_good_n = id_good_n),
-                       by = c("id_diconame_n" = "id_n")) %>%
-      dplyr::left_join(specimens_linked, by = c("id_specimen" = "id_specimen")) %>% # adding id_diconame for specimens
-      dplyr::mutate(id_diconame_final = ifelse(
-        !is.na(id_dico_name_specimen),
-        id_dico_name_specimen,
-        id_diconame_good_n
-      )) %>% #### selecting id_dico_name from specimens if any
-      dplyr::filter(id_diconame_final %in% !!res$id_n)
-
-    if(!simple_ind_extract) {
-      res_individuals_full <-
-        res_individuals_full %>%
-        dplyr::left_join(
-          dplyr::tbl(mydb, "diconame") %>%
-            dplyr::select(-data_modif_d, -data_modif_m, -data_modif_y),
-          by = c("id_diconame_final" = "id_n")
-        ) ## getting taxa information based on id_diconame_final
-    }
-
-    res_individuals_full <-
-      res_individuals_full %>%
-      dplyr::select(
-        -photo_tranche,
-        -liane,
-        -dbh,
-        -dbh_height,
-        -tree_height,
-        -branch_height,
-        -branchlet_height,-crown_spread,
-        -observations,
-        -observations_census_2,
-        -id_census2,
-        -dbh_census2,
-        -id_specimen_old
-      )
-
-    res_individuals_full <-
-      res_individuals_full %>%
-      dplyr::collect() %>%
-      dplyr::mutate(original_tax_name = stringr::str_trim(original_tax_name))
-
-    if(!simple_ind_extract) {
-      #adding metada information
-      res_individuals_full <-
-        res_individuals_full %>%
-        dplyr::left_join(selec_plot_tables,
-                         by = c("id_table_liste_plots_n" = "id_liste_plots"))
-
-      all_traits <- traits_list()
-
-      all_traits_list <-
-        .get_trait_individuals_values(
-          traits = all_traits$trait,
-          id_individuals = res_individuals_full$id_n,
-          show_multiple_measures = T,
-          skip_dates = T,
-          collapse_multiple_val = F
-        )
-
-      if (length(all_traits_list) > 0) {
-        for (i in 1:length(all_traits_list)) {
-          res_individuals_full <-
-            res_individuals_full %>%
-            dplyr::left_join(all_traits_list[[i]] %>%
-                               dplyr::select(-id_old),
-                             by = c("id_n" = "id_n"))
-
-        }
-      }
-    }
-
-    res <-
-      res_individuals_full %>%
-      dplyr::arrange(id_n)
-  }
-
-
-  if(nrow(res) < 20 & verbose) {
-    res_html <-
-      tibble(columns = names(res), data.frame(t(res), fix.empty.names = T)) %>%
-      # as_tibble(cbind(columns = names(res), record = t(res))) %>%
-      mutate_all(~ tidyr::replace_na(., ""))
-
-    for (i in (which(res$id_good_n != res$id_n) + 1)) {
-      col_ <- colnames(res_html)[i]
-      var_new <-
-        rlang::parse_expr(rlang::quo_name(rlang::enquo(col_)))
-
-      res_html <-
-        res_html %>%
-        mutate(!!var_new :=
-                 kableExtra::cell_spec(!!var_new,
-                                       "html",
-                                       background = "grey",
-                                       color = "white", italic = T))
-    }
-
-    res_html %>%
-      kableExtra::kable(format = "html", escape = F) %>%
-      kableExtra::kable_styling("striped", full_width = F) %>%
-      print()
-
-  }
-
-  if (nrow(res) == 1 & show_synonymies & verbose) {
-    if (res$id_good_n != res$id_n) {
-      cli::cli_alert_info("This taxa is considered SYNONYM")
-
-      print(
-        dplyr::tbl(mydb, "diconame") %>%
-          dplyr::filter(id_n == !!res$id_good_n) %>%
-          dplyr::select(
-            full_name,
-            full_name_no_auth,
-            tax_fam,
-            tax_gen,
-            morphocat,
-            tax_rank1,
-            tax_name1
-          )
-      )
-    }
-
-    if (nrow(taxa_syn) > 0) {
-      cli::cli_alert_info("This taxa has SYNONYM(S)")
-      print(
-        taxa_syn %>%
-          dplyr::select(full_name, full_name_no_auth, tax_fam, tax_gen, morphocat)
-      )
-    }
-  }
-
-
-  return(dplyr::as_tibble(res))
-}
+# query_tax_all <- function(genus_searched = NULL,
+#                           tax_esp_searched = NULL,
+#                           tax_fam_searched = NULL,
+#                           tax_name1_searched = NULL,
+#                           id_search = NULL,
+#                           show_synonymies = TRUE,
+#                           extract_individuals = FALSE,
+#                           simple_ind_extract = FALSE,
+#                           verbose = TRUE) {
+#
+#   if(!exists("mydb")) call.mydb()
+#
+#   if(is.null(id_search)) {
+#
+#     query <- 'SELECT * FROM diconame WHERE MMM'
+#
+#     if(!is.null(genus_searched))
+#       query <- gsub(pattern = "MMM", replacement = paste0(" tax_gen ILIKE '", genus_searched, "%' AND MMM"), x=query)
+#
+#     if(!is.null(tax_esp_searched))
+#       query <- gsub(pattern = "MMM", replacement = paste0(" tax_esp ILIKE '", tax_esp_searched, "%' AND MMM"), x=query)
+#
+#     if(!is.null(tax_fam_searched))
+#       query <- gsub(pattern = "MMM", replacement = paste0(" tax_fam ILIKE '%", tax_fam_searched, "%' AND MMM"), x=query)
+#
+#     if(!is.null(tax_name1_searched))
+#       query <- gsub(pattern = "MMM", replacement = paste0(" tax_name1 ILIKE '%", tax_name1_searched, "%' AND MMM"), x=query)
+#
+#     query <- gsub(pattern = "AND MMM", replacement = "", query)
+#
+#     rs <- DBI::dbSendQuery(mydb, query)
+#     res <- DBI::dbFetch(rs)
+#     DBI::dbClearResult(rs)
+#
+#   }else{
+#
+#     if(!is.null(genus_searched) | !is.null(tax_esp_searched) | !is.null(tax_fam_searched))
+#       cli::cli_alert_info("Query for tax based on ID, others entries ignored")
+#
+#     res <-
+#       dplyr::tbl(mydb, "diconame") %>%
+#       dplyr::filter(id_n %in% id_search) %>%
+#       dplyr::collect()
+#
+#   }
+#
+#   if (nrow(res) == 1 & show_synonymies) {
+#
+#     taxa_syn <-
+#       dplyr::tbl(mydb, "diconame") %>%
+#       dplyr::filter(id_good_n == !!res$id_n, id_n != !!res$id_n) %>%
+#       dplyr::collect()
+#
+#   } else {
+#     if (show_synonymies) {
+#       cli::cli_alert_warning("synonyms are not shown when multiple taxa are found in query")
+#     }
+#   }
+#
+#   # dbDisconnect(mydb)
+#
+#   res <-
+#     res %>%
+#     dplyr::select(-id, -id_good)
+#
+#   if (show_synonymies & nrow(res) == 1) {
+#     res <-
+#       res %>%
+#       bind_rows(taxa_syn %>%
+#                   dplyr::select(-id,-id_good))
+#   }
+#
+#   if(extract_individuals & nrow(res) > 0) {
+#
+#     # getting taxo identification from specimens
+#     specimens_id_diconame <-
+#       dplyr::tbl(mydb, "specimens") %>%
+#       dplyr::select(id_specimen, id_diconame_n)
+#
+#     # getting all ids from diconames
+#     diconames_id <-
+#       dplyr::tbl(mydb, "diconame") %>%
+#       dplyr::select(id_n, id_good_n)
+#
+#     # getting correct id_diconame considering synonymies
+#     specimens_linked <-
+#       specimens_id_diconame %>%
+#       dplyr::left_join(diconames_id, by = c("id_diconame_n" = "id_n")) %>%
+#       dplyr::rename(id_dico_name_specimen = id_good_n) %>%
+#       dplyr::select(id_specimen, id_dico_name_specimen)
+#
+#     ## getting all metadata
+#     selec_plot_tables <-
+#       tbl(mydb, "data_liste_plots") %>%
+#       dplyr::select(plot_name, team_leader, country, locality_name,
+#                     data_provider, id_liste_plots) %>%
+#       collect()
+#
+#     res_individuals_full <-
+#       dplyr::tbl(mydb, "data_individuals")
+#
+#     ### getting links to specimens -
+#     ## TO BE e_dED POTENTIALLY IF MORE THAN ONE SPECIMEN IS LINKED TO ONE INDIVIDUAL
+#     ## CODE TO EXTRACT THE "BEST" IDENTIFICATION IF DIFFERENT TO BE IMPLEMENETED
+#     links_specimens <-
+#       dplyr::tbl(mydb, "data_link_specimens") %>%
+#       dplyr::select(id_n, id_specimen) %>%
+#       dplyr::group_by(id_n) %>%
+#       dplyr::summarise(id_specimen = max(id_specimen, na.rm = T))
+#
+#     res_individuals_full <-
+#       res_individuals_full %>%
+#       dplyr::select(-id_specimen) %>%
+#       dplyr::left_join(links_specimens,
+#                        by = c("id_n" = "id_n"))
+#
+#     res_individuals_full <-
+#       res_individuals_full %>%
+#       # dplyr::filter(id_table_liste_plots_n %in% !!res$id_liste_plots) %>%  #filtering for selected plots
+#       dplyr::left_join(diconames_id %>%
+#                          dplyr::rename(id_diconame_good_n = id_good_n),
+#                        by = c("id_diconame_n" = "id_n")) %>%
+#       dplyr::left_join(specimens_linked, by = c("id_specimen" = "id_specimen")) %>% # adding id_diconame for specimens
+#       dplyr::mutate(id_diconame_final = ifelse(
+#         !is.na(id_dico_name_specimen),
+#         id_dico_name_specimen,
+#         id_diconame_good_n
+#       )) %>% #### selecting id_dico_name from specimens if any
+#       dplyr::filter(id_diconame_final %in% !!res$id_n)
+#
+#     if(!simple_ind_extract) {
+#       res_individuals_full <-
+#         res_individuals_full %>%
+#         dplyr::left_join(
+#           dplyr::tbl(mydb, "diconame") %>%
+#             dplyr::select(-data_modif_d, -data_modif_m, -data_modif_y),
+#           by = c("id_diconame_final" = "id_n")
+#         ) ## getting taxa information based on id_diconame_final
+#     }
+#
+#     res_individuals_full <-
+#       res_individuals_full %>%
+#       dplyr::select(
+#         -photo_tranche,
+#         -liane,
+#         -dbh,
+#         -dbh_height,
+#         -tree_height,
+#         -branch_height,
+#         -branchlet_height,-crown_spread,
+#         -observations,
+#         -observations_census_2,
+#         -id_census2,
+#         -dbh_census2,
+#         -id_specimen_old
+#       )
+#
+#     res_individuals_full <-
+#       res_individuals_full %>%
+#       dplyr::collect() %>%
+#       dplyr::mutate(original_tax_name = stringr::str_trim(original_tax_name))
+#
+#     if(!simple_ind_extract) {
+#       #adding metada information
+#       res_individuals_full <-
+#         res_individuals_full %>%
+#         dplyr::left_join(selec_plot_tables,
+#                          by = c("id_table_liste_plots_n" = "id_liste_plots"))
+#
+#       all_traits <- traits_list()
+#
+#       all_traits_list <-
+#         .get_trait_individuals_values(
+#           traits = all_traits$trait,
+#           id_individuals = res_individuals_full$id_n,
+#           show_multiple_measures = T,
+#           skip_dates = T,
+#           collapse_multiple_val = F
+#         )
+#
+#       if (length(all_traits_list) > 0) {
+#         for (i in 1:length(all_traits_list)) {
+#           res_individuals_full <-
+#             res_individuals_full %>%
+#             dplyr::left_join(all_traits_list[[i]] %>%
+#                                dplyr::select(-id_old),
+#                              by = c("id_n" = "id_n"))
+#
+#         }
+#       }
+#     }
+#
+#     res <-
+#       res_individuals_full %>%
+#       dplyr::arrange(id_n)
+#   }
+#
+#
+#   if(nrow(res) < 20 & verbose) {
+#     res_html <-
+#       tibble(columns = names(res), data.frame(t(res), fix.empty.names = T)) %>%
+#       # as_tibble(cbind(columns = names(res), record = t(res))) %>%
+#       mutate_all(~ tidyr::replace_na(., ""))
+#
+#     for (i in (which(res$id_good_n != res$id_n) + 1)) {
+#       col_ <- colnames(res_html)[i]
+#       var_new <-
+#         rlang::parse_expr(rlang::quo_name(rlang::enquo(col_)))
+#
+#       res_html <-
+#         res_html %>%
+#         mutate(!!var_new :=
+#                  kableExtra::cell_spec(!!var_new,
+#                                        "html",
+#                                        background = "grey",
+#                                        color = "white", italic = T))
+#     }
+#
+#     res_html %>%
+#       kableExtra::kable(format = "html", escape = F) %>%
+#       kableExtra::kable_styling("striped", full_width = F) %>%
+#       print()
+#
+#   }
+#
+#   if (nrow(res) == 1 & show_synonymies & verbose) {
+#     if (res$id_good_n != res$id_n) {
+#       cli::cli_alert_info("This taxa is considered SYNONYM")
+#
+#       print(
+#         dplyr::tbl(mydb, "diconame") %>%
+#           dplyr::filter(id_n == !!res$id_good_n) %>%
+#           dplyr::select(
+#             full_name,
+#             full_name_no_auth,
+#             tax_fam,
+#             tax_gen,
+#             morphocat,
+#             tax_rank1,
+#             tax_name1
+#           )
+#       )
+#     }
+#
+#     if (nrow(taxa_syn) > 0) {
+#       cli::cli_alert_info("This taxa has SYNONYM(S)")
+#       print(
+#         taxa_syn %>%
+#           dplyr::select(full_name, full_name_no_auth, tax_fam, tax_gen, morphocat)
+#       )
+#     }
+#   }
+#
+#
+#   return(dplyr::as_tibble(res))
+# }
 
 
 
@@ -2757,14 +3665,14 @@ explore_allometric_taxa <- function(genus_searched = NULL,
 
   if(!exists("mydb")) call.mydb()
 
-  res_taxa <- query_tax_all(
+  res_taxa <- query_taxa(
     genus_searched = genus_searched,
     tax_esp_searched =
       tax_esp_searched,
     id_search = id_search, verbose = F)
 
   tax_data <-
-    query_plots(id_diconame = res_taxa$id_n)
+    query_plots(id_diconame = res_taxa$idtax_n)
 
   if(nrow(tax_data)>0) {
     # cat(paste0("\n ", nrow(tax_data), " taxa selected"))
@@ -4268,10 +5176,10 @@ update_individuals <- function(new_data,
                           all_rows_to_be_updated, append = TRUE, row.names = FALSE)
       }
 
-      if(any(names(matches) == "id_diconame_n_new"))
+      if(any(names(matches) == "idtax_n_new"))
         matches <-
         matches %>%
-        dplyr::mutate(id_diconame_n_new == as.integer(id_diconame_n_new))
+        dplyr::mutate(idtax_n_new == as.integer(idtax_n_new))
 
       ## create a temporary table with new data
       DBI::dbWriteTable(mydb, "temp_table", matches,
@@ -4390,16 +5298,15 @@ update_ident_specimens <- function(colnam = NULL,
 
     if (is.null(id_new_taxa)) {
       query_new_taxa <-
-        query_tax_all(
-          genus_searched = new_genus,
-          tax_esp_searched = new_species,
-          tax_fam_searched = new_family,
-          show_synonymies = F
+        query_taxa(genus = new_genus,
+                   species = new_species,
+                   family = new_family,
+                   check_synonymy = F
         )
-    } else{
+    } else {
 
       query_new_taxa <-
-        query_tax_all(id_search = id_new_taxa, show_synonymies = F)
+        query_taxa(ids = id_new_taxa, check_synonymy = F)
 
     }
 
@@ -4413,13 +5320,13 @@ update_ident_specimens <- function(colnam = NULL,
 
       new_values <-
         dplyr::tibble(
-          id_diconame_n =
+          idtax_n =
             ifelse(
               !is.null(new_genus) |
                 !is.null(new_species) |
                 !is.null(new_family | !is.null(id_new_taxa)),
-              query_new_taxa$id_n,
-              queried_speci$id_diconame_n
+              query_new_taxa$idtax_n,
+              queried_speci$idtax_n
             ),
           detd = ifelse(!is.null(new_detd), as.numeric(new_detd), queried_speci$detd),
           detm = ifelse(!is.null(new_detm), as.numeric(new_detm), queried_speci$detm),
@@ -4484,7 +5391,7 @@ update_ident_specimens <- function(colnam = NULL,
     if(only_new_ident & nbr_new_taxa_ok & any(comp_values==TRUE)) {
       if(any(comp_values %>%
              dplyr::select_if(~sum(.) > 0) %>%
-             colnames() == "id_diconame_n")) {
+             colnames() == "idtax_n")) {
         new_ident <- TRUE
       }else{
         new_ident <- FALSE
@@ -4570,9 +5477,9 @@ update_ident_specimens <- function(colnam = NULL,
         }
 
         rs <-
-          DBI::dbSendQuery(mydb, statement="UPDATE specimens SET id_diconame_n=$2, detd=$3, detm=$4, dety=$5, detby=$6, detvalue=$7, data_modif_d=$8, data_modif_m=$9, data_modif_y=$10 WHERE id_specimen = $1",
+          DBI::dbSendQuery(mydb, statement="UPDATE specimens SET idtax_n=$2, detd=$3, detm=$4, dety=$5, detby=$6, detvalue=$7, data_modif_d=$8, data_modif_m=$9, data_modif_y=$10 WHERE id_specimen = $1",
                            params=list(queried_speci$id_specimen, # $1
-                                       new_values$id_diconame_n, # $2
+                                       new_values$idtax_n, # $2
                                        as.numeric(new_values$detd), # $3
                                        as.numeric(new_values$detm), # $4
                                        as.numeric(new_values$dety), # $5
@@ -4683,29 +5590,27 @@ update_ident_specimens <- function(colnam = NULL,
 
   if (ncol(comp_val) > 0) {
 
-    if (any(colnames(vec_1) == "id_diconame_n")) {
+    if (any(colnames(vec_1) == "idtax_n")) {
       old_tax <-
-        query_tax_all(id_search = vec_2$id_diconame_n,
-                      show_synonymies = F)
+        query_taxa(ids = vec_2$idtax_n, check_synonymy = F)
 
       new_tax <-
-        query_tax_all(id_search = vec_1$id_diconame_n,
-                      show_synonymies = F)
+        query_taxa(ids = vec_1$idtax_n, check_synonymy = F)
 
       vec_1 <-
         vec_1 %>%
         dplyr::left_join(
           new_tax %>%
-            dplyr::select(tax_fam, tax_gen, tax_esp, id_n),
-          by = c("id_diconame_n" = "id_n")
+            dplyr::select(tax_fam, tax_gen, tax_esp, idtax_n),
+          by = c("idtax_n" = "idtax_n")
         )
 
       vec_2 <-
         vec_2 %>%
         dplyr::left_join(
           old_tax %>%
-            dplyr::select(tax_fam, tax_gen, tax_esp, id_n),
-          by = c("id_diconame_n" = "id_n")
+            dplyr::select(tax_fam, tax_gen, tax_esp, idtax_n),
+          by = c("idtax_n" = "idtax_n")
         )
 
     }
@@ -4777,389 +5682,390 @@ update_ident_specimens <- function(colnam = NULL,
 #'
 #'
 #' @return No return value individuals updated
-#' @export
-update_dico_name <- function(genus_searched = NULL,
-                             tax_esp_searched = NULL,
-                             tax_fam_searched = NULL,
-                             # tax_order_searched = NULL,
-                             id_searched = NULL,
-                             new_tax_gen = NULL,
-                             new_tax_esp = NULL,
-                             new_tax_fam = NULL,
-                             # new_tax_order = NULL,
-                             new_tax_rank1 = NULL,
-                             new_tax_name1 = NULL,
-                             # new_introduced_status = NULL,
-                             ask_before_update = TRUE,
-                             add_backup = TRUE,
-                             show_results = TRUE,
-                             cancel_synonymy= FALSE,
-                             synonym_of = NULL,
-                             exact_match = FALSE) {
+# update_dico_name <- function(genus_searched = NULL,
+#                              tax_esp_searched = NULL,
+#                              tax_fam_searched = NULL,
+#                              # tax_order_searched = NULL,
+#                              id_searched = NULL,
+#                              new_tax_gen = NULL,
+#                              new_tax_esp = NULL,
+#                              new_tax_fam = NULL,
+#                              # new_tax_order = NULL,
+#                              new_tax_rank1 = NULL,
+#                              new_tax_name1 = NULL,
+#                              # new_introduced_status = NULL,
+#                              ask_before_update = TRUE,
+#                              add_backup = TRUE,
+#                              show_results = TRUE,
+#                              cancel_synonymy= FALSE,
+#                              synonym_of = NULL,
+#                              exact_match = FALSE) {
+#
+#   if(!exists("mydb")) call.mydb()
+#
+#   if(all(is.null(c(genus_searched, tax_esp_searched,
+#                    tax_fam_searched, synonym_of,
+#                    id_searched)) & !cancel_synonymy))
+#     stop("\n Provide the species to be updated or precise new synonymy")
+#
+#   ### checking if at least one modification is asked
+#   new_vals <- c(new_tax_gen = new_tax_gen,
+#                 new_tax_esp = new_tax_esp,
+#                 new_tax_fam = new_tax_fam)
+#   if (!any(!is.null(new_vals)) &
+#       is.null(synonym_of) &
+#       !cancel_synonymy)
+#     stop("\n No new values to be updated.")
+#
+#   ### querying for entries to be modified
+#   if(is.null(id_searched)) {
+#     cat(paste("\n", genus_searched, " - ", tax_esp_searched, "-", tax_fam_searched))
+#     query_tax <-
+#       query_tax_all(genus_searched = genus_searched, tax_esp_searched = tax_esp_searched,
+#                     tax_fam_searched = tax_fam_searched)
+#     #    , check_synonymy = FALSE,
+#     # exact_match = exact_match
+#   }else{
+#     query_tax <-
+#       query_tax_all(id_search = id_searched)
+#     # , check_synonymy = FALSE
+#   }
+#
+#   if(is.null(query_tax)) query_tax <- tibble()
+#
+#   if(nrow(query_tax)>0) {
+#     message(paste("\n ", nrow(query_tax), "taxa selected"))
+#     print(query_tax %>% as.data.frame())
+#     nrow_query=TRUE
+#   }else{
+#     nrow_query=FALSE
+#   }
+#
+#   if(nrow_query)
+#     modif_types <-
+#     vector(mode = "character", length = nrow(query_tax))
+#
+#   ## if the modification does not concern synonymies, check if provided values are different for those existing
+#   if(nrow_query & !cancel_synonymy & is.null(synonym_of)) {
+#
+#     query_tax_n <- query_tax
+#     col_new <- c()
+#     for (i in c("tax_esp", "tax_fam",
+#                 "tax_gen", "tax_rank01", "tax_nam01")) {
+#       if(any(grepl(pattern = i, x = names(new_vals)))) {
+#         col_new <- c(col_new, i)
+#         var <- enquo(i)
+#         query_tax_n <-
+#           query_tax_n %>%
+#           dplyr::mutate(!!var := new_vals[grep(i, names(new_vals))])
+#       }
+#     }
+#
+#     query_tax_n <-
+#       query_tax_n %>%
+#       dplyr::select(col_new)
+#
+#     # new_vals <-
+#     #   dplyr::tibble(
+#     #     tax_order = ifelse(!is.null(new_tax_order), new_tax_order, query_tax$tax_order),
+#     #     tax_fam = ifelse(!is.null(new_tax_fam), as.character(new_tax_fam), query_tax$tax_fam),
+#     #     tax_gen = ifelse(!is.null(new_tax_gen), as.character(new_tax_gen), query_tax$tax_gen),
+#     #     tax_esp = ifelse(!is.null(new_tax_esp), as.character(new_tax_esp), query_tax$tax_esp),
+#     #     tax_rank1 = ifelse(!is.null(new_tax_rank1), new_tax_rank1, query_tax$tax_rank01),
+#     #     tax_name1 = ifelse(!is.null(new_tax_name1), new_tax_name1, query_tax$tax_nam01),
+#     #     introduced_status = ifelse(!is.null(new_introduced_status), new_introduced_status, query_tax$introduced_status)
+#     #                 )
+#
+#     query_tax_n <-
+#       query_tax_n %>%
+#       replace(., is.na(.), -9999)
+#
+#     sel_query_tax <-
+#       dplyr::bind_rows(query_tax_n, query_tax %>%
+#                          dplyr::select(col_new))
+#
+#     sel_query_tax <-
+#       sel_query_tax %>%
+#       replace(., is.na(.), -9999)
+#
+#     print(sel_query_tax)
+#
+#     comp_vals <-
+#       apply(
+#         sel_query_tax,
+#         MARGIN = 2,
+#         FUN = function(x)
+#           unique(x[nrow(query_tax_n)]) != x[(nrow(query_tax_n) + 1):length(x)]
+#       )
+#
+#     # comp_vals <-
+#     #   apply(sel_query_tax, MARGIN = 2, FUN = function(x) x[1]!=x[2:length(x)])
+#
+#     if(!is.null(nrow(comp_vals))) {
+#       query_tax <-
+#         query_tax[apply(comp_vals, MARGIN = 1, FUN = function(x) any(x)),]
+#       modif_types <- modif_types[apply(comp_vals, MARGIN = 1, FUN = function(x) any(x))]
+#       comp_vals <-
+#         apply(comp_vals, MARGIN = 2, FUN = function(x) any(x))
+#     }else{
+#       query_tax <- query_tax
+#     }
+#
+#     if(any(is.na(comp_vals)))
+#       comp_vals <-
+#       comp_vals[!is.na(comp_vals)]
+#
+#     modif_types[1:length(modif_types)] <-
+#       paste0(modif_types, rep(paste(names(comp_vals)[comp_vals], sep=", "), length(modif_types)), collapse ="__")
+#
+#   }else{
+#     comp_vals <- TRUE
+#   }
+#
+#   new_id_diconame_good <- NULL
+#   if(nrow_query & cancel_synonymy) {
+#     if(query_tax$id_good_n == query_tax$id_n) {
+#
+#       cat("\n This taxa is not considered as synonym. No modification is thus done on its synonymy")
+#       comp_vals <- FALSE
+#
+#     }else{
+#
+#       new_id_diconame_good <- NA
+#
+#       modif_types[1:length(modif_types)] <-
+#         paste(modif_types, "cancel_synonymy", sep="__")
+#
+#     }
+#
+#   }
+#
+#
+#   Q.syn2 <- FALSE
+#   if(nrow_query & !is.null(synonym_of)) {
+#     Q.syn <- TRUE
+#
+#     ## checking if taxa selected is already a synonym of another taxa
+#     if(query_tax$id_good_n != query_tax$id_n) {
+#
+#       if(query_tax$id_good_n != query_tax$id_n) {
+#
+#         query_tax_all(id_search = query_tax$id_good_n)
+#
+#         Q.syn <-
+#           utils::askYesNo("Taxa selected is already a synonym of this taxa. Are you sure you want to modify this?", default = FALSE)
+#
+#       }
+#     }
+#
+#     if(Q.syn) {
+#
+#       ## checking if others names are pointing to the selected taxa as synonyms
+#       syn_of_new_syn <-
+#         tbl(mydb, "diconame") %>%
+#         filter(id_good_n == !!query_tax$id_n) %>%
+#         collect()
+#
+#       if(nrow(syn_of_new_syn) > 0) {
+#
+#         message("\n Some names are considered synonyms of the selected taxa:")
+#
+#         print(
+#           syn_of_new_syn %>%
+#             dplyr::select(
+#               tax_fam,
+#               tax_gen,
+#               tax_esp,
+#               tax_rank1,
+#               tax_name1,
+#               id_n,
+#               id_good_n
+#             )
+#         )
+#
+#         Q.syn2 <-
+#           utils::askYesNo("Do you confirm to also modify the synonymies of these selected names?",
+#                           default = FALSE)
+#
+#         if(Q.syn2)
+#           ids_others_names_synonyms <-
+#           syn_of_new_syn$id_n
+#
+#       }
+#
+#       # if(Q.syn2) {
+#
+#       if (!any(names(synonym_of) == "genus"))
+#         synonym_of$genus <- NULL
+#       if (!any(names(synonym_of) == "species"))
+#         synonym_of$species <- NULL
+#       if (!any(names(synonym_of) == "id"))
+#         synonym_of$id <- NULL
+#
+#       new_syn <-
+#         query_tax_all(genus_searched = synonym_of$genus,
+#                       tax_esp_searched = synonym_of$species,
+#                       id_search = synonym_of$id,
+#                       show_synonymies = FALSE)
+#
+#       if(nrow(new_syn) == 0) {
+#
+#         cat("\n No taxa found for new synonymy. Select one.")
+#         Q.syn <- FALSE
+#
+#       }
+#
+#       if(nrow(new_syn) > 1) {
+#
+#         cat("\n More than one taxa found for new synonymy. Select only one.")
+#         Q.syn <- FALSE
+#
+#       }
+#
+#       if(nrow(new_syn) == 1) {
+#
+#         # message("\n synonym of:")
+#         # print(new_syn %>% as.data.frame())
+#
+#         new_id_diconame_good <- new_syn$id_n
+#
+#         modif_types[1:length(modif_types)] <-
+#           paste(modif_types, "new_synonymy", sep="__")
+#
+#       }
+#
+#       # }
+#     }
+#
+#   }else{
+#     Q.syn <- TRUE
+#   }
+#
+#   # if(!any(comp_vals)) stop("No update performed because no values are different.")
+#
+#   if(any(comp_vals) & Q.syn & nrow_query) {
+#
+#     cli::cli_alert_info(" Number of rows selected to be updated {nrow(query_tax)} ")
+#
+#     if(ask_before_update) {
+#       Q <-
+#         utils::askYesNo(msg = "Do you confirm you want to update these rows for selected fields?", default = FALSE)
+#     }else{
+#       Q <- TRUE
+#     }
+#
+#     if(Q) {
+#
+#       if(add_backup) {
+#
+#         query_tax <-
+#           query_tax %>%
+#           tibble::add_column(date_modified = Sys.Date()) %>%
+#           tibble::add_column(modif_type = modif_types)
+#
+#         DBI::dbWriteTable(mydb, "followup_updates_diconames",
+#                           query_tax, append = TRUE, row.names = FALSE)
+#
+#         if(Q.syn2) {
+#           syn_of_new_syn <-
+#             syn_of_new_syn %>%
+#             tibble::add_column(date_modified = Sys.Date()) %>%
+#             tibble::add_column(modif_type = modif_types)
+#
+#           DBI::dbWriteTable(mydb, "followup_updates_diconames",
+#                             syn_of_new_syn, append = TRUE, row.names = FALSE)
+#
+#
+#         }
+#       }
+#
+#       rs <-
+#         DBI::dbSendQuery(
+#           mydb,
+#           statement = "UPDATE diconame SET tax_fam=$2, tax_gen=$3, tax_esp=$4, id_good_n=$5, tax_rank1=$6, tax_name1=$7 WHERE id_n = $1",
+#           params = list(
+#             query_tax$id_n,
+#             # $1
+#             rep(
+#               ifelse(!is.null(new_tax_fam), new_tax_fam, query_tax$tax_fam),
+#               nrow(query_tax)
+#             ),
+#             # $2
+#             rep(
+#               ifelse(!is.null(new_tax_gen), new_tax_gen, query_tax$tax_gen),
+#               nrow(query_tax)
+#             ),
+#             # $3
+#             rep(
+#               ifelse(!is.null(new_tax_esp), new_tax_esp, query_tax$tax_esp),
+#               nrow(query_tax)
+#             ),
+#             # $4
+#             # rep(ifelse(!is.null(new_tax_order), new_tax_order, query_tax$tax_order), nrow(query_tax)), # $5
+#             rep(
+#               ifelse(
+#                 !is.null(new_id_diconame_good),
+#                 new_id_diconame_good,
+#                 query_tax$id_good_n
+#               ),
+#               nrow(query_tax)
+#             ),
+#             # $5
+#             rep(
+#               ifelse(!is.null(new_tax_rank1), new_tax_rank1, query_tax$tax_rank1),
+#               nrow(query_tax)
+#             ),
+#             # $6
+#             rep(
+#               ifelse(!is.null(new_tax_name1), new_tax_name1, query_tax$tax_name1),
+#               nrow(query_tax)
+#             )
+#           )
+#         ) # $7
+#
+#       DBI::dbClearResult(rs)
+#
+#       rs <-
+#         DBI::dbSendQuery(mydb, statement="SELECT *FROM diconame WHERE id_n = $1",
+#                          params=list(query_tax$id_n))
+#       if(show_results) print(DBI::dbFetch(rs))
+#       DBI::dbClearResult(rs)
+#
+#       if(Q.syn2) {
+#         cli::cli_alert_info("Updating synonymies for others taxa")
+#         rs <-
+#           DBI::dbSendQuery(mydb, statement="UPDATE diconame SET id_good_n=$2 WHERE id_n = $1",
+#                            params= list(ids_others_names_synonyms, # $1
+#                                         rep(ifelse(!is.null(new_id_diconame_good),
+#                                                    new_id_diconame_good, syn_of_new_syn$id_good_n),
+#                                             nrow(syn_of_new_syn)) # $2
+#                            ))
+#
+#         DBI::dbClearResult(rs)
+#
+#         rs <-
+#           DBI::dbSendQuery(mydb, statement="SELECT *FROM diconame WHERE id_n = $1",
+#                            params=list(ids_others_names_synonyms))
+#         if(show_results) print(DBI::dbFetch(rs))
+#         DBI::dbClearResult(rs)
+#
+#
+#       }
+#
+#     }
+#   }else{
+#     if(nrow(query_tax)==0) print("No update because no taxa found.")
+#
+#     if(!any(comp_vals)) print("No update performed because no values are different.")
+#
+#     if(!Q.syn) print("No update because new synonymy not correctly defined.")
+#
+#     if(!nrow_query) print("No updates because none taxa were found based on query parameters (genus/species/family/id)")
+#
+#   }
+# }
 
-  if(!exists("mydb")) call.mydb()
 
-  if(all(is.null(c(genus_searched, tax_esp_searched,
-                   tax_fam_searched, synonym_of,
-                   id_searched)) & !cancel_synonymy))
-    stop("\n Provide the species to be updated or precise new synonymy")
-
-  ### checking if at least one modification is asked
-  new_vals <- c(new_tax_gen = new_tax_gen,
-                new_tax_esp = new_tax_esp,
-                new_tax_fam = new_tax_fam)
-  if (!any(!is.null(new_vals)) &
-      is.null(synonym_of) &
-      !cancel_synonymy)
-    stop("\n No new values to be updated.")
-
-  ### querying for entries to be modified
-  if(is.null(id_searched)) {
-    cat(paste("\n", genus_searched, " - ", tax_esp_searched, "-", tax_fam_searched))
-    query_tax <-
-      query_tax_all(genus_searched = genus_searched, tax_esp_searched = tax_esp_searched,
-                    tax_fam_searched = tax_fam_searched)
-    #    , check_synonymy = FALSE,
-    # exact_match = exact_match
-  }else{
-    query_tax <-
-      query_tax_all(id_search = id_searched)
-    # , check_synonymy = FALSE
-  }
-
-  if(is.null(query_tax)) query_tax <- tibble()
-
-  if(nrow(query_tax)>0) {
-    message(paste("\n ", nrow(query_tax), "taxa selected"))
-    print(query_tax %>% as.data.frame())
-    nrow_query=TRUE
-  }else{
-    nrow_query=FALSE
-  }
-
-  if(nrow_query)
-    modif_types <-
-    vector(mode = "character", length = nrow(query_tax))
-
-  ## if the modification does not concern synonymies, check if provided values are different for those existing
-  if(nrow_query & !cancel_synonymy & is.null(synonym_of)) {
-
-    query_tax_n <- query_tax
-    col_new <- c()
-    for (i in c("tax_esp", "tax_fam",
-                "tax_gen", "tax_rank01", "tax_nam01")) {
-      if(any(grepl(pattern = i, x = names(new_vals)))) {
-        col_new <- c(col_new, i)
-        var <- enquo(i)
-        query_tax_n <-
-          query_tax_n %>%
-          dplyr::mutate(!!var := new_vals[grep(i, names(new_vals))])
-      }
-    }
-
-    query_tax_n <-
-      query_tax_n %>%
-      dplyr::select(col_new)
-
-    # new_vals <-
-    #   dplyr::tibble(
-    #     tax_order = ifelse(!is.null(new_tax_order), new_tax_order, query_tax$tax_order),
-    #     tax_fam = ifelse(!is.null(new_tax_fam), as.character(new_tax_fam), query_tax$tax_fam),
-    #     tax_gen = ifelse(!is.null(new_tax_gen), as.character(new_tax_gen), query_tax$tax_gen),
-    #     tax_esp = ifelse(!is.null(new_tax_esp), as.character(new_tax_esp), query_tax$tax_esp),
-    #     tax_rank1 = ifelse(!is.null(new_tax_rank1), new_tax_rank1, query_tax$tax_rank01),
-    #     tax_name1 = ifelse(!is.null(new_tax_name1), new_tax_name1, query_tax$tax_nam01),
-    #     introduced_status = ifelse(!is.null(new_introduced_status), new_introduced_status, query_tax$introduced_status)
-    #                 )
-
-    query_tax_n <-
-      query_tax_n %>%
-      replace(., is.na(.), -9999)
-
-    sel_query_tax <-
-      dplyr::bind_rows(query_tax_n, query_tax %>%
-                         dplyr::select(col_new))
-
-    sel_query_tax <-
-      sel_query_tax %>%
-      replace(., is.na(.), -9999)
-
-    print(sel_query_tax)
-
-    comp_vals <-
-      apply(
-        sel_query_tax,
-        MARGIN = 2,
-        FUN = function(x)
-          unique(x[nrow(query_tax_n)]) != x[(nrow(query_tax_n) + 1):length(x)]
-      )
-
-    # comp_vals <-
-    #   apply(sel_query_tax, MARGIN = 2, FUN = function(x) x[1]!=x[2:length(x)])
-
-    if(!is.null(nrow(comp_vals))) {
-      query_tax <-
-        query_tax[apply(comp_vals, MARGIN = 1, FUN = function(x) any(x)),]
-      modif_types <- modif_types[apply(comp_vals, MARGIN = 1, FUN = function(x) any(x))]
-      comp_vals <-
-        apply(comp_vals, MARGIN = 2, FUN = function(x) any(x))
-    }else{
-      query_tax <- query_tax
-    }
-
-    if(any(is.na(comp_vals)))
-      comp_vals <-
-      comp_vals[!is.na(comp_vals)]
-
-    modif_types[1:length(modif_types)] <-
-      paste0(modif_types, rep(paste(names(comp_vals)[comp_vals], sep=", "), length(modif_types)), collapse ="__")
-
-  }else{
-    comp_vals <- TRUE
-  }
-
-  new_id_diconame_good <- NULL
-  if(nrow_query & cancel_synonymy) {
-    if(query_tax$id_good_n == query_tax$id_n) {
-
-      cat("\n This taxa is not considered as synonym. No modification is thus done on its synonymy")
-      comp_vals <- FALSE
-
-    }else{
-
-      new_id_diconame_good <- NA
-
-      modif_types[1:length(modif_types)] <-
-        paste(modif_types, "cancel_synonymy", sep="__")
-
-    }
-
-  }
-
-
-  Q.syn2 <- FALSE
-  if(nrow_query & !is.null(synonym_of)) {
-    Q.syn <- TRUE
-
-    ## checking if taxa selected is already a synonym of another taxa
-    if(query_tax$id_good_n != query_tax$id_n) {
-
-      if(query_tax$id_good_n != query_tax$id_n) {
-
-        query_tax_all(id_search = query_tax$id_good_n)
-
-        Q.syn <-
-          utils::askYesNo("Taxa selected is already a synonym of this taxa. Are you sure you want to modify this?", default = FALSE)
-
-      }
-    }
-
-    if(Q.syn) {
-
-      ## checking if others names are pointing to the selected taxa as synonyms
-      syn_of_new_syn <-
-        tbl(mydb, "diconame") %>%
-        filter(id_good_n == !!query_tax$id_n) %>%
-        collect()
-
-      if(nrow(syn_of_new_syn) > 0) {
-
-        message("\n Some names are considered synonyms of the selected taxa:")
-
-        print(
-          syn_of_new_syn %>%
-            dplyr::select(
-              tax_fam,
-              tax_gen,
-              tax_esp,
-              tax_rank1,
-              tax_name1,
-              id_n,
-              id_good_n
-            )
-        )
-
-        Q.syn2 <-
-          utils::askYesNo("Do you confirm to also modify the synonymies of these selected names?",
-                          default = FALSE)
-
-        if(Q.syn2)
-          ids_others_names_synonyms <-
-          syn_of_new_syn$id_n
-
-      }
-
-      # if(Q.syn2) {
-
-      if (!any(names(synonym_of) == "genus"))
-        synonym_of$genus <- NULL
-      if (!any(names(synonym_of) == "species"))
-        synonym_of$species <- NULL
-      if (!any(names(synonym_of) == "id"))
-        synonym_of$id <- NULL
-
-      new_syn <-
-        query_tax_all(genus_searched = synonym_of$genus,
-                      tax_esp_searched = synonym_of$species,
-                      id_search = synonym_of$id,
-                      show_synonymies = FALSE)
-
-      if(nrow(new_syn) == 0) {
-
-        cat("\n No taxa found for new synonymy. Select one.")
-        Q.syn <- FALSE
-
-      }
-
-      if(nrow(new_syn) > 1) {
-
-        cat("\n More than one taxa found for new synonymy. Select only one.")
-        Q.syn <- FALSE
-
-      }
-
-      if(nrow(new_syn) == 1) {
-
-        # message("\n synonym of:")
-        # print(new_syn %>% as.data.frame())
-
-        new_id_diconame_good <- new_syn$id_n
-
-        modif_types[1:length(modif_types)] <-
-          paste(modif_types, "new_synonymy", sep="__")
-
-      }
-
-      # }
-    }
-
-  }else{
-    Q.syn <- TRUE
-  }
-
-  # if(!any(comp_vals)) stop("No update performed because no values are different.")
-
-  if(any(comp_vals) & Q.syn & nrow_query) {
-
-    cli::cli_alert_info(" Number of rows selected to be updated {nrow(query_tax)} ")
-
-    if(ask_before_update) {
-      Q <-
-        utils::askYesNo(msg = "Do you confirm you want to update these rows for selected fields?", default = FALSE)
-    }else{
-      Q <- TRUE
-    }
-
-    if(Q) {
-
-      if(add_backup) {
-
-        query_tax <-
-          query_tax %>%
-          tibble::add_column(date_modified = Sys.Date()) %>%
-          tibble::add_column(modif_type = modif_types)
-
-        DBI::dbWriteTable(mydb, "followup_updates_diconames",
-                          query_tax, append = TRUE, row.names = FALSE)
-
-        if(Q.syn2) {
-          syn_of_new_syn <-
-            syn_of_new_syn %>%
-            tibble::add_column(date_modified = Sys.Date()) %>%
-            tibble::add_column(modif_type = modif_types)
-
-          DBI::dbWriteTable(mydb, "followup_updates_diconames",
-                            syn_of_new_syn, append = TRUE, row.names = FALSE)
-
-
-        }
-      }
-
-      rs <-
-        DBI::dbSendQuery(
-          mydb,
-          statement = "UPDATE diconame SET tax_fam=$2, tax_gen=$3, tax_esp=$4, id_good_n=$5, tax_rank1=$6, tax_name1=$7 WHERE id_n = $1",
-          params = list(
-            query_tax$id_n,
-            # $1
-            rep(
-              ifelse(!is.null(new_tax_fam), new_tax_fam, query_tax$tax_fam),
-              nrow(query_tax)
-            ),
-            # $2
-            rep(
-              ifelse(!is.null(new_tax_gen), new_tax_gen, query_tax$tax_gen),
-              nrow(query_tax)
-            ),
-            # $3
-            rep(
-              ifelse(!is.null(new_tax_esp), new_tax_esp, query_tax$tax_esp),
-              nrow(query_tax)
-            ),
-            # $4
-            # rep(ifelse(!is.null(new_tax_order), new_tax_order, query_tax$tax_order), nrow(query_tax)), # $5
-            rep(
-              ifelse(
-                !is.null(new_id_diconame_good),
-                new_id_diconame_good,
-                query_tax$id_good_n
-              ),
-              nrow(query_tax)
-            ),
-            # $5
-            rep(
-              ifelse(!is.null(new_tax_rank1), new_tax_rank1, query_tax$tax_rank1),
-              nrow(query_tax)
-            ),
-            # $6
-            rep(
-              ifelse(!is.null(new_tax_name1), new_tax_name1, query_tax$tax_name1),
-              nrow(query_tax)
-            )
-          )
-        ) # $7
-
-      DBI::dbClearResult(rs)
-
-      rs <-
-        DBI::dbSendQuery(mydb, statement="SELECT *FROM diconame WHERE id_n = $1",
-                         params=list(query_tax$id_n))
-      if(show_results) print(DBI::dbFetch(rs))
-      DBI::dbClearResult(rs)
-
-      if(Q.syn2) {
-        cli::cli_alert_info("Updating synonymies for others taxa")
-        rs <-
-          DBI::dbSendQuery(mydb, statement="UPDATE diconame SET id_good_n=$2 WHERE id_n = $1",
-                           params= list(ids_others_names_synonyms, # $1
-                                        rep(ifelse(!is.null(new_id_diconame_good),
-                                                   new_id_diconame_good, syn_of_new_syn$id_good_n),
-                                            nrow(syn_of_new_syn)) # $2
-                           ))
-
-        DBI::dbClearResult(rs)
-
-        rs <-
-          DBI::dbSendQuery(mydb, statement="SELECT *FROM diconame WHERE id_n = $1",
-                           params=list(ids_others_names_synonyms))
-        if(show_results) print(DBI::dbFetch(rs))
-        DBI::dbClearResult(rs)
-
-
-      }
-
-    }
-  }else{
-    if(nrow(query_tax)==0) print("No update because no taxa found.")
-
-    if(!any(comp_vals)) print("No update performed because no values are different.")
-
-    if(!Q.syn) print("No update because new synonymy not correctly defined.")
-
-    if(!nrow_query) print("No updates because none taxa were found based on query parameters (genus/species/family/id)")
-
-  }
-}
 # update_dico_name <- function(genus_searched = NULL,
 #                              tax_esp_searched = NULL,
 #                              tax_fam_searched = NULL,
@@ -6252,18 +7158,18 @@ add_individuals <- function(new_data ,
 
   unmatch_id_diconame <-
     new_data_renamed %>%
-    dplyr::select(id_diconame_n) %>%
+    dplyr::select(idtax_n) %>%
     dplyr::left_join(
-      dplyr::tbl(mydb, "diconame") %>%
-        dplyr::select(id_n, id_good_n) %>%
+      dplyr::tbl(mydb, "table_taxa") %>%
+        dplyr::select(idtax_n, idtax_good_n) %>%
         dplyr::collect(),
-      by = c("id_diconame_n" = "id_n")
+      by = c("idtax_n" = "idtax_n")
     ) %>%
-    dplyr::filter(is.na(id_good_n)) %>%
-    dplyr::pull(id_diconame_n)
+    dplyr::filter(is.na(idtax_good_n)) %>%
+    dplyr::pull(idtax_n)
 
   if (length(unmatch_id_diconame) > 0)
-    stop(paste("id_diconame not found in diconame", unmatch_id_diconame))
+    stop(paste("idtax_n not found in diconame", unmatch_id_diconame))
 
   ## checking DBH
   # if(!any(colnames(new_data_renamed)=="dbh")) stop("dbh column missing")
@@ -7360,15 +8266,14 @@ delete_entry_dico_name <- function(id) {
 #' @param id integer
 #'
 #' @return No values
-#' @export
-.delete_entry_diconame <- function(id) {
-
-  if(!exists("mydb")) call.mydb()
-
-  DBI::dbExecute(mydb,
-                 "DELETE FROM diconame WHERE id_n=$1", params=list(id)
-  )
-}
+# .delete_entry_diconame <- function(id) {
+#
+#   if(!exists("mydb")) call.mydb()
+#
+#   DBI::dbExecute(mydb,
+#                  "DELETE FROM diconame WHERE id_n=$1", params=list(id)
+#   )
+# }
 
 
 #' Delete an entry in trait measurement table
@@ -7511,20 +8416,47 @@ query_specimens <- function(collector = NULL,
   query_speci <-
     dplyr::tbl(mydb, "specimens") %>%
     dplyr::left_join(
-      dplyr::tbl(mydb, "diconame") %>% dplyr::select(-detvalue,-data_modif_d,-data_modif_m,-data_modif_y),
-      by = c("id_diconame_n" = "id_n")
+      dplyr::tbl(mydb, "table_taxa") %>%
+        dplyr::mutate(idtax_f = ifelse(is.na(idtax_good_n), idtax_n, idtax_good_n)) %>%
+        dplyr::select(idtax_n, idtax_f),
+      by = c("idtax_n" = "idtax_n")
     ) %>%
+    left_join(add_taxa_table_taxa(),
+              by = c("idtax_f" = "idtax_n")) %>%
     dplyr::left_join(dplyr::tbl(mydb, "table_colnam"),
                      by = c("id_colnam" = "id_table_colnam"))
+
   # %>%
   #   dplyr::select(-id_specimen_old, -id_diconame, -photo_tranche, -id_colnam, -id_good, -id, -id_good_n)
 
-
-  if(subset_columns & !generate_labels)
+  if (subset_columns & !generate_labels)
     query_speci <-
     query_speci %>%
-    dplyr::select(colnam, colnbr, suffix, full_name, tax_fam, tax_gen, tax_esp, ddlat, ddlon, country, detby, detd, detm, dety, add_col,
-                  cold, colm, coly, detvalue, id_specimen, id_diconame_n)
+    dplyr::select(
+      colnam,
+      colnbr,
+      suffix,
+      tax_sp_level,
+      tax_infra_level_auth,
+      tax_fam,
+      tax_gen,
+      tax_esp,
+      ddlat,
+      ddlon,
+      country,
+      detby,
+      detd,
+      detm,
+      dety,
+      add_col,
+      cold,
+      colm,
+      coly,
+      detvalue,
+      morpho_species,
+      id_specimen,
+      idtax_f
+    )
 
   ## filter by collector or id_colnam (id of people table)
   if ((!is.null(collector) |
@@ -7638,9 +8570,10 @@ query_specimens <- function(collector = NULL,
     modif_backups <-
       dplyr::tbl(mydb, "followup_updates_specimens") %>%
       dplyr::filter(id_specimen == !!query$id_specimen) %>%
-      dplyr::filter(grepl("id_good_diconame", modif_type)) %>%
+      dplyr::filter(grepl("idtax_n", modif_type)) %>%
       dplyr::left_join(
-        dplyr::tbl(mydb, "diconame") %>% dplyr::select(-detvalue,-data_modif_d,-data_modif_m,-data_modif_y),
+        dplyr::tbl(mydb, "table_taxa") %>%
+          dplyr::select(-detvalue,-data_modif_d,-data_modif_m,-data_modif_y),
         by = c("id_diconame_n" = "id_n")
       ) %>%
       dplyr::left_join(dplyr::tbl(mydb, "table_colnam"),
@@ -9546,6 +10479,7 @@ add_specimens <- function(new_data ,
 #'
 #' @export
 .get_trait_individuals_values <- function(traits,
+                                          src_individuals = NULL,
                                           id_individuals = NULL,
                                           ids_plot = NULL,
                                           skip_dates = TRUE,
@@ -9558,61 +10492,72 @@ add_specimens <- function(new_data ,
     dplyr::left_join(dplyr::tbl(mydb, "traitlist"), by = c("traitid" = "id_trait")) %>%
     dplyr::select(-id_specimen,-id_diconame)
 
-  ## filtering individuals based on ids of individuals and/or plots
-  if (is.null(id_individuals) & is.null(ids_plot))
+  if (is.null(src_individuals)) {
+
     res_individuals_full <-
-      dplyr::tbl(mydb, "data_individuals")
+      merge_individuals_taxa(id_individual = id_individuals, id_plot = ids_plot)
 
-  if (!is.null(id_individuals) & is.null(ids_plot))
-    res_individuals_full <-
-      dplyr::tbl(mydb, "data_individuals") %>%
-      dplyr::filter(id_n %in% id_individuals)
+  } else {
 
-  if (is.null(id_individuals) & !is.null(ids_plot))
-    res_individuals_full <-
-      dplyr::tbl(mydb, "data_individuals") %>%
-      dplyr::filter(id_table_liste_plots_n %in% ids_plot)
+    res_individuals_full <- src_individuals
 
-  ## getting specimens id and identification
-  specimens_id_diconame <-
-    dplyr::tbl(mydb, "specimens") %>%
-    dplyr::select(id_specimen, id_diconame_n)
+  }
 
-  ## getting synonimies of identification
-  diconames_id <-
-    dplyr::tbl(mydb, "diconame") %>%
-    dplyr::select(id_n, id_good_n)
-
-  ## merging specimens and good identification
-  specimens_linked <-
-    specimens_id_diconame %>%
-    dplyr::left_join(diconames_id, by=c("id_diconame_n"="id_n")) %>%
-    dplyr::rename(id_dico_name_specimen=id_good_n) %>%
-    dplyr::select(id_specimen, id_dico_name_specimen)
-
-  ## getting link between specimen and individual
-  links_specimens <-
-    dplyr::tbl(mydb, "data_link_specimens") %>%
-    dplyr::select(id_n, id_specimen) %>%
-    dplyr::group_by(id_n) %>%
-    dplyr::summarise(id_specimen = max(id_specimen, na.rm = T))
-
-  ## adding id of specimens to individual (and removing old link)
-  res_individuals_full <-
-    res_individuals_full %>%
-    dplyr::select(-id_specimen) %>%
-    dplyr::left_join(links_specimens,
-                     by = c("id_n" = "id_n"))
-
-  res_individuals_full <-
-    res_individuals_full %>%
-    dplyr::left_join(specimens_linked, by=c("id_specimen"="id_specimen")) %>% # adding id_diconame for specimens
-    dplyr::mutate(id_diconame_final=ifelse(!is.na(id_dico_name_specimen), id_dico_name_specimen, id_diconame_n)) %>% #### selecting id_dico_name from specimens if any
-    dplyr::left_join(dplyr::tbl(mydb, "diconame"), by=c("id_diconame_final"="id_n")) ## getting taxa information based on id_diconame_final
+  # ## filtering individuals based on ids of individuals and/or plots
+  # if (is.null(id_individuals) & is.null(ids_plot))
+  #   res_individuals_full <-
+  #     dplyr::tbl(mydb, "data_individuals")
+  #
+  # if (!is.null(id_individuals) & is.null(ids_plot))
+  #   res_individuals_full <-
+  #     dplyr::tbl(mydb, "data_individuals") %>%
+  #     dplyr::filter(id_n %in% id_individuals)
+  #
+  # if (is.null(id_individuals) & !is.null(ids_plot))
+  #   res_individuals_full <-
+  #     dplyr::tbl(mydb, "data_individuals") %>%
+  #     dplyr::filter(id_table_liste_plots_n %in% ids_plot)
+  #
+  # ## getting specimens id and identification
+  # specimens_id_diconame <-
+  #   dplyr::tbl(mydb, "specimens") %>%
+  #   dplyr::select(id_specimen, id_diconame_n)
+  #
+  # ## getting synonimies of identification
+  # diconames_id <-
+  #   dplyr::tbl(mydb, "diconame") %>%
+  #   dplyr::select(id_n, id_good_n)
+  #
+  # ## merging specimens and good identification
+  # specimens_linked <-
+  #   specimens_id_diconame %>%
+  #   dplyr::left_join(diconames_id, by=c("id_diconame_n"="id_n")) %>%
+  #   dplyr::rename(id_dico_name_specimen=id_good_n) %>%
+  #   dplyr::select(id_specimen, id_dico_name_specimen)
+  #
+  # ## getting link between specimen and individual
+  # links_specimens <-
+  #   dplyr::tbl(mydb, "data_link_specimens") %>%
+  #   dplyr::select(id_n, id_specimen) %>%
+  #   dplyr::group_by(id_n) %>%
+  #   dplyr::summarise(id_specimen = max(id_specimen, na.rm = T))
+  #
+  # ## adding id of specimens to individual (and removing old link)
+  # res_individuals_full <-
+  #   res_individuals_full %>%
+  #   dplyr::select(-id_specimen) %>%
+  #   dplyr::left_join(links_specimens,
+  #                    by = c("id_n" = "id_n"))
+  #
+  # res_individuals_full <-
+  #   res_individuals_full %>%
+  #   dplyr::left_join(specimens_linked, by=c("id_specimen"="id_specimen")) %>% # adding id_diconame for specimens
+  #   dplyr::mutate(id_diconame_final=ifelse(!is.na(id_dico_name_specimen), id_dico_name_specimen, id_diconame_n)) %>% #### selecting id_dico_name from specimens if any
+  #   dplyr::left_join(dplyr::tbl(mydb, "diconame"), by=c("id_diconame_final"="id_n")) ## getting taxa information based on id_diconame_final
 
   traits_linked <-
     res_individuals_full %>%
-    dplyr::left_join(traits_measures, by=c("id_n"="id_data_individuals")) %>%
+    dplyr::left_join(traits_measures, by = c("id_n" = "id_data_individuals")) %>%
     dplyr::select(id_n, id_old, id_trait_measures, id_sub_plots, traitvalue, traitvalue_char, trait, issue, day, month, year) %>%
     dplyr::filter(!is.na(trait)) %>%
     dplyr::filter(trait  %in% traits) %>%
@@ -9653,10 +10598,12 @@ add_specimens <- function(new_data ,
           dplyr::select(-traitvalue_char)
       }
 
-      issue_name <- paste0(all_trait[i],"_issue")
-      issue_name_enquo <- rlang::parse_expr(rlang::quo_name(rlang::enquo(issue_name)))
+      issue_name <- paste0(all_trait[i], "_issue")
+      issue_name_enquo <-
+        rlang::parse_expr(rlang::quo_name(rlang::enquo(issue_name)))
       trait_name <- all_trait[i]
-      trait_name_enquo <- rlang::parse_expr(rlang::quo_name(rlang::enquo(trait_name)))
+      trait_name_enquo <-
+        rlang::parse_expr(rlang::quo_name(rlang::enquo(trait_name)))
 
       # print(issue_name)
 
@@ -9668,12 +10615,12 @@ add_specimens <- function(new_data ,
         traits_linked_subset %>%
         dplyr::group_by(id_n) %>%
         dplyr::count() %>%
-        dplyr::filter(n>1) %>%
+        dplyr::filter(n > 1) %>%
         # dplyr::collect() %>%
         nrow()
 
       multiple_census <- FALSE
-      if(nbe_individuals_double>0) {
+      if(nbe_individuals_double > 0) {
 
         warning(paste("more than one trait value for at least one individual for", all_trait[i]))
 
@@ -9779,7 +10726,7 @@ add_specimens <- function(new_data ,
               paste("census", j, sep=("_"))
           }
         }
-      }else{
+      } else{
 
         traits_linked_subset_spread <-
           traits_linked_subset %>%
@@ -12132,3 +13079,680 @@ growth_computing <- function(dataset,
 
 }
 
+
+
+#' List, extract taxa
+#'
+#' Provide list of selected taxa
+#'
+#' @return A tibble of all taxa
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#'
+#' @param team_lead string fuzzy person name to look for
+#' @param plot_name string fuzzy plot name to look for
+#' @param tag numeric exact tag number of the plot
+#' @param country string fuzzy country name to look for
+#' @param province string fuzzy province name to look for
+#' @param locality_name string fuzzy locality_name name to look for
+#' @param method stringfuzzy method name to look for
+#' @param date_y integer year of collect
+#' @param extract_individuals logical whether individuals instead of plot list as output
+#' @param map logical whether map whould be produced
+#' @param zoom integer positive values indicating zoom level for ggplot style map
+#' @param label logical for ggplot map, whether adding label or not
+#' @param try_optimal_label logical if map is ggplot
+#' @param map_type string mapview or ggplot, mapview by default
+#' @param id_individual numeric id of individual to be extracted
+#' @param id_plot numeric id of plot to be extracted
+#' @param show_multiple_census logical whether multiple census should be shown, by default FALSE
+#' @param remove_ids logical remove all ids columns, by default TRUE
+#' @param collapse_multiple_val logical whether multiple traits measures should be collapsed (resulting values as character, separated by dash)
+#'
+#'
+#' @return A tibble of plots or individuals if extract_individuals is TRUE
+#' @export
+query_taxa <-
+  function(
+    class = c("Magnoliopsida", "Pinopsida", "Lycopsida", "Pteropsida"),
+    family = NULL,
+    genus = NULL,
+    order = NULL,
+    species = NULL,
+    tax_nam01 = NULL,
+    tax_nam02 = NULL,
+    only_genus = FALSE,
+    only_family = FALSE,
+    only_class = FALSE,
+    habit = NULL,
+    ids = NULL,
+    verbose = TRUE,
+    exact_match = FALSE,
+    check_synonymy =TRUE,
+    extract_traits = FALSE
+  ) {
+
+    if(!exists("mydb")) call.mydb()
+
+    if(!is.null(class)) {
+
+      all_res <- list()
+      system.time(
+        for (i in 1:length(class)) {
+          if(!exact_match)
+            rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_tax_famclass WHERE tax_famclass ILIKE '%",
+                                                class[i], "%'"))
+          if(exact_match)
+            rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_tax_famclass WHERE tax_famclass ='",
+                                                class[i], "'"))
+
+          res <- DBI::dbFetch(rs)
+          DBI::dbClearResult(rs)
+
+          all_res[[i]] <-
+            tbl(mydb, "table_taxa") %>%
+            filter(id_tax_famclass %in% !!res$id_tax_famclass) %>%
+            dplyr::select(idtax_n, idtax_good_n) %>%
+            collect()
+        }
+      )
+
+      res_class <- bind_rows(all_res)
+
+    }
+
+    if(is.null(ids)) {
+
+      if(!is.null(order)) {
+        all_res <- list()
+        for (i in 1:length(order)) {
+          if(!exact_match)
+            rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_order ILIKE '%",
+                                                order[i], "%'"))
+          if(exact_match)
+            rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_order ='",
+                                                order[i], "'"))
+
+          res <- DBI::dbFetch(rs)
+          DBI::dbClearResult(rs)
+          all_res[[i]] <- dplyr::as_tibble(res) %>%
+            dplyr::select(idtax_n, id_good)
+        }
+        res_order <- bind_rows(all_res)
+      }
+
+      if(!is.null(family)) {
+        all_res <- list()
+        for (i in 1:length(family)) {
+          if(!exact_match)
+            rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_fam ILIKE '%",
+                                                family[i], "%'"))
+          if(exact_match)
+            rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_fam ='",
+                                                family[i], "'"))
+
+          res <- DBI::dbFetch(rs)
+          DBI::dbClearResult(rs)
+          all_res[[i]] <- dplyr::as_tibble(res) %>%
+            dplyr::select(idtax_n, id_good)
+        }
+        res_family <- bind_rows(all_res)
+      }
+
+      if(!is.null(genus)) {
+        all_res <- list()
+        for (i in 1:length(genus)) {
+          if(!exact_match)
+            rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_gen ILIKE '%",
+                                                genus[i], "%'"))
+          if(exact_match)
+            rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_gen ='",
+                                                genus[i], "'"))
+
+          res <- DBI::dbFetch(rs)
+          DBI::dbClearResult(rs)
+          all_res[[i]]  <- dplyr::as_tibble(res) %>%
+            dplyr::select(idtax_n, id_good)
+        }
+        res_genus <- bind_rows(all_res)
+      }
+
+      if(!is.null(species)) {
+        all_res <- list()
+        for (i in 1:length(species)) {
+          if(!exact_match)
+            rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_esp ILIKE '%",
+                                                species[i], "%'"))
+          if(exact_match)
+            rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_esp ='",
+                                                species[i], "'"))
+
+          res <- DBI::dbFetch(rs)
+          DBI::dbClearResult(rs)
+          all_res[[i]]  <- dplyr::as_tibble(res) %>%
+            dplyr::select(idtax_n, id_good)
+        }
+        res_species <- bind_rows(all_res)
+      }
+
+      if(!is.null(habit)) {
+        all_res <- list()
+        for (i in 1:length(habit)) {
+          rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE a_habit ILIKE '%",
+                                              habit[i], "%'"))
+          res <- DBI::dbFetch(rs)
+          DBI::dbClearResult(rs)
+          all_res[[i]]  <- dplyr::as_tibble(res) %>%
+            dplyr::select(idtax_n, id_good)
+        }
+        res_habit <- bind_rows(all_res)
+      }
+
+      no_match <- FALSE
+      res <-
+        tbl(mydb, "table_taxa")
+
+      if(!is.null(class))
+        res <- res %>%
+        filter(idtax_n %in% !!res_class$idtax_n)
+
+      if (!is.null(order))
+        if (nrow(res_order) > 0) {
+          res <-
+            res %>%
+            filter(idtax_n %in% !!res_order$idtax_n)
+        } else{
+          message("\n no match for order")
+          no_match <- TRUE
+        }
+
+      if(!is.null(family))
+        if(nrow(res_family)>0) {
+          res <-
+            res %>%
+            filter(idtax_n %in% !!res_family$idtax_n)
+        }else{
+          message("\n no match for family")
+          no_match <- TRUE
+        }
+
+      if(!is.null(genus))
+        if(nrow(res_genus)>0) {
+          res <-
+            res %>%
+            filter(idtax_n %in% !!res_genus$idtax_n)
+        }else{
+          message("\n no match for genus")
+          no_match <- TRUE
+        }
+
+      if (!is.null(species))
+        if (nrow(res_species) > 0) {
+          res <-
+            res %>%
+            filter(idtax_n %in% !!res_species$idtax_n)
+        } else{
+          message("\n no match for species")
+          no_match <- TRUE
+        }
+
+      if (!is.null(habit))
+        if (nrow(res_habit) > 0) {
+          res <-
+            res %>%
+            filter(idtax_n %in% !!res_habit$idtax_n)
+        } else{
+          message("\n no match for habit")
+          no_match <- TRUE
+        }
+
+      if(!no_match) {
+        res <- res %>% collect()
+      } else {
+        res <- NULL
+        message("no matching names")
+      }
+
+    } else {
+
+      if(!is.null(class)) {
+
+        # message("\n Filtering by class.")
+
+        ids <-
+          ids[ids %in% res_class$idtax_n]
+
+        if (length(ids) == 0) {
+
+          stop("id provided not found in the class queried")
+
+        }
+
+      }
+
+      query <- "SELECT * FROM table_taxa WHERE MMM"
+      query <-
+        gsub(
+          pattern = "MMM",
+          replacement = paste0("idtax_n IN ('",
+                               paste(unique(ids), collapse = "', '"), "')"),
+          x = query
+        )
+
+      rs <- DBI::dbSendQuery(mydb, query)
+      res <- DBI::dbFetch(rs)
+      DBI::dbClearResult(rs)
+      res <- dplyr::as_tibble(res)
+
+    }
+
+    if(only_genus) {
+
+      res <-
+        res %>%
+        dplyr::filter(is.na(tax_esp))
+
+    }
+
+    if(only_family) {
+
+      res <-
+        res %>%
+        dplyr::filter(is.na(tax_esp),
+                      is.na(tax_gen))
+
+    }
+
+    if(only_class) {
+
+      res <-
+        res %>%
+        dplyr::filter(is.na(tax_esp),
+                      is.na(tax_gen),
+                      is.na(tax_order),
+                      is.na(tax_fam))
+
+    }
+
+    ## checking synonymies
+    if(!is.null(res) & check_synonymy) {
+
+      ## if selected taxa are synonyms
+      if(any(!is.na(res$idtax_good_n))) {
+
+        if (any(res$idtax_good_n > 1)) {
+
+          if (verbose) {
+
+            cli::cli_alert_info("{sum(res$idtax_good_n > 1, na.rm = TRUE)} taxa selected is/are synonym(s)")
+
+            cli::cli_alert_info("{nrow(res)} taxa selected before checking synonymies")
+
+          }
+
+          ## retrieving good idtax_n if selected ones are considered synonyms
+          idtax_accepted <-
+            res %>%
+            dplyr::select(idtax_n, idtax_good_n) %>%
+            dplyr::mutate(idtax_f = ifelse(!is.na(idtax_good_n),
+                                           idtax_good_n, idtax_n)) %>%
+            dplyr::distinct(idtax_f) %>%
+            dplyr::rename(idtax_n = idtax_f)
+
+          res <-
+            tbl(mydb, "table_taxa") %>%
+            dplyr::filter(idtax_n %in% !!idtax_accepted$idtax_n) %>%
+            collect()
+
+          # %>%
+          #   dplyr::select(tax_gen, idtax_n)
+
+          cli::cli_alert_info("{nrow(res)} taxa selected after checking synonymies")
+
+        }
+      }
+
+
+      ## retrieving all synonyms from selected taxa
+      id_synonyms <-
+        tbl(mydb, "table_taxa") %>%
+        filter(idtax_good_n %in% !!res$idtax_n) %>% ## all taxa synonyms of selected taxa
+        # filter(idtax_n %in% !!res$idtax_n) %>% ## excluding taxa already in extract
+        dplyr::select(idtax_n, idtax_good_n) %>%
+        collect()
+
+      if(nrow(id_synonyms) > 0) {
+
+        if(verbose) {
+          cli::cli_alert_info("{sum(id_synonyms$idtax_good_n > 0, na.rm = TRUE)} taxa selected have synonym(s)")
+          cli::cli_alert_info("{nrow(res)} taxa selected before checking synonymies")
+        }
+
+        synonyms <- query_taxa(ids = id_synonyms$idtax_n,
+                               check_synonymy = FALSE,
+                               verbose = FALSE,
+                               class = NULL,
+                               extract_traits = FALSE)
+
+        res <-
+          res %>%
+          bind_rows(synonyms)
+
+      }
+    }
+
+    if(!is.null(res)) {
+
+      res <-
+        res %>%
+        mutate(tax_sp_level = ifelse(!is.na(tax_esp), paste(tax_gen, tax_esp), NA)) %>%
+        mutate(tax_infra_level = ifelse(!is.na(tax_esp),
+                                        paste0(tax_gen,
+                                               " ",
+                                               tax_esp,
+                                               ifelse(!is.na(tax_rank01), paste0(" ", tax_rank01), ""),
+                                               ifelse(!is.na(tax_nam01), paste0(" ", tax_nam01), ""),
+                                               ifelse(!is.na(tax_rank02), paste0(" ", tax_rank02), ""),
+                                               ifelse(!is.na(tax_nam02), paste0(" ", tax_nam02), "")),
+                                        NA)) %>%
+        mutate(tax_infra_level_auth = ifelse(!is.na(tax_esp),
+                                             paste0(tax_gen,
+                                                    " ",
+                                                    tax_esp,
+                                                    ifelse(!is.na(author1), paste0(" ", author1), ""),
+                                                    ifelse(!is.na(tax_rank01), paste0(" ", tax_rank01), ""),
+                                                    ifelse(!is.na(tax_nam01), paste0(" ", tax_nam01), ""),
+                                                    ifelse(!is.na(author2), paste0(" ", author2), ""),
+                                                    ifelse(!is.na(tax_rank02), paste0(" ", tax_rank02), ""),
+                                                    ifelse(!is.na(tax_nam02), paste0(" ", tax_nam02), ""),
+                                                    ifelse(!is.na(author3), paste0(" ", author3), "")),
+                                             NA)) %>%
+        dplyr::mutate(introduced_status = stringr::str_trim(introduced_status)) %>%
+        dplyr::mutate(tax_sp_level = as.character(tax_sp_level),
+                      tax_infra_level = as.character(tax_infra_level),
+                      tax_infra_level_auth = as.character(tax_infra_level_auth)) %>%
+        dplyr::select(-tax_famclass) %>%
+        left_join(dplyr::tbl(mydb, "table_tax_famclass") %>%
+                    dplyr::collect(),
+                  by = c("id_tax_famclass" = "id_tax_famclass")) %>%
+        dplyr::relocate(tax_famclass, .after = tax_order)
+
+
+      if(extract_traits) {
+        temp_table <-
+          tibble(id = unique(res$idtax_n), look_for = 1)
+
+        ## create a temporary table with new data
+        DBI::dbWriteTable(
+          mydb,
+          "temp_table",
+          temp_table,
+          overwrite = T,
+          fileEncoding = "UTF-8",
+          row.names = F
+        )
+
+        traits_found <-
+          dplyr::tbl(mydb, "table_traits_measures") %>%
+          dplyr::left_join(
+            dplyr::tbl(mydb, "temp_table"),
+            by = c("idtax" = "id")
+          ) %>%
+          filter(!is.na(look_for)) %>%
+          dplyr::select(-look_for) %>%
+          dplyr::left_join(tbl(mydb, "table_traits") %>%
+                             dplyr::select(trait, id_trait, valuetype),
+                           by = c("id_trait" = "id_trait")) %>%
+          dplyr::collect()
+
+
+        # traits_found <-
+        #   dplyr::tbl(mydb, "table_traits_measures") %>%
+        #   dplyr::filter(idtax %in% !!res$idtax_n) %>%
+        #   dplyr::left_join(tbl(mydb, "table_traits") %>%
+        #                      dplyr::select(trait, id_trait, valuetype),
+        #                    by = c("id_trait" = "id_trait")) %>%
+        #   dplyr::collect()
+
+        # traits_found <-
+        #   dplyr::tbl(mydb, "table_traits_measures") %>%
+        #   dplyr::filter(idtax == 37) %>%
+        #   dplyr::left_join(tbl(mydb, "table_traits") %>%
+        #                      dplyr::select(trait, id_trait, valuetype),
+        #                    by = c("id_trait" = "id_trait")) %>%
+        #   dplyr::collect()
+
+        # dplyr::tbl(mydb, "table_traits_measures") %>%
+        #   dplyr::select(id_trait, id_trait_measures, idtax) %>%
+        #   collect() %>%
+        #   group_by(idtax, id_trait) %>%
+        #   count() %>%
+        #   filter(n > 1)
+
+        # duplicates <- dplyr::tbl(mydb, "table_traits_measures") %>%
+        #   dplyr::select(id_trait, id_trait_measures, idtax, traitvalue_char, id_trait_measures) %>%
+        #   collect() %>%
+        #   group_by(idtax, id_trait, traitvalue_char) %>%
+        #   count() %>%
+        #   filter(n > 1)
+        #
+        #
+        # for (i in 1:length(unique(duplicates$idtax))) {
+        #
+        #   test <- duplicates %>%
+        #     filter(idtax == !!unique(duplicates$idtax)[i])
+        #
+        #   for (j in 1:nrow(test)) {
+        #
+        #
+        #     test2 <-
+        #       dplyr::tbl(mydb, "table_traits_measures") %>%
+        #       filter(idtax == !!unique(test$idtax),
+        #              id_trait == !!test$id_trait[j]) %>%
+        #       collect()
+        #
+        #     delete_entry_trait_measure(id = test2$id_trait_measures[1])
+        #
+        #   }
+        #
+        # }
+
+
+        # traits_idtax <-
+        #   traits_found %>%
+        #   dplyr::select(idtax, trait,  traitvalue_char) %>%
+        #   tidyr::pivot_wider(names_from = c(trait),
+        #                      values_from = c(traitvalue_char),
+        #                      values_fn = list(traitvalue_char = list))
+
+        if(nrow(traits_found) > 0) {
+          traits_idtax <-
+            traits_found %>%
+            dplyr::select(idtax, trait,  traitvalue_char, basisofrecord, id_trait_measures) %>%
+            mutate(rn = data.table::rowid(trait)) %>%
+            tidyr::pivot_wider(names_from = trait,
+                               values_from = c(traitvalue_char, basisofrecord, id_trait_measures)) %>%
+            select(-rn) %>%
+            group_by(idtax) %>%
+            # summarise_at(vars(-group_cols()), ~ stringr::str_c(unique(.)[!is.na(unique(.))], collapse = ", "))
+            summarise_at(vars(-group_cols()), ~ stringr::str_c(.[!is.na(.)], collapse = ", "))
+
+          res <-
+            res %>%
+            # dplyr::select(-a_habit, a_habit_secondary) %>%
+            left_join(traits_idtax,
+                      by = c("idtax_n" = "idtax"))
+
+        }
+
+
+
+      }
+
+
+
+    }
+
+    if(!is.null(res)) {
+      if (verbose & nrow(res) < 50) {
+
+        res_print <-
+          res %>%
+          dplyr::select(-fktax,-id_good,-tax_tax) %>%
+          dplyr::relocate(tax_infra_level_auth, .before = tax_order) %>%
+          dplyr::relocate(idtax_n, .before = tax_order) %>%
+          dplyr::relocate(idtax_good_n, .before = tax_order)
+
+        res_print <-
+          res_print %>%
+          mutate_all(~ as.character(.)) %>%
+          mutate_all(~ tidyr::replace_na(., ""))
+
+        as_tibble(cbind(columns = names(res_print), record = t(res_print))) %>%
+          kableExtra::kable(format = "html", escape = F) %>%
+          kableExtra::kable_styling("striped", full_width = F) %>%
+          print()
+
+      }
+
+
+      if(verbose & nrow(res) >= 20)
+        message("\n Not showing html table because too many taxa")
+    }
+
+
+
+    if(!is.null(res)) return(res)
+  }
+
+#' Merge individuals and taxonomic backbone
+#'
+#' Merge idividuals and taxonomic backbone
+#'#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#'
+#' @param id_individual numeric id of individuals to be extracted if any
+#' @param id_plot numeric id of plots to be extracted if any
+#'
+#'
+#' @return A src object with merged taxa
+#' @export
+merge_individuals_taxa <- function(id_individual = NULL, id_plot = NULL) {
+
+
+  # getting taxo identification from specimens
+  specimens_id_diconame <-
+    dplyr::tbl(mydb, "specimens") %>%
+    dplyr::select(id_specimen, idtax_n)
+
+  # getting all ids from diconames
+  diconames_id <-
+    dplyr::tbl(mydb, "table_taxa") %>%
+    dplyr::select(idtax_n, idtax_good_n) %>%
+    dplyr::mutate(idtax_f = ifelse(is.na(idtax_good_n), idtax_n, idtax_good_n))
+
+  # getting correct id_diconame considering synonymies
+  specimens_linked <-
+    specimens_id_diconame %>%
+    dplyr::left_join(diconames_id, by = c("idtax_n" = "idtax_n")) %>%
+    dplyr::rename(idtax_specimen_f = idtax_f)
+
+
+  if (!is.null(id_individual)) {
+
+    res_individuals_full <-
+      dplyr::tbl(mydb, "data_individuals") %>%
+      dplyr::filter(id_n %in% id_individual)
+
+  } else{
+
+    res_individuals_full <-
+      dplyr::tbl(mydb, "data_individuals")
+
+  }
+
+  ### getting links to specimens -
+  ## TO BE e_dED POTENTIALLY IF MORE THAN ONE SPECIMEN IS LINKED TO ONE INDIVIDUAL
+  ## CODE TO EXTRACT THE "BEST" IDENTIFICATION IF DIFFERENT TO BE IMPLEMENETED
+  links_specimens <-
+    dplyr::tbl(mydb, "data_link_specimens") %>%
+    dplyr::select(id_n, id_specimen) %>%
+    dplyr::group_by(id_n) %>%
+    dplyr::summarise(id_specimen = max(id_specimen, na.rm = T))
+
+  res_individuals_full <-
+    res_individuals_full %>%
+    dplyr::select(-id_specimen) %>%
+    dplyr::left_join(links_specimens,
+                     by=c("id_n"="id_n"))
+
+  if (!is.null(id_plot))
+    res_individuals_full <-
+    res_individuals_full %>%
+    dplyr::filter(id_table_liste_plots_n %in% !!id_plot)   #filtering for selected plots
+
+  res_individuals_full <-
+    res_individuals_full %>%
+    dplyr::left_join(diconames_id %>%
+                       dplyr::select(idtax_n, idtax_f),
+                     # dplyr::rename(id_diconame_good_n = idtax_good_n),
+                     by = c("idtax_n" = "idtax_n")) %>%
+    dplyr::left_join(specimens_linked %>%
+                       dplyr::select(id_specimen, idtax_specimen_f),
+                     by = c("id_specimen" = "id_specimen")) %>% # adding id_diconame for specimens
+    dplyr::mutate(idtax_individual_f = ifelse(
+      !is.na(idtax_specimen_f),
+      idtax_specimen_f,
+      idtax_f
+    )) %>% #### selecting id_dico_name from specimens if any
+    dplyr::left_join(
+      add_taxa_table_taxa() %>%
+        dplyr::select(-data_modif_d, -data_modif_m, -data_modif_y),
+      by = c("idtax_f" = "idtax_n")
+    ) ## getting taxa information based on id_diconame_final
+
+  return(res_individuals_full)
+
+}
+
+#' List, extract taxa
+#'
+#' Provide list of selected taxa
+#'
+#' @return A tibble of all taxa
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#'
+#'
+#'
+#' @return A src object with merged taxa
+#' @export
+add_taxa_table_taxa <- function() {
+
+  table_taxa <-
+    dplyr::tbl(mydb, "table_taxa") %>%
+    mutate(tax_sp_level = ifelse(!is.na(tax_esp), paste(tax_gen, tax_esp), NA)) %>%
+    mutate(tax_infra_level = ifelse(!is.na(tax_esp),
+                                    paste0(tax_gen,
+                                           " ",
+                                           tax_esp,
+                                           ifelse(!is.na(tax_rank01), paste0(" ", tax_rank01), ""),
+                                           ifelse(!is.na(tax_nam01), paste0(" ", tax_nam01), ""),
+                                           ifelse(!is.na(tax_rank02), paste0(" ", tax_rank02), ""),
+                                           ifelse(!is.na(tax_nam02), paste0(" ", tax_nam02), "")),
+                                    NA)) %>%
+    mutate(tax_infra_level_auth = ifelse(!is.na(tax_esp),
+                                         paste0(tax_gen,
+                                                " ",
+                                                tax_esp,
+                                                ifelse(!is.na(author1), paste0(" ", author1), ""),
+                                                ifelse(!is.na(tax_rank01), paste0(" ", tax_rank01), ""),
+                                                ifelse(!is.na(tax_nam01), paste0(" ", tax_nam01), ""),
+                                                ifelse(!is.na(author2), paste0(" ", author2), ""),
+                                                ifelse(!is.na(tax_rank02), paste0(" ", tax_rank02), ""),
+                                                ifelse(!is.na(tax_nam02), paste0(" ", tax_nam02), ""),
+                                                ifelse(!is.na(author3), paste0(" ", author3), "")),
+                                         NA))
+
+  return(table_taxa)
+}

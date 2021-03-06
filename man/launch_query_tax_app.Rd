@@ -2,7 +2,7 @@
 % Please edit documentation in R/functions_manip_db.R
 \name{launch_query_tax_app}
 \alias{launch_query_tax_app}
-\title{Launch shiny app for taxa}
+\title{Launch shiny app for taxonomic standardization}
 \usage{
 launch_query_tax_app()
 }
@@ -10,7 +10,7 @@ launch_query_tax_app()
 Launch in web browser the app
 }
 \description{
-Allow exploring the database by taxa - export individuals or taxa list and plot stem diameter and tree height
+Tool for standardizing taxonomy according to the taxonomic backbone (step needed before importing data to databases)
 }
 \author{
 Gilles Dauby, \email{gilles.dauby@ird.fr}
