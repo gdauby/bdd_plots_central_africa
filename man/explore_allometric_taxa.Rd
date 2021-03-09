@@ -2,7 +2,7 @@
 % Please edit documentation in R/functions_manip_db.R
 \name{explore_allometric_taxa}
 \alias{explore_allometric_taxa}
-\title{Query taxa}
+\title{Explore allometric relation}
 \usage{
 explore_allometric_taxa(
   genus_searched = NULL,
@@ -19,34 +19,15 @@ explore_allometric_taxa(
 \item{tax_fam_searched}{string}
 
 \item{id_search}{integer}
-
-\item{tax_name1_searched}{string}
-
-\item{show_synonymies}{logical}
-
-\item{extract_individuals}{logical}
-
-\item{verbose}{logical}
-
-\item{simple_ind_extract}{logical if TRUE only report IDs from individuals table}
 }
 \value{
 A tibble
 
 A tibble of taxa or individuals if extract_individuals is TRUE
-Explore allometric relation
-
-Provide allometric data and graph dbh-height of selected taxa
-
-A tibble
-
-A tibble of taxa or individuals if extract_individuals is TRUE
 }
 \description{
-Provide information on selected taxa
+Provide allometric data and graph dbh-height of selected taxa
 }
 \author{
-Gilles Dauby, \email{gilles.dauby@ird.fr}
-
 Gilles Dauby, \email{gilles.dauby@ird.fr}
 }
