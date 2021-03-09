@@ -1,146 +1,4 @@
 
-# launch_query_tax_app <- function() {
-#
-#   app <- list(ui = ui <- fluidPage(
-#
-#     # Application title
-#     titlePanel("Query plots"),
-#
-#     sidebarPanel(
-#       textInput("genus",
-#                 "Enter genus name", value=NULL),
-#
-#       textInput("species",
-#                 "Enter species name", value=NULL),
-#
-#       textInput("family",
-#                 "Enter family name", value=NULL),
-#
-#       checkboxInput("extract_ind", "Extract individuals?"),
-#       actionButton("launch_extract", "Extract", color = "#0040FF")
-#       # ,
-#       #
-#       # actionButton("do", "Launch query")
-#
-#     ),
-#
-#
-#     mainPanel(
-#       DT::DTOutput("table"),
-#
-#       verbatimTextOutput("test"),
-#
-#       plotOutput(outputId = "plots_allo", brush = "plot_brush"),
-#
-#       tableOutput("data_brush")
-#
-#     )
-#   ),
-#
-#   server = function(input, output, session) {
-#     # stop the serveur in the end of the session
-#     session$onSessionEnded(function() {
-#       stopApp()
-#     })
-#
-#     extract <- reactiveValues(df = NULL)
-#
-#     plot_dbh_h <- reactiveValues(df = NULL)
-#
-#     ids_selected <- reactiveValues(df = NULL)
-#
-#     data_height_dbh <- reactiveValues(df = NULL)
-#
-#     # all_val <- reactiveValues(val=NULL)
-#     # all_val$val <-
-#     #   paste(input$genus , input$species)
-#
-#     # xxchange <- reactive({
-#     #   paste(input$genus , input$species , input$family)
-#     # })
-#
-#     observeEvent(input$launch_extract, {
-#       # req(input$genus)
-#
-#       output$table <- DT::renderDataTable({
-#         extract$df <-
-#           query_tax_all(
-#             genus_searched = input$genus,
-#             tax_esp_searched = input$species,
-#             extract_individuals = input$extract_ind,
-#             tax_fam_searched = input$family,
-#             verbose = FALSE
-#           )
-#         extract$df
-#
-#       })
-#     })
-#
-#     observeEvent(input$launch_extract, {
-#       #
-#       # output$test <- renderPrint({
-#       #
-#       #   print(input$genus)
-#       #   print(input$species)
-#       #   print(data_height_dbh$df)
-#       #   # print(ids_selected$df)
-#       #
-#       # })
-#
-#       output$plots_allo <-
-#         renderPlot({
-#           # ids_selected$df <-
-#           #   query_tax_all(
-#           #     genus_searched = input$genus,
-#           #     tax_esp_searched = input$species,
-#           #     tax_fam_searched = input$family,
-#           #     verbose = FALSE
-#           #   ) %>%
-#           #   dplyr::select(id_n) %>%
-#           #   dplyr::pull()
-#
-#           # ids$vec <- id
-#           if (length(ids_selected$df) > 0) {
-#             # out_all <-
-#             #   explore_allometric_taxa(id_search = ids_selected$df)
-#             #
-#             # data_height_dbh$df <-
-#             #   out_all$data_height_dbh
-#             #
-#             # plot_dbh_h$df <- out_all$plot_height_dbh
-#             # #
-#             # plot_dbh_h$df
-#
-#           } else{
-#             return()
-#           }
-#         })
-#
-#
-#       output$data_brush <-
-#         renderTable({
-#           n <-
-#             nrow(brushedPoints(data_height_dbh$df, brush = input$plot_brush))
-#
-#           if (n == 0) {
-#             return()
-#           } else{
-#             brushedPoints(data_height_dbh$df, brush = input$plot_brush)
-#           }
-#
-#         })
-#
-#     })
-#
-#     # }
-#     # )
-#   })
-#   shiny::runApp(app, launch.browser = TRUE)
-#
-# }
-
-
-
 
 #' Launch shiny app for taxonomic standardization
 #'
@@ -152,7 +10,7 @@
 #'
 #' @import shiny
 #' @export
-launch_query_tax_app <- function() {
+launch_stand_tax_app <- function() {
 
   app <- list(ui = ui <- fluidPage(
     titlePanel("Standardisation de noms d'especes vegetales pour l'Afrique tropicale - correction des erreurs orthographiques et homogeneisation de la synonymie"),
@@ -1439,8 +1297,7 @@ launch_query_tax_app <- function() {
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
 #'
 #' @import shiny
-#' @export
-launch_stand_tax_app <- function() {
+launch_stand_tax_app_old <- function() {
 
   app <- list(ui = ui <- fluidPage(
     titlePanel("Standardisation de noms d'especes vegetales pour l'Afrique tropicale - correction des erreurs orthographiques et homogeneisation de la synonymie"),
