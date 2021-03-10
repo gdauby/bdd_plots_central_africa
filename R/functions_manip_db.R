@@ -95,6 +95,8 @@ launch_stand_tax_app <- function() {
 
   server = function(input, output, session) {
 
+    options(shiny.maxRequestSize=30*1024^2)
+
     # stop the serveur in the end of the session
     session$onSessionEnded(function() {
       stopApp()
@@ -102,9 +104,7 @@ launch_stand_tax_app <- function() {
 
     # options(shiny.maxRequestSize=30*1024^2)
 
-    if(!exists("mydb")) call.mydb()
-
-
+    # if(!exists("mydb")) call.mydb()
 
     val.nom.chosen <- reactiveValues(n = 1) ### Pointeur pour le nom a standardiser
     data.to.standardize.reac <- reactiveValues(df = NULL) ### reactive value destine a stocker la table des individus qui sera mise a jour
@@ -145,8 +145,9 @@ launch_stand_tax_app <- function() {
 
       shinybusy::show_spinner()
 
+      data(table_taxa_tb)
       DicoNames1 <-
-        dplyr::tbl(mydb, "table_taxa") %>%
+        table_taxa_tb %>%
         mutate(tax_sp_level = ifelse(!is.na(tax_esp), paste(tax_gen, tax_esp), NA)) %>%
         mutate(tax_infra_level = ifelse(!is.na(tax_esp),
                                         paste0(tax_gen,
@@ -168,8 +169,33 @@ launch_stand_tax_app <- function() {
                                                     ifelse(!is.na(tax_rank02), paste0(" ", tax_rank02), ""),
                                                     ifelse(!is.na(tax_nam02), paste0(" ", tax_nam02), ""),
                                                     ifelse(!is.na(author3), paste0(" ", author3), "")),
-                                             NA)) %>%
-        dplyr::collect()
+                                             NA))
+
+      # DicoNames1 <-
+      #   dplyr::tbl(mydb, "table_taxa") %>%
+      #   mutate(tax_sp_level = ifelse(!is.na(tax_esp), paste(tax_gen, tax_esp), NA)) %>%
+      #   mutate(tax_infra_level = ifelse(!is.na(tax_esp),
+      #                                   paste0(tax_gen,
+      #                                          " ",
+      #                                          tax_esp,
+      #                                          ifelse(!is.na(tax_rank01), paste0(" ", tax_rank01), ""),
+      #                                          ifelse(!is.na(tax_nam01), paste0(" ", tax_nam01), ""),
+      #                                          ifelse(!is.na(tax_rank02), paste0(" ", tax_rank02), ""),
+      #                                          ifelse(!is.na(tax_nam02), paste0(" ", tax_nam02), "")),
+      #                                   NA)) %>%
+      #   mutate(tax_infra_level_auth = ifelse(!is.na(tax_esp),
+      #                                        paste0(tax_gen,
+      #                                               " ",
+      #                                               tax_esp,
+      #                                               ifelse(!is.na(author1), paste0(" ", author1), ""),
+      #                                               ifelse(!is.na(tax_rank01), paste0(" ", tax_rank01), ""),
+      #                                               ifelse(!is.na(tax_nam01), paste0(" ", tax_nam01), ""),
+      #                                               ifelse(!is.na(author2), paste0(" ", author2), ""),
+      #                                               ifelse(!is.na(tax_rank02), paste0(" ", tax_rank02), ""),
+      #                                               ifelse(!is.na(tax_nam02), paste0(" ", tax_nam02), ""),
+      #                                               ifelse(!is.na(author3), paste0(" ", author3), "")),
+      #                                        NA)) %>%
+      #   dplyr::collect()
 
       DicoNames$df <- DicoNames1
 
@@ -5461,9 +5487,11 @@ update_subplots_table <- function(subplots_id = NULL,
                   additional_people = ifelse(!is.null(new_add_people), new_add_people,
                                              query_subplots$additional_people))
 
-  new_vals <-
-    new_vals %>%
-    replace(., is.na(.), -9999)
+
+
+  # new_vals <-
+  #   new_vals %>%
+  #   replace(., is.na(.), -9999)
 
   sel_query_subplots <-
     dplyr::bind_rows(
@@ -5472,10 +5500,13 @@ update_subplots_table <- function(subplots_id = NULL,
         dplyr::select(id_type_sub_plot, year, month, day, typevalue, id_colnam, additional_people)
     )
 
-  sel_query_subplots <-
-    sel_query_subplots %>%
-    mutate_if(is.character, ~ tidyr::replace_na(., "-9999")) %>%
-    mutate_if(is.numeric, ~ tidyr::replace_na(., -9999))
+
+  sel_query_subplots <- replace_NA(vec = sel_query_subplots)
+
+  # sel_query_subplots <-
+  #   sel_query_subplots %>%
+  #   mutate_if(is.character, ~ tidyr::replace_na(., "-9999")) %>%
+  #   mutate_if(is.numeric, ~ tidyr::replace_na(., -9999))
 
   comp_vals <-
     apply(
@@ -5821,12 +5852,12 @@ add_individuals <- function(new_data ,
   if(length(col_names_select) != length(col_names_corresp))
     stop("Provide same numbers of corresponding and selected colnames")
 
-  new_data_renamed <-
-    new_data %>%
-    dplyr::rename_at(dplyr::vars(col_names_select[id_col]), ~ col_names_corresp[id_col])
+  # new_data_renamed <-
+  #   new_data %>%
+  #   dplyr::rename_at(dplyr::vars(col_names_select[id_col]), ~ col_names_corresp[id_col])
 
   new_data_renamed <-
-    .rename_data(dataset = new_data_renamed,
+    .rename_data(dataset = new_data,
                  col_old = col_names_select,
                  col_new = col_names_corresp)
 
@@ -5925,20 +5956,20 @@ add_individuals <- function(new_data ,
     stop("More than one method selected, import plot of one method at a time")
   }
 
-  if (!any(colnames(new_data_renamed) == "id_diconame_n"))
-    stop("id_diconame_n column missing")
+  if (!any(colnames(new_data_renamed) == "idtax_n"))
+    stop("idtax_n column missing")
 
-  if (any(new_data_renamed$id_diconame_n == 0))
+  if (any(new_data_renamed$idtax_n == 0))
     stop(paste(
-      "id_diconame_n is NULL for",
-      sum(new_data_renamed$id_diconame_n == 0),
+      "idtax_n is NULL for",
+      sum(new_data_renamed$idtax_n == 0),
       "individuals"
     ))
 
-  if (any(is.na(new_data_renamed$id_diconame_n)))
+  if (any(is.na(new_data_renamed$idtax_n)))
     stop(paste(
-      "id_diconame_n is missing for",
-      sum(new_data_renamed$id_diconame_n == 0),
+      "idtax_n is missing for",
+      sum(new_data_renamed$idtax_n == 0),
       "individuals"
     ))
 
@@ -5947,11 +5978,12 @@ add_individuals <- function(new_data ,
     dplyr::select(idtax_n) %>%
     dplyr::left_join(
       dplyr::tbl(mydb, "table_taxa") %>%
-        dplyr::select(idtax_n, idtax_good_n) %>%
+        dplyr::select(idtax_n, tax_tax) %>%
+        filter(idtax_n %in% !!new_data_renamed$idtax_n) %>%
         dplyr::collect(),
       by = c("idtax_n" = "idtax_n")
     ) %>%
-    dplyr::filter(is.na(idtax_good_n)) %>%
+    dplyr::filter(is.na(tax_tax)) %>%
     dplyr::pull(idtax_n)
 
   if (length(unmatch_id_diconame) > 0)
@@ -5965,47 +5997,7 @@ add_individuals <- function(new_data ,
 
   }
 
-  #   warning(paste(sum(is.na(new_data_renamed$dbh)), "missing dbh values"))
-  #
-  #   logs <-
-  #     dplyr::bind_rows(logs,
-  #                      dplyr::tibble(
-  #                        column = "dbh",
-  #                        note = paste(sum(is.na(new_data_renamed$dbh)), "missing dbh values")
-  #                      ))
-  #
-  # }
 
-  # if(any(new_data_renamed$dbh[!is.na(new_data_renamed$dbh)]<0)) {
-  #   warning(paste(sum(new_data_renamed$dbh[!is.na(new_data_renamed$dbh)]<0),
-  #                 "negative dbh values"))
-  #
-  #   logs <-
-  #     dplyr::bind_rows(logs,
-  #                      dplyr::tibble(
-  #                        column = "dbh",
-  #                        note = paste(sum(new_data_renamed$dbh[!is.na(new_data_renamed$dbh)]<0),
-  #                                     "negative dbh values")
-  #                      ))
-  #
-  # }
-  #
-  # if(any(new_data_renamed$dbh[!is.na(new_data_renamed$dbh)]>300)) {
-  #   warning(paste(sum(new_data_renamed$dbh[!is.na(new_data_renamed$dbh)]>300),
-  #                 "excessive (>300) dbh values"))
-  #
-  #   print(new_data_renamed %>%
-  #           dplyr::filter(dbh>300))
-  #
-  #   logs <-
-  #     dplyr::bind_rows(logs,
-  #                      dplyr::tibble(
-  #                        column = "dbh",
-  #                        note = paste(sum(new_data_renamed$dbh[!is.na(new_data_renamed$dbh)]>300),
-  #                                     "excessive (>300) dbh values")
-  #                      ))
-  #
-  # }
 
   ## checking column given method
   if(dplyr::pull(method) == "Large") {
@@ -6118,6 +6110,44 @@ add_individuals <- function(new_data ,
 
       readr::write_excel_csv(duplicated_tags, "duplicated_tags.csv")
     }
+
+    if(any(names(new_data_renamed) == "multi_tiges_id")) {
+      cli::cli_alert_info("Checking multi tiges")
+
+      # all_multi_tiges <- new_data_renamed %>%
+      #   filter(!is.na(multi_tiges_id))
+
+      # all_multi_tiges %>%
+      #   dplyr::select(idtax_n, id_table_liste_plots_n) %>%
+      #   left_join(new_data_renamed %>%
+      #               dplyr::select(idtax_n, id_table_liste_plots_n))
+      #
+      # for (j in 1:length(unique(all_multi_tiges$id_table_liste_plots_n))) {
+      #
+      #   new_data_subset <-
+      #     new_data_renamed %>%
+      #     filter(id_table_liste_plots_n == unique(all_multi_tiges$id_table_liste_plots_n)[j])
+      #
+      #   all_multi_tiges_subset <-
+      #     all_multi_tiges %>%
+      #     filter(id_table_liste_plots_n == unique(all_multi_tiges$id_table_liste_plots_n)[j])
+      #
+      #   for (i in 1:nrow(all_multi_tiges_subset)) {
+      #
+      #     new_data_subset %>%
+      #       dplyr::select(ind_num_sous_plot, idtax_n) %>%
+      #       filter()
+      #
+      #
+      #
+      #   }
+      #
+      #
+      # }
+
+
+    }
+
   }
 
   ## checking ind_num_sous_plot
@@ -6138,9 +6168,9 @@ add_individuals <- function(new_data ,
   # check herbarium specimen coherence
 
   if (!any(colnames(new_data_renamed) == "herbarium_nbe_type"))
-    warning("herbarium_nbe_type column missing")
+    cli::cli_alert_danger("herbarium_nbe_type column missing")
   if (!any(colnames(new_data_renamed) == "herbarium_nbe_char"))
-    warning("herbarium_nbe_char column missing")
+    cli::cli_alert_danger("herbarium_nbe_char column missing")
 
   if (any(colnames(new_data_renamed) == "herbarium_nbe_char")) {
     all_herb_ref <-
@@ -6264,7 +6294,7 @@ add_individuals <- function(new_data ,
   if(any(colnames(new_data_renamed)=="herbarium_nbe_char")) {
     herb_ref_multiple_taxa <-
       new_data_renamed %>%
-      dplyr::distinct(herbarium_nbe_char, id_diconame_n) %>%
+      dplyr::distinct(herbarium_nbe_char, idtax_n) %>%
       dplyr::filter(!is.na(herbarium_nbe_char)) %>%
       dplyr::group_by(herbarium_nbe_char) %>%
       dplyr::count() %>%
@@ -6273,7 +6303,7 @@ add_individuals <- function(new_data ,
     herb_ref_multiple_taxa <-
       new_data_renamed %>%
       dplyr::filter(herbarium_nbe_char %in% dplyr::pull(herb_ref_multiple_taxa, herbarium_nbe_char)) %>%
-      dplyr::select(herbarium_nbe_char, original_tax_name, id_diconame_n) %>%
+      dplyr::select(herbarium_nbe_char, original_tax_name, idtax_n) %>%
       dplyr::distinct()
 
     if(nrow(herb_ref_multiple_taxa) > 0) {
@@ -7353,34 +7383,34 @@ query_specimens <- function(collector = NULL,
   if (nrow(query) == 1 & show_previous_modif) {
 
     ## get previous modifications of queried entries
-    modif_backups <-
-      dplyr::tbl(mydb, "followup_updates_specimens") %>%
-      dplyr::filter(id_specimen == !!query$id_specimen) %>%
-      dplyr::filter(grepl("idtax_n", modif_type)) %>%
-      dplyr::left_join(
-        dplyr::tbl(mydb, "table_taxa") %>%
-          dplyr::select(-detvalue,-data_modif_d,-data_modif_m,-data_modif_y),
-        by = c("id_diconame_n" = "id_n")
-      ) %>%
-      dplyr::left_join(dplyr::tbl(mydb, "table_colnam"),
-                       by = c("id_colnam" = "id_table_colnam")) %>%
-      dplyr::collect()
+    # modif_backups <-
+    #   dplyr::tbl(mydb, "followup_updates_specimens") %>%
+    #   dplyr::filter(id_specimen == !!query$id_specimen) %>%
+    #   dplyr::filter(grepl("idtax_n", modif_type)) %>%
+    #   dplyr::left_join(
+    #     dplyr::tbl(mydb, "table_taxa") %>%
+    #       dplyr::select(-data_modif_d,-data_modif_m,-data_modif_y),
+    #     by = c("id_diconame_n" = "idtax_n")
+    #   ) %>%
+    #   dplyr::left_join(dplyr::tbl(mydb, "table_colnam"),
+    #                    by = c("id_colnam" = "id_table_colnam")) %>%
+    #   dplyr::collect()
 
-    if(nrow(modif_backups) > 0) {
-
-            # cat("\n Previous modification in identification")
-      #
-      # print(modif_backups)
-
-      modif_backups <-
-        modif_backups %>%
-        dplyr::select(all_of(names(query)))
-
-    }else{
-
-      cli::cli_alert_info("No identification change in backups")
-
-    }
+    # if(nrow(modif_backups) > 0) {
+    #
+    #         # cat("\n Previous modification in identification")
+    #   #
+    #   # print(modif_backups)
+    #
+    #   modif_backups <-
+    #     modif_backups %>%
+    #     dplyr::select(all_of(names(query)))
+    #
+    # }else{
+    #
+    #   cli::cli_alert_info("No identification change in backups")
+    #
+    # }
   }
 
   if(generate_labels) {
@@ -7533,14 +7563,14 @@ query_specimens <- function(collector = NULL,
   nrow_query <-
     nrow(query)
 
-  if (nrow(query) == 1 & show_previous_modif) {
-
-    if(nrow(modif_backups) > 0)
-      query <-
-      bind_rows(query,
-                modif_backups)
-
-  }
+  # if (nrow(query) == 1 & show_previous_modif) {
+  #
+  #   if(nrow(modif_backups) > 0)
+  #     query <-
+  #     bind_rows(query,
+  #               modif_backups)
+  #
+  # }
 
   if(nrow(query) < 20)
   {
@@ -7549,24 +7579,24 @@ query_specimens <- function(collector = NULL,
                                                 fix.empty.names = T)) %>%
       mutate_all(~ tidyr::replace_na(., ""))
 
-    if(nrow(query) == 1 & show_previous_modif) {
-      if(nrow(modif_backups) > 0) {
-        for (i in ((nrow_query  + 2):(nrow(query)  + 1))) {
-
-          col_ <- colnames(res_html)[i]
-          var_new <-
-            rlang::parse_expr(rlang::quo_name(rlang::enquo(col_)))
-
-          res_html <-
-            res_html %>%
-            mutate(!!var_new :=
-                     kableExtra::cell_spec(!!var_new,
-                                           "html",
-                                           background = "grey",
-                                           color = "white", italic = T))
-        }
-      }
-    }
+    # if(nrow(query) == 1 & show_previous_modif) {
+    #   if(nrow(modif_backups) > 0) {
+    #     for (i in ((nrow_query  + 2):(nrow(query)  + 1))) {
+    #
+    #       col_ <- colnames(res_html)[i]
+    #       var_new <-
+    #         rlang::parse_expr(rlang::quo_name(rlang::enquo(col_)))
+    #
+    #       res_html <-
+    #         res_html %>%
+    #         mutate(!!var_new :=
+    #                  kableExtra::cell_spec(!!var_new,
+    #                                        "html",
+    #                                        background = "grey",
+    #                                        color = "white", italic = T))
+    #     }
+    #   }
+    # }
 
     res_html %>%
       kableExtra::kable(format = "html", escape = F) %>%
@@ -7924,20 +7954,20 @@ add_traits_measures <- function(new_data,
 
     new_data_renamed <-
       new_data_renamed %>%
-      dplyr::rename_at(all_of(dplyr::vars(id_tag_plot)), ~ id_tag)
+      dplyr::rename_at(dplyr::vars(all_of(id_tag_plot)), ~ id_tag)
 
 
     link_individuals <-
       new_data_renamed %>%
       dplyr::left_join(
         dplyr::tbl(mydb, "data_individuals") %>%
-          dplyr::select(id_diconame_n, id_n) %>% dplyr::collect(),
+          dplyr::select(idtax_n, id_n) %>% dplyr::collect(),
         by = c("id_n" = "id_n")
       )
 
-    if (dplyr::filter(link_individuals, is.na(id_diconame_n)) %>%
+    if (dplyr::filter(link_individuals, is.na(idtax_n)) %>%
         nrow() > 0) {
-      print(dplyr::filter(link_individuals, is.na(id_diconame_n)))
+      print(dplyr::filter(link_individuals, is.na(idtax_n)))
       stop("provided id individuals not found in data_individuals")
     }
 
@@ -9874,7 +9904,7 @@ replace_NA <- function(vec, inv = FALSE) {
 
   data_stand <-
     data_stand %>%
-    dplyr::rename_at(dplyr::vars(collector_field), ~ col_name)
+    dplyr::rename_at(dplyr::vars(all_of(collector_field)), ~ col_name)
 
   all_names_collector <-
     dplyr::distinct(data_stand, col_name)
@@ -12542,3 +12572,23 @@ add_taxa_table_taxa <- function() {
 
   return(table_taxa)
 }
+
+
+
+#' Table taxa
+#'
+#'
+#' Rainbio taxonomic backbone
+#'
+#' @docType data
+#'
+#' @usage data(table_taxa_tb)
+#'
+#' @format An object data.frame/tibble
+#'
+#' @keywords datasets
+#'
+#'
+#' @examples
+#' data(table_taxa_tb)
+"table_taxa_tb"
