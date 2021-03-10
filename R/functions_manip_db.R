@@ -31,9 +31,9 @@ launch_stand_tax_app <- function() {
 
       h4("   "),
 
-      radioButtons("dico.choix", "Utiliser le dictionnaire par defaut",
-                   c("oui","choisir un autre dictionnaire"),
-                   selected = "oui"),
+      # radioButtons("dico.choix", "Utiliser le dictionnaire par defaut",
+      #              c("oui","choisir un autre dictionnaire"),
+      #              selected = "oui"),
       # textInput("champ.nom", "Quel est le nom du champs contenant les noms a standardiser?",
       #              value = "Code"),
       uiOutput("Dico")
@@ -532,7 +532,8 @@ launch_stand_tax_app <- function() {
 
       output$Box1 = renderUI({
         req(input$data1)
-        if(input$dico.choix!="oui") req(input$data2)
+        # if(input$dico.choix!="oui")
+          # req(input$data2)
 
         ### 'truc' pour eviter de mal afficher les noms avec caracteres speciaux
 
@@ -554,8 +555,8 @@ launch_stand_tax_app <- function() {
         }else{
 
           radioButtons("choice.kind", "Chercher une correspondance dans",
-                       c("Noms sans auteurs","Noms avec auteurs"),
-                       selected = "Noms sans auteurs")
+                       c("Noms sans auteurs", "Noms avec auteurs"),
+                       selected = ifelse(input$authors, "Noms avec auteurs", "Noms sans auteurs") )
         }
       })
 
@@ -605,7 +606,8 @@ launch_stand_tax_app <- function() {
         }else{
 
           req(input$data1)
-          if(input$dico.choix!="oui") req(input$data2)
+          # if(input$dico.choix!="oui")
+            # req(input$data2)
 
           # Name1 <- original.list.name$df[as.numeric(input$sector)]
           Name1 <-
@@ -864,7 +866,7 @@ launch_stand_tax_app <- function() {
       output$list.sp.m <- renderTable({ # renderTable
 
         req(input$data1)
-        if(input$dico.choix!="oui") req(input$data2)
+        # if(input$dico.choix!="oui") req(input$data2)
 
         if (is.null(input$stock) || input$stock == " ") {
           return()
@@ -952,7 +954,7 @@ launch_stand_tax_app <- function() {
       output$table_chosen_sp <- renderTable({ # renderTable
 
         req(input$data1)
-        if(input$dico.choix!="oui") req(input$data2)
+        # if(input$dico.choix!="oui") req(input$data2)
 
         if (is.null(input$stock) || input$stock == " ") {
           return()
@@ -1054,7 +1056,7 @@ launch_stand_tax_app <- function() {
       observeEvent(input$confirm.name, {
 
         req(input$data1)
-        if(input$dico.choix!="oui") req(input$data2)
+        # if(input$dico.choix!="oui") req(input$data2)
 
         Name1 <-
           stand.list.name$df %>%
@@ -1174,7 +1176,7 @@ launch_stand_tax_app <- function() {
 
       observeEvent(input$no.match, {
         req(input$data1)
-        if(input$dico.choix!="oui") req(input$data2)
+        # if(input$dico.choix!="oui") req(input$data2)
 
         Name1 <-
           stand.list.name$df %>%
@@ -1251,7 +1253,7 @@ launch_stand_tax_app <- function() {
 
     # output$view <- renderPrint({
     #
-    #   print(data.to.standardize.reac$df)
+    #   print(input$authors)
     #
     #
     # })
@@ -2242,7 +2244,8 @@ query_plots <- function(team_lead = NULL,
                     dplyr::contains("date_census"))
 
     res_individuals_full <-
-      merge_individuals_taxa(id_individual = id_individual, id_plot = selec_plot_tables$id_liste_plots)
+      merge_individuals_taxa(id_individual = id_individual,
+                             id_plot = selec_plot_tables$id_liste_plots)
 
     if (!is.null(id_diconame))
       res_individuals_full <-
@@ -7004,13 +7007,25 @@ add_entry_dico_name <- function(tax_gen = NULL,
 #'
 #' @return No values
 #' @export
-delete_entry_dico_name <- function(id) {
+.delete_taxa <- function(id) {
 
   if(!exists("mydb")) call.mydb()
 
-  DBI::dbExecute(mydb,
-            "DELETE FROM diconame WHERE id_n=$1", params=list(id)
-  )
+  # DBI::dbExecute(mydb,
+  #                "DELETE FROM table_taxa WHERE idtax_n=$1", params=list(id)
+  # )
+
+  query <- "DELETE FROM table_taxa WHERE MMM"
+  query <-
+    gsub(
+      pattern = "MMM",
+      replacement = paste0("idtax_n IN ('",
+                           paste(unique(id), collapse = "', '"), "')"),
+      x = query
+    )
+
+  rs <- DBI::dbSendQuery(mydb, query)
+  DBI::dbClearResult(rs)
 }
 
 #' Delete an entry in subplotype_list table
@@ -7112,7 +7127,7 @@ delete_entry_dico_name <- function(id) {
   if(!is.null(id_ind)) {
     selected_link <-
       dplyr::tbl(mydb, "data_link_specimens") %>%
-      dplyr::filter(id_n %in% id_ind) %>%
+      dplyr::filter(id_n %in% !!id_ind) %>%
       dplyr::collect() %>%
       as.data.frame()
     print(selected_link)
@@ -7157,9 +7172,22 @@ delete_entry_dico_name <- function(id) {
 
   if(!exists("mydb")) call.mydb()
 
-  DBI::dbExecute(mydb,
-                 "DELETE FROM data_individuals WHERE id_n=$1", params=list(id)
-  )
+  # DBI::dbExecute(mydb,
+  #                "DELETE FROM data_individuals WHERE id_n=$1", params=list(id)
+  # )
+
+  query <- "DELETE FROM data_individuals WHERE MMM"
+  query <-
+    gsub(
+      pattern = "MMM",
+      replacement = paste0("id_n IN ('",
+                           paste(unique(id), collapse = "', '"), "')"),
+      x = query
+    )
+
+  rs <- DBI::dbSendQuery(mydb, query)
+  DBI::dbClearResult(rs)
+
 }
 
 
@@ -9820,6 +9848,9 @@ replace_NA <- function(vec, inv = FALSE) {
 
     matches <-
       dplyr::left_join(select_col_new, select_col_old, by = c("id"="id"))
+
+    replace_NA(vec = matches)
+
 
     matches[,2] <-
       replace_NA(vec = matches[,2])
@@ -12524,8 +12555,8 @@ merge_individuals_taxa <- function(id_individual = NULL, id_plot = NULL) {
     dplyr::left_join(
       add_taxa_table_taxa() %>%
         dplyr::select(-data_modif_d, -data_modif_m, -data_modif_y),
-      by = c("idtax_f" = "idtax_n")
-    ) ## getting taxa information based on id_diconame_final
+      by = c("idtax_individual_f" = "idtax_n")
+    )
 
   return(res_individuals_full)
 
