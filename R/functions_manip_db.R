@@ -512,7 +512,7 @@ launch_stand_tax_app <- function() {
         }else{
 
           radioButtons("nbe_choice", "Nombre de noms similaires propose",
-                       c("Top 10", "Top 20", "Top 30", "Tous"),
+                       c("Top 10", "Top 20", "Top 30"),
                        selected = "Top 10")
 
         }
@@ -705,9 +705,9 @@ launch_stand_tax_app <- function() {
           if (input$nbe_choice == "Top 30")
             nbe.match <-
             30 ### Nombre de proposition pour la correspondance a afficher
-          if (input$nbe_choice == "Tous")
-            nbe.match <-
-            length(dist.[!is.na(dist.)]) ### Nombre de proposition pour la correspondance a afficher
+          # if (input$nbe_choice == "Tous")
+          #   nbe.match <-
+          #   length(dist.[!is.na(dist.)]) ### Nombre de proposition pour la correspondance a afficher
 
           # test_dat$df <- dico_genus[order(dist., decreasing = T),]
 
@@ -1616,7 +1616,7 @@ query_plots <- function(team_lead = NULL,
 
     id_plot <-
       merge_individuals_taxa() %>%
-      filter(idtax_individual_f == !!id_diconame) %>%
+      filter(idtax_individual_f %in% !!id_diconame) %>%
       pull(id_table_liste_plots_n)
 
     # id_plot <-
@@ -2481,10 +2481,9 @@ explore_allometric_taxa <- function(genus_searched = NULL,
   if(!exists("mydb")) call.mydb()
 
   res_taxa <- query_taxa(
-    genus_searched = genus_searched,
-    tax_esp_searched =
-      tax_esp_searched,
-    id_search = id_search, verbose = F)
+    genus = genus_searched,
+    species = tax_esp_searched,
+    ids =  id_search, verbose = F)
 
   tax_data <-
     query_plots(id_diconame = res_taxa$idtax_n)
@@ -3263,6 +3262,7 @@ herbarium_label <-
 #' @importFrom methods new
 #' @importFrom stats dist sd
 #' @importFrom utils askYesNo data
+#' @importFrom kableExtra cell_spec kable_styling
 #'
 #' @return No return value, new plots are added
 #' @export
@@ -4083,6 +4083,7 @@ update_ident_specimens <- function(colnam = NULL,
   }
 
   if (nrow(queried_speci) > 0) {
+
     print(
       queried_speci %>%
         dplyr::select(
@@ -4116,12 +4117,19 @@ update_ident_specimens <- function(colnam = NULL,
         query_taxa(genus = new_genus,
                    species = new_species,
                    family = new_family,
-                   check_synonymy = F
+                   check_synonymy = F,
+                   extract_traits = F,
+                   class = NULL
         )
     } else {
 
       query_new_taxa <-
-        query_taxa(ids = id_new_taxa, check_synonymy = F)
+        query_taxa(
+          ids = id_new_taxa,
+          check_synonymy = F,
+          extract_traits = F,
+          class = NULL
+        )
 
     }
 
@@ -4199,11 +4207,12 @@ update_ident_specimens <- function(colnam = NULL,
       # comp_values <- comp_values %>%
       #   dplyr::select_if(~sum(!is.na(.)) > 0)
 
-    }else{
+    } else{
       comp_values <- TRUE
     }
 
-    if(only_new_ident & nbr_new_taxa_ok & any(comp_values==TRUE)) {
+    if (only_new_ident & nbr_new_taxa_ok & any(comp_values == TRUE)
+    ) {
       if(any(comp_values %>%
              dplyr::select_if(~sum(.) > 0) %>%
              colnames() == "idtax_n")) {
@@ -4318,7 +4327,7 @@ update_ident_specimens <- function(colnam = NULL,
     }
 
     return(NA)
-  }else{
+  } else {
 
     cat("\n SPECIMEN NOT FOUND")
     return(dplyr::tibble(collector = dplyr::tbl(mydb, "table_colnam") %>%
@@ -4344,6 +4353,8 @@ update_ident_specimens <- function(colnam = NULL,
 #'
 #' @param vec_1 tibble one row and same col numbers of vec_2
 #' @param vec_2 tibble one row and same col numbers of vec_1
+#'
+#' @importFrom kableExtra cell_spec kable_styling
 #'
 #' @return A list with one tibble of logical and a html table
 #' @export
@@ -4407,10 +4418,10 @@ update_ident_specimens <- function(colnam = NULL,
 
     if (any(colnames(vec_1) == "idtax_n")) {
       old_tax <-
-        query_taxa(ids = vec_2$idtax_n, check_synonymy = F)
+        query_taxa(ids = vec_2$idtax_n, check_synonymy = F, class = NULL, extract_traits = F)
 
       new_tax <-
-        query_taxa(ids = vec_1$idtax_n, check_synonymy = F)
+        query_taxa(ids = vec_1$idtax_n, check_synonymy = F, class = NULL, extract_traits = F)
 
       vec_1 <-
         vec_1 %>%
@@ -11688,8 +11699,8 @@ growth_computing <- function(dataset,
               selected_dataset %>%
                 dplyr::select(
                   id_n,
-                  id_diconame_final,
-                  full_name_no_auth,
+                  idtax_individual_f,
+                  tax_sp_level,
                   tax_fam,
                   tax_gen,
                   tax_esp,
@@ -11703,7 +11714,7 @@ growth_computing <- function(dataset,
             dplyr::relocate(plot_name,
                             sous_plot_name,
                             ind_num_sous_plot,
-                            full_name_no_auth,
+                            tax_sp_level,
                             tax_fam,
                             tax_gen,
                             tax_esp,
@@ -11773,8 +11784,8 @@ growth_computing <- function(dataset,
             selected_dataset %>%
               dplyr::select(
                 id_n,
-                id_diconame_final,
-                full_name_no_auth,
+                idtax_individual_f,
+                tax_sp_level,
                 tax_fam,
                 tax_gen,
                 tax_esp,
