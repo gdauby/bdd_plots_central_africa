@@ -11972,7 +11972,7 @@ growth_computing <- function(dataset,
 #' @export
 query_taxa <-
   function(
-    class = c("Magnoliopsida", "Pinopsida", "Lycopsida", "Pteropsida"),
+    class = NULL,
     family = NULL,
     genus = NULL,
     order = NULL,
