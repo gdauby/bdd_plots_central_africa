@@ -24,7 +24,7 @@ query_plots(
   id_diconame = NULL,
   show_multiple_census = FALSE,
   show_all_coordinates = FALSE,
-  remove_ids = TRUE,
+  remove_ids = FALSE,
   collapse_multiple_val = FALSE
 )
 }

@@ -1582,7 +1582,7 @@ query_plots <- function(team_lead = NULL,
                         id_diconame = NULL,
                         show_multiple_census = FALSE,
                         show_all_coordinates = FALSE,
-                        remove_ids = TRUE,
+                        remove_ids = FALSE,
                         collapse_multiple_val = FALSE) {
 
   if(!exists("mydb")) call.mydb()
@@ -2331,7 +2331,6 @@ query_plots <- function(team_lead = NULL,
   }
 
   # dbDisconnect(mydb)
-
 
   res_list <-
     list(
@@ -3288,12 +3287,12 @@ add_plots <- function(new_data,
 
   ## Checking dates
   if (any(colnames(new_data_renamed) == "date_y"))
-    if (any(new_data_renamed$date_y > lubridate::year(Sys.Date())) |
-        any(new_data_renamed$date_y < 1900))
+    if (any(new_data_renamed$date_y[!is.na(new_data_renamed$date_y)] > lubridate::year(Sys.Date())) |
+        any(new_data_renamed$date_y[!is.na(new_data_renamed$date_y)] < 1900))
       stop("ERREUR dans date_y, year provided impossible")
   if (any(colnames(new_data_renamed) == "date_m"))
-    if (any(new_data_renamed$date_m > 12) |
-        any(new_data_renamed$date_m < 1))
+    if (any(new_data_renamed$date_m[!is.na(new_data_renamed$date_m)] > 12) |
+        any(new_data_renamed$date_m[!is.na(new_data_renamed$date_m)] < 1))
       stop("ERREUR dans date_m, month provided impossible")
   if (any(colnames(new_data_renamed) == "data_d"))
     if (any(new_data_renamed$data_d[!is.na(new_data_renamed$data_d)] > 31) |
@@ -4060,7 +4059,8 @@ update_ident_specimens <- function(colnam = NULL,
                                    new_detvalue = NULL,
                                    add_backup = TRUE,
                                    show_results = TRUE,
-                                   only_new_ident = T) {
+                                   only_new_ident = TRUE,
+                                   ask_before_update = TRUE) {
 
   if(!exists("mydb")) call.mydb()
 
@@ -4276,7 +4276,12 @@ update_ident_specimens <- function(colnam = NULL,
       #         dplyr::select(-full_name_used, -full_name_used2) %>%
       #         as.data.frame())
 
-      confirmed <- utils::askYesNo("Confirm this update?")
+      if (ask_before_update) {
+        confirmed <- utils::askYesNo("Confirm this update?")
+      } else
+      {
+        confirmed <- TRUE
+      }
 
       if(confirmed) {
         if(add_backup) {
@@ -6222,6 +6227,8 @@ add_individuals <- function(new_data ,
       if(nrow(missing_herb_type) > 0) {
 
         cli::cli_alert_danger("Some specimens type not represented in specimens links")
+
+        print(missing_herb_type)
 
         complete_type_specimen <-
           askYesNo(msg = "Complete automatically type specimen by taking the first individual?")
@@ -9009,12 +9016,15 @@ add_specimens <- function(new_data ,
     tibble::add_column(id_new_data=1:nrow(.))
 
   for (i in 1:length(col_names_select)) {
-    if(any(colnames(new_data_renamed)==col_names_select[i])){
+    if (any(colnames(new_data_renamed) == col_names_select[i])) {
       new_data_renamed <-
         new_data_renamed %>%
         dplyr::rename_at(dplyr::vars(col_names_select[i]), ~ col_names_corresp[i])
-    }else{
-      stop(paste("Column name provided not found in provided new dataset", col_names_select[i]))
+    } else{
+      stop(paste(
+        "Column name provided not found in provided new dataset",
+        col_names_select[i]
+      ))
     }
   }
 
@@ -9023,36 +9033,37 @@ add_specimens <- function(new_data ,
 
   new_data_renamed <-
     new_data_renamed %>%
-    dplyr::select(col_names_corresp)
+    dplyr::select(all_of(col_names_corresp))
 
   ### check diconame id
-  if(!any(colnames(new_data_renamed)=="id_diconame_n")) stop("id_diconame_n column missing")
+  if(!any(colnames(new_data_renamed)=="idtax_n")) stop("idtax_n column missing")
 
-  if (any(new_data_renamed$id_diconame_n == 0))
+  if (any(new_data_renamed$idtax_n == 0))
     stop(paste(
-      "id_diconame_n is NULL for",
-      sum(new_data_renamed$id_diconame_n == 0),
+      "idtax_n is NULL for",
+      sum(new_data_renamed$idtax_n == 0),
       "individuals"
     ))
 
-  if (any(is.na(new_data_renamed$id_diconame_n)))
+  if (any(is.na(new_data_renamed$idtax_n)))
     stop(paste(
-      "id_diconame_n is missing for",
-      sum(new_data_renamed$id_diconame_n == 0),
+      "idtax_n is missing for",
+      sum(new_data_renamed$idtax_n == 0),
       "individuals"
     ))
 
   unmatch_id_diconame <-
     new_data_renamed %>%
-    dplyr::select(id_diconame_n) %>%
-    dplyr::left_join(dplyr::tbl(mydb, "diconame") %>%
-                       dplyr::select(id_n, id_good_n) %>%
-                       dplyr::collect(), by=c("id_diconame_n"="id_n")) %>%
-    dplyr::filter(is.na(id_good_n)) %>%
-    dplyr::pull(id_diconame_n)
+    dplyr::select(idtax_n) %>%
+    dplyr::left_join(dplyr::tbl(mydb, "table_taxa") %>%
+                       dplyr::select(idtax_n, idtax_good_n) %>%
+                       dplyr::collect() %>%
+                       dplyr::mutate(tag = 1), by=c("idtax_n" = "idtax_n")) %>%
+    dplyr::filter(is.na(tag)) %>%
+    dplyr::pull(idtax_n)
 
   if (length(unmatch_id_diconame) > 0)
-    stop(paste("id_diconame not found in diconame", unmatch_id_diconame))
+    stop(paste("idtax_n not found in table_taxa", unmatch_id_diconame))
 
 
   ### check locality and adding it if link to plots
@@ -9158,14 +9169,14 @@ add_specimens <- function(new_data ,
   }
 
   ### Linking collectors names
-  if(!is.null(collector_field)) {
+  if (!is.null(collector_field)) {
     # data_stand = new_data_renamed
     # collector_field = 1
     new_data_renamed <-
       .link_colnam(data_stand = new_data_renamed,
                    collector_field = collector_field)
-  }else{
-    if(!any(colnames(new_data_renamed) == "id_colnam"))
+  } else{
+    if (!any(colnames(new_data_renamed) == "id_colnam"))
       stop("indicate the field if of collector name for standardizing")
   }
 
@@ -9188,17 +9199,26 @@ add_specimens <- function(new_data ,
       mutate(dety = as.numeric(dety))
   }
 
+  if (!any(names(new_data_renamed) == "suffix")) {
 
+    new_data_renamed <-
+      new_data_renamed %>%
+      dplyr::mutate(suffix = NA) %>%
+      dplyr::mutate(suffix = as.character(suffix))
 
+  }
 
   ## check if not duplicates in new specimens
   dup_imported_datasets <-
     new_data_renamed %>%
-    dplyr::select(colnbr, id_colnam, id_new_data) %>%
-    dplyr::mutate(combined = paste(colnbr, id_colnam, sep = "-")) %>%
-    dplyr::group_by(combined) %>%
-    dplyr::count() %>%
-    dplyr::filter(n > 1)
+    dplyr::select(colnbr, id_colnam, suffix, id_new_data) %>%
+    group_by(colnbr, id_colnam, suffix) %>%
+    count() %>%
+    filter(n > 1)
+    # dplyr::mutate(combined = paste(colnbr, id_colnam, sep = "-")) %>%
+    # dplyr::group_by(combined) %>%
+    # dplyr::count() %>%
+    # dplyr::filter(n > 1)
 
   if (nrow(dup_imported_datasets) > 0) {
     print(dup_imported_datasets)
@@ -9290,7 +9310,7 @@ add_specimens <- function(new_data ,
                        data_modif_m=lubridate::month(Sys.Date()),
                        data_modif_y=lubridate::year(Sys.Date()))
 
-  if(any(colnames(new_data_renamed)=="col_name"))
+  if (any(colnames(new_data_renamed) == "col_name"))
     new_data_renamed <-
     new_data_renamed %>%
     dplyr::select(-col_name)
@@ -9860,13 +9880,13 @@ replace_NA <- function(vec, inv = FALSE) {
     matches <-
       dplyr::left_join(select_col_new, select_col_old, by = c("id"="id"))
 
-    replace_NA(vec = matches)
+    matches <- replace_NA(vec = matches)
 
 
-    matches[,2] <-
-      replace_NA(vec = matches[,2])
-    matches[,3] <-
-      replace_NA(vec = matches[,3])
+    # matches[,2] <-
+    #   replace_NA(vec = matches[,2])
+    # matches[,3] <-
+    #   replace_NA(vec = matches[,3])
 
     # matches[is.na(matches[,2]), 2] <- -9999
     # matches[is.na(matches[,3]), 3] <- -9999

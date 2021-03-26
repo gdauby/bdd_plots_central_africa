@@ -19,7 +19,8 @@ update_ident_specimens(
   new_detvalue = NULL,
   add_backup = TRUE,
   show_results = TRUE,
-  only_new_ident = T
+  only_new_ident = TRUE,
+  ask_before_update = TRUE
 )
 }
 \arguments{
