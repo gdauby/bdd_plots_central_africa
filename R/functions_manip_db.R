@@ -12654,3 +12654,60 @@ add_taxa_table_taxa <- function() {
 #' @examples
 #' data(table_taxa_tb)
 "table_taxa_tb"
+
+
+#' Get species-plot data frame
+#'
+#' Convert the extract of database into a species-plot data frame
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#'
+#'
+#' @return A data frame with taxa as row, plot as columns and values as number of individuals
+#' @export
+species_plot_matrix <- function(data_tb, tax_col = "tax_sp_level", plot_col = "plot_name") {
+
+  tax_col_enquo <-
+    rlang::parse_expr(rlang::quo_name(rlang::enquo(tax_col)))
+  plot_col_enquo <-
+    rlang::parse_expr(rlang::quo_name(rlang::enquo(plot_col)))
+
+  nbe_row_identified <-
+    data_tb %>%
+    filter(!is.na(!!tax_col_enquo)) %>%
+    nrow()
+
+  if (nbe_row_identified != nrow(data_tb)) {
+
+      cli::cli_alert_info("Removing {nrow(data_tb) - nbe_row_identified} unidentified individuals")
+
+    data_tb <-
+      data_tb %>%
+      filter(!is.na(!!tax_col_enquo))
+
+  }
+
+  data_tb_grouped <-
+    data_tb %>%
+    dplyr::mutate(ab = 1) %>%
+    dplyr::group_by(!!plot_col_enquo, !!tax_col_enquo) %>%
+    summarise(ab = sum(ab)) %>%
+    ungroup()
+
+  data_mat_tb <-
+    tidyr::pivot_wider(data = data_tb_grouped,
+                       names_from = !!plot_col_enquo,
+                       values_from = ab,
+                       values_fill = list(ab = 0))
+
+  ## format the tibble into a matrix
+  data_mat <- data_mat_tb %>% dplyr::select(-!!tax_col_enquo) %>%  as.data.frame()
+  row.names(data_mat) <-
+    data_mat_tb %>%
+    dplyr::select(!!tax_col_enquo) %>%
+    dplyr::pull()
+
+  return(data_mat)
+}
+
+
