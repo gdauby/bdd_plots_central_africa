@@ -12656,6 +12656,24 @@ add_taxa_table_taxa <- function() {
 "table_taxa_tb"
 
 
+#' phylo_tree
+#'
+#' Phylogeny from Janssens et al 2020
+#'
+#' @docType data
+#'
+#' @usage data(phylo_tree)
+#'
+#' @format An object of class phylo
+#'
+#' @keywords datasets
+#'
+#'
+#' @examples
+#' data(phylo_tree)
+"phylo_tree"
+
+
 #' Get species-plot data frame
 #'
 #' Convert the extract of database into a species-plot data frame
