@@ -125,6 +125,8 @@ launch_stand_tax_app <- function() {
       # file.rename(input$data1$datapath,
       #             paste(input$data1$datapath, ".xlsx", sep=""))
 
+      # DATA <- readxl::read_xlsx("D:/MonDossierR/database.transects/individuals_to_be_added/new_individuals_IDU.xlsx", sheet =  1)
+
       DATA <- readxl::read_xlsx(input$data1$datapath, sheet =  1)
 
 
@@ -1630,8 +1632,30 @@ query_plots <- function(team_lead = NULL,
 
     query <- 'SELECT * FROM data_liste_plots WHERE MMM'
 
-    if(!is.null(team_lead))
-      query <- gsub(pattern = "MMM", replacement = paste0(" team_leader ILIKE '%", team_lead, "%' AND MMM"), x=query)
+    if(!is.null(team_lead)) {
+
+      id_liste_plots_match <- vector('list', length(team_lead))
+      for (i in 1:length(team_lead)) {
+
+        query_colnam <-
+          paste0("SELECT * FROM table_colnam WHERE colnam ILIKE '%", team_lead[i], "%'")
+
+        rs_col <- DBI::dbSendQuery(mydb, query_colnam)
+        rs_colnam <- DBI::dbFetch(rs_col)
+        DBI::dbClearResult(rs_col)
+        rs_colnam <- dplyr::as_tibble(rs_colnam)
+        id_liste_plots_match[[i]] <- rs_colnam$id_table_colnam
+      }
+
+      query <-
+        gsub(
+          pattern = "MMM",
+          replacement = paste0("id_colnam IN ('", paste(unlist(id_liste_plots_match), collapse = "', '"), "') AND MMM"),
+          x = query
+        )
+
+    }
+      # query <- gsub(pattern = "MMM", replacement = paste0(" team_leader ILIKE '%", team_lead, "%' AND MMM"), x=query)
 
     # query <- "SELECT * FROM data_liste_plots WHERE  team_leader ILIKE '%Dauby%' AND country IN ('Gabon', 'Cameroun')"
 
@@ -1792,15 +1816,6 @@ query_plots <- function(team_lead = NULL,
       dplyr::select(-id_old)
 
 
-    ## link method
-    res <-
-      res %>%
-      dplyr::select(-method) %>% # remove old method
-      dplyr::left_join(dplyr::tbl(mydb, "methodslist") %>%
-                         dplyr::collect(),
-                       by = c("id_method" = "id_method")) %>%
-      dplyr::relocate(method, .after = data_provider)
-
 
   } else {
 
@@ -1813,6 +1828,25 @@ query_plots <- function(team_lead = NULL,
       dplyr::select(-id_old)
 
   }
+
+  ## link method
+  res <-
+    res %>%
+    dplyr::select(-method) %>% # remove old method
+    dplyr::left_join(dplyr::tbl(mydb, "methodslist") %>%
+                       dplyr::collect(),
+                     by = c("id_method" = "id_method")) %>%
+    dplyr::relocate(method, .after = data_provider)
+
+  ## link colnam
+  res <-
+    res %>%
+    dplyr::select(-team_leader) %>% # remove old method
+    dplyr::left_join(dplyr::tbl(mydb, "table_colnam") %>%
+                       dplyr::collect(),
+                     by = c("id_colnam" = "id_table_colnam")) %>%
+    dplyr::rename(team_leader = colnam) %>%
+    dplyr::relocate(team_leader, .after = plot_name)
 
   if (nrow(res) == 0)
     stop("No plot are found based on inputs")
@@ -2448,7 +2482,8 @@ query_subplots <- function(team_lead = NULL,
                   valuetype,
                   typevalue,
                   typevalue_char,
-                  original_subplot_name)
+                  original_subplot_name,
+                  id_sub_plots)
 
   return(extracted_data)
 
@@ -3389,6 +3424,7 @@ add_plots <- function(new_data,
 #' @param id_plot_name string id of plot_name
 #' @param subplottype_field string vector listing trait columns names in new_data
 #' @param add_data logical whether or not data should be added - by default FALSE
+#' @param ask_before_update logical ask before adding
 #'
 #' @export
 add_subplot_features <- function(new_data,
@@ -3399,7 +3435,8 @@ add_subplot_features <- function(new_data,
                                  id_plot_name = NULL,
                                  id_plot_name_corresp = "id_table_liste_plots_n",
                                  subplottype_field,
-                                 add_data = FALSE) {
+                                 add_data = FALSE,
+                                 ask_before_update = TRUE) {
 
   if(!exists("mydb")) call.mydb()
 
@@ -3467,7 +3504,7 @@ add_subplot_features <- function(new_data,
 
     new_data_renamed <-
       new_data_renamed %>%
-      dplyr::rename_at(dplyr::vars(id_plot_name), ~ id_plot_name_corresp)
+      dplyr::rename_at(dplyr::all_of(dplyr::vars(id_plot_name)), ~ id_plot_name_corresp)
 
     if(any(colnames(new_data_renamed) == "plot_name"))
       new_data_renamed <-
@@ -3524,6 +3561,7 @@ add_subplot_features <- function(new_data,
 
     subplottype_name <-
       "subplottype"
+
     data_subplottype <-
       data_subplottype %>%
       dplyr::rename_at(dplyr::all_of(dplyr::vars(subplottype)), ~ subplottype_name)
@@ -3612,9 +3650,14 @@ add_subplot_features <- function(new_data,
     print(data_to_add)
 
   if(continue) {
-    response <-
-      utils::askYesNo("Confirm add these data to data_liste_sub_plots table?")
-  }else{
+
+    if (ask_before_update) {
+      response <-
+        utils::askYesNo("Confirm add these data to data_liste_sub_plots table?")
+    } else {
+      response <- TRUE
+    }
+  } else {
     response <- FALSE
   }
 
@@ -3698,6 +3741,7 @@ update_plot_data <- function(team_lead = NULL,
                              new_method = NULL,
                              new_province = NULL,
                              new_data_provider = NULL,
+                             new_locality_name = NULL,
                              add_backup = TRUE,
                              ask_before_update = TRUE) {
 
@@ -3742,7 +3786,8 @@ update_plot_data <- function(team_lead = NULL,
         ddlon = ifelse(!is.null(new_ddlon), new_ddlon, quer_plots$ddlon),
         elevation = ifelse(!is.null(new_elevation), new_elevation, quer_plots$elevation),
         province = ifelse(!is.null(new_province), new_province, quer_plots$province),
-        data_provider = ifelse(!is.null(new_data_provider), new_data_provider, quer_plots$data_provider)
+        data_provider = ifelse(!is.null(new_data_provider), new_data_provider, quer_plots$data_provider),
+        locality_name = ifelse(!is.null(new_locality_name), new_locality_name, quer_plots$locality_name)
       )
 
     # quer_plots_sel <-
@@ -3838,7 +3883,7 @@ update_plot_data <- function(team_lead = NULL,
         }
 
         rs <-
-          DBI::dbSendQuery(mydb, statement="UPDATE data_liste_plots SET plot_name = $2, id_method = $3, team_leader = $4, country = $5, ddlat = $6, ddlon = $7, elevation = $8, province = $9, data_provider = $10, data_modif_d=$11, data_modif_m=$12, data_modif_y=$13 WHERE id_liste_plots = $1",
+          DBI::dbSendQuery(mydb, statement="UPDATE data_liste_plots SET plot_name = $2, id_method = $3, team_leader = $4, country = $5, ddlat = $6, ddlon = $7, elevation = $8, province = $9, data_provider = $10, locality_name = $11, data_modif_d=$12, data_modif_m=$13, data_modif_y=$14 WHERE id_liste_plots = $1",
                       params=list(quer_plots$id_liste_plots, # $1
                                   new_values$plot_name, # $2
                                   new_values$id_method, # $3
@@ -3848,10 +3893,11 @@ update_plot_data <- function(team_lead = NULL,
                                   new_values$ddlon, # $7
                                   new_values$elevation, # $8
                                   new_values$province, # $9
-                                  new_values$data_provider, # $10
-                                  lubridate::day(Sys.Date()), # $11
-                                  lubridate::month(Sys.Date()), # $12
-                                  lubridate::year(Sys.Date()))) # $13
+                                  new_values$data_provider, # $10,
+                                  new_values$locality_name, # $11
+                                  lubridate::day(Sys.Date()), # $12
+                                  lubridate::month(Sys.Date()), # $13
+                                  lubridate::year(Sys.Date()))) # $14
 
         # if(show_results) print(dbFetch(rs))
         DBI::dbClearResult(rs)
@@ -4057,6 +4103,8 @@ update_ident_specimens <- function(colnam = NULL,
                                    new_dety = NULL,
                                    new_detby = NULL,
                                    new_detvalue = NULL,
+                                   new_colnbr = NULL,
+                                   new_suffix = NULL,
                                    add_backup = TRUE,
                                    show_results = TRUE,
                                    only_new_ident = TRUE,
@@ -4090,6 +4138,7 @@ update_ident_specimens <- function(colnam = NULL,
           family_name,
           surname,
           colnbr,
+          suffix,
           detd,
           detm,
           dety,
@@ -4113,14 +4162,22 @@ update_ident_specimens <- function(colnam = NULL,
       modif_types <- vector(mode = "character", length = nrow(queried_speci))
 
     if (is.null(id_new_taxa)) {
-      query_new_taxa <-
-        query_taxa(genus = new_genus,
-                   species = new_species,
-                   family = new_family,
-                   check_synonymy = F,
-                   extract_traits = F,
-                   class = NULL
-        )
+
+      if (!is.null(new_genus) | !is.null(new_family) | !is.null(new_species)) {
+
+        query_new_taxa <-
+          query_taxa(genus = new_genus,
+                     species = new_species,
+                     family = new_family,
+                     check_synonymy = F,
+                     extract_traits = F,
+                     class = NULL)
+
+      } else {
+
+        query_new_taxa <- tibble(1)
+      }
+
     } else {
 
       query_new_taxa <-
@@ -4134,9 +4191,13 @@ update_ident_specimens <- function(colnam = NULL,
     }
 
     if (nrow(query_new_taxa) == 1) {
+
       nbr_new_taxa_ok <- TRUE
+
     } else{
+
       nbr_new_taxa_ok <- FALSE
+
     }
 
     if(nbr_new_taxa_ok & nbr_queried_speci_ok) {
@@ -4147,7 +4208,8 @@ update_ident_specimens <- function(colnam = NULL,
             ifelse(
               !is.null(new_genus) |
                 !is.null(new_species) |
-                !is.null(new_family | !is.null(id_new_taxa)),
+                !is.null(new_family) |
+                !is.null(id_new_taxa),
               query_new_taxa$idtax_n,
               queried_speci$idtax_n
             ),
@@ -4155,7 +4217,9 @@ update_ident_specimens <- function(colnam = NULL,
           detm = ifelse(!is.null(new_detm), as.numeric(new_detm), queried_speci$detm),
           dety = ifelse(!is.null(new_dety), as.numeric(new_dety), queried_speci$dety),
           detby = ifelse(!is.null(new_detby), new_detby, queried_speci$detby),
-          detvalue = ifelse(!is.null(new_detvalue), new_detvalue, queried_speci$detvalue)
+          detvalue = ifelse(!is.null(new_detvalue), new_detvalue, queried_speci$detvalue),
+          colnbr = ifelse(!is.null(new_colnbr), new_colnbr, queried_speci$colnbr),
+          suffix = ifelse(!is.null(new_suffix), new_suffix, queried_speci$suffix)
         )
 
       ## correcting if NA is not well coded and null
@@ -4173,7 +4237,7 @@ update_ident_specimens <- function(colnam = NULL,
 
 
         print(queried_speci %>%
-                dplyr::select(family_name, surname, colnbr, detd, detm, dety, detby, cold, colm, coly, country, id_specimen))
+                dplyr::select(family_name, surname, colnbr, suffix, detd, detm, dety, detby, cold, colm, coly, country, id_specimen))
 
         # htmlTable::htmlTable(comp_res$comp_html)
 
@@ -4211,22 +4275,27 @@ update_ident_specimens <- function(colnam = NULL,
       comp_values <- TRUE
     }
 
-    if (only_new_ident & nbr_new_taxa_ok & any(comp_values == TRUE)
-    ) {
-      if(any(comp_values %>%
-             dplyr::select_if(~sum(.) > 0) %>%
-             colnames() == "idtax_n")) {
+    if (only_new_ident & nbr_new_taxa_ok & any(comp_values == TRUE)) {
+      if (any(comp_values %>%
+              dplyr::select_if( ~ sum(.) > 0) %>%
+              colnames() == "idtax_n")) {
+
         new_ident <- TRUE
-      }else{
+
+      } else{
+
         new_ident <- FALSE
+
       }
 
-    }else{
+    } else {
+
       new_ident <- TRUE
+
     }
 
-    if(nbr_new_taxa_ok & any(comp_values==TRUE) &
-       nbr_queried_speci_ok & new_ident) {
+    if (nbr_new_taxa_ok & any(comp_values == TRUE) &
+        nbr_queried_speci_ok & new_ident) {
 
       modif_types <-
         paste0(colnames(as.matrix(comp_values))[which(as.matrix(comp_values))], sep="__")
@@ -4277,7 +4346,9 @@ update_ident_specimens <- function(colnam = NULL,
       #         as.data.frame())
 
       if (ask_before_update) {
+
         confirmed <- utils::askYesNo("Confirm this update?")
+
       } else
       {
         confirmed <- TRUE
@@ -4306,7 +4377,7 @@ update_ident_specimens <- function(colnam = NULL,
         }
 
         rs <-
-          DBI::dbSendQuery(mydb, statement="UPDATE specimens SET idtax_n=$2, detd=$3, detm=$4, dety=$5, detby=$6, detvalue=$7, data_modif_d=$8, data_modif_m=$9, data_modif_y=$10 WHERE id_specimen = $1",
+          DBI::dbSendQuery(mydb, statement="UPDATE specimens SET idtax_n=$2, detd=$3, detm=$4, dety=$5, detby=$6, detvalue=$7, colnbr=$8, suffix=$9, data_modif_d=$10, data_modif_m=$11, data_modif_y=$12 WHERE id_specimen = $1",
                            params=list(queried_speci$id_specimen, # $1
                                        new_values$idtax_n, # $2
                                        as.numeric(new_values$detd), # $3
@@ -4314,9 +4385,11 @@ update_ident_specimens <- function(colnam = NULL,
                                        as.numeric(new_values$dety), # $5
                                        new_values$detby, # $6
                                        new_values$detvalue, # $7
-                                       lubridate::day(Sys.Date()), # $8
-                                       lubridate::month(Sys.Date()), # $9
-                                       lubridate::year(Sys.Date()))) # $10
+                                       new_values$colnbr, # $8
+                                       new_values$suffix, # $9
+                                       lubridate::day(Sys.Date()), # $10
+                                       lubridate::month(Sys.Date()), # $11
+                                       lubridate::year(Sys.Date()))) # $12
 
         # if(show_results) print(dbFetch(rs))
         DBI::dbClearResult(rs)
@@ -4324,11 +4397,23 @@ update_ident_specimens <- function(colnam = NULL,
         if(show_results) query_specimens(id_search = queried_speci$id_specimen)
       }
 
-    }else{
-      if(!nbr_new_taxa_ok) cat("\n NO UPDATE. The number of taxa selected for new identification is ", nrow(query_new_taxa),". Select one taxa.")
-      if(!any(comp_values==TRUE)) cat("\n NO UPDATE. No different values entered.")
-      if(!nbr_queried_speci_ok) cat("\n NO UPDATE. The number of specimen selected is ",nrow(queried_speci),". Select ONE specimen. Not less, not more.")
-      if(!new_ident) cat("\n No new identification")
+    } else{
+      if (!nbr_new_taxa_ok)
+        cat(
+          "\n NO UPDATE. The number of taxa selected for new identification is ",
+          nrow(query_new_taxa),
+          ". Select one taxa."
+        )
+      if (!any(comp_values == TRUE))
+        cat("\n NO UPDATE. No different values entered.")
+      if (!nbr_queried_speci_ok)
+        cat(
+          "\n NO UPDATE. The number of specimen selected is ",
+          nrow(queried_speci),
+          ". Select ONE specimen. Not less, not more."
+        )
+      if (!new_ident)
+        cat("\n No new identification")
     }
 
     return(NA)
@@ -7060,6 +7145,8 @@ add_entry_dico_name <- function(tax_gen = NULL,
 
   if(!exists("mydb")) call.mydb()
 
+
+
   DBI::dbExecute(mydb,
                  "DELETE FROM subplotype_list WHERE id_subplotype=$1", params=list(id)
   )
@@ -7079,9 +7166,21 @@ add_entry_dico_name <- function(tax_gen = NULL,
 
   if(!exists("mydb")) call.mydb()
 
-  DBI::dbExecute(mydb,
-                 "DELETE FROM data_liste_sub_plots WHERE id_sub_plots=$1", params=list(id)
-  )
+  query <- "DELETE FROM data_liste_sub_plots WHERE MMM"
+  query <-
+    gsub(
+      pattern = "MMM",
+      replacement = paste0("id_sub_plots IN ('",
+                           paste(unique(id), collapse = "', '"), "')"),
+      x = query
+    )
+
+  rs <- DBI::dbSendQuery(mydb, query)
+  DBI::dbClearResult(rs)
+
+  # DBI::dbExecute(mydb,
+  #                "DELETE FROM data_liste_sub_plots WHERE id_sub_plots=$1", params=list(id)
+  # )
 }
 
 #' Delete an entry in trait measurement table
@@ -7148,6 +7247,7 @@ add_entry_dico_name <- function(tax_gen = NULL,
       dplyr::filter(id_n %in% !!id_ind) %>%
       dplyr::collect() %>%
       as.data.frame()
+
     print(selected_link)
     confirm <-
       utils::askYesNo(msg = "Confirm removing these links?")
@@ -7162,17 +7262,37 @@ add_entry_dico_name <- function(tax_gen = NULL,
   if(!is.null(id_specimen)) {
     selected_link <-
       dplyr::tbl(mydb, "data_link_specimens") %>%
-      dplyr::filter(id_specimen %in% id_specimen)
+      dplyr::filter(id_specimen %in% !!id_specimen) %>%
+      dplyr::collect() %>%
+      as.data.frame()
+
     print(selected_link)
+
     confirm <-
       utils::askYesNo(msg = "Confirm removing these links?")
 
-    if(confirm)
-      for (i in 1:nrow(selected_link))
-        DBI::dbExecute(mydb,
-                       "DELETE FROM data_link_specimens WHERE id_specimen=$1",
-                       params=list(selected_link$id_specimen[i]))
+    if(confirm) {
+      query <- "DELETE FROM data_link_specimens WHERE MMM"
+      query <-
+        gsub(
+          pattern = "MMM",
+          replacement = paste0("id_specimen IN ('",
+                               paste(unique(selected_link$id_specimen), collapse = "', '"), "')"),
+          x = query
+        )
+
+      rs <- DBI::dbSendQuery(mydb, query)
+      DBI::dbClearResult(rs)
+    }
+
+
+    # if(confirm)
+    #   for (i in 1:nrow(selected_link))
+    #     DBI::dbExecute(mydb,
+    #                    "DELETE FROM data_link_specimens WHERE id_specimen=$1",
+    #                    params=list(selected_link$id_specimen[i]))
   }
+
 }
 
 #' Delete an entry in individuals table
@@ -7199,6 +7319,36 @@ add_entry_dico_name <- function(tax_gen = NULL,
     gsub(
       pattern = "MMM",
       replacement = paste0("id_n IN ('",
+                           paste(unique(id), collapse = "', '"), "')"),
+      x = query
+    )
+
+  rs <- DBI::dbSendQuery(mydb, query)
+  DBI::dbClearResult(rs)
+
+}
+
+
+#' Delete an entry in specimen table
+#'
+#' Delete an entry in specimen table using id for selection
+#'
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#'
+#' @param id integer
+#'
+#' @return No values
+#' @export
+.delete_specimens <- function(id) {
+
+  if(!exists("mydb")) call.mydb()
+
+  query <- "DELETE FROM specimens WHERE MMM"
+  query <-
+    gsub(
+      pattern = "MMM",
+      replacement = paste0("id_specimen IN ('",
                            paste(unique(id), collapse = "', '"), "')"),
       x = query
     )
@@ -8030,9 +8180,9 @@ add_traits_measures <- function(new_data,
   }
 
 
-  if(is.null(id_plot_name) & is.null(plot_name_field)) {
+  if (is.null(id_plot_name) & is.null(plot_name_field)) {
 
-    if(!is.null(id_tag_plot) & is.null(individual_plot_field)) {
+    if (!is.null(id_tag_plot) & is.null(individual_plot_field)) {
 
       queried_individuals <-
         query_plots(id_individual = new_data_renamed$id_data_individuals, remove_ids = F)
@@ -8044,7 +8194,7 @@ add_traits_measures <- function(new_data,
                   by = c("id_data_individuals" = "id_n")) %>%
         rename(id_liste_plots = id_table_liste_plots_n)
 
-    }else {
+    } else {
 
       new_data_renamed <-
         new_data_renamed %>%
@@ -8219,8 +8369,10 @@ add_traits_measures <- function(new_data,
           by = c("id_trait" = "id_trait")
         )
 
+
+
       ### Linking individuals
-      if(!is.null(individual_plot_field)) {
+      if (!is.null(individual_plot_field)) {
 
         individual_plot <-
           "ind_num_sous_plot"
@@ -8502,11 +8654,13 @@ add_traits_measures <- function(new_data,
       if (!any(colnames(data_trait) == "id_diconame")) {
         data_no_specimen_no_individual <-
           data_trait
+
         if (any(colnames(data_trait) == "id_data_individuals")) {
           data_no_specimen_no_individual <-
             data_no_specimen_no_individual %>%
             dplyr::filter(is.na(id_data_individuals))
         }
+
         if (any(colnames(data_trait) == "id_specimen")) {
           data_no_specimen_no_individual <-
             data_no_specimen_no_individual %>%
@@ -8518,7 +8672,7 @@ add_traits_measures <- function(new_data,
           tibble::add_column(id_diconame = NA) %>%
           dplyr::mutate(id_diconame = as.integer(id_diconame))
 
-      }else{
+      } else {
         data_no_specimen_no_individual <-
           data_trait %>%
           dplyr::filter(is.na(id_data_individuals) & is.na(id_specimen) & is.na(id_diconame))
@@ -8551,26 +8705,33 @@ add_traits_measures <- function(new_data,
         diff_fam <-
           data_trait_compa_taxo %>%
           dplyr::filter(tax_fam != tax_fam_linked)
-        if(nrow(diff_fam)>0) {
+        if (nrow(diff_fam) > 0) {
           message("Some measures linked to individuals carry different family")
           print(diff_fam)
           diff_fam <-
             diff_fam %>%
-            dplyr::mutate(issue = paste("ident. when measured and in DB)",
-                                 full_name_no_auth, full_name_no_auth_linked))
+            dplyr::mutate(
+              issue = paste(
+                "ident. when measured and in DB)",
+                full_name_no_auth,
+                full_name_no_auth_linked
+              )
+            )
           ## merging issue
           data_trait <-
             data_trait %>%
-            dplyr::left_join(diff_fam %>%
-                        dplyr::select(id_new_data, issue) %>%
-                        dplyr::rename(issue_tax = issue),
-                      by=c("id_new_data"="id_new_data"))
+            dplyr::left_join(
+              diff_fam %>%
+                dplyr::select(id_new_data, issue) %>%
+                dplyr::rename(issue_tax = issue),
+              by = c("id_new_data" = "id_new_data")
+            )
 
           data_trait <-
             data_trait %>%
             dplyr::mutate(issue = paste(ifelse(is.na(issue), "", issue),
                                         ifelse(is.na(issue_tax), "", issue_tax), sep = ", ")) %>%
-            dplyr::mutate(issue = ifelse(issue ==", ", NA, issue)) %>%
+            dplyr::mutate(issue = ifelse(issue == ", ", NA, issue)) %>%
             dplyr::select(-issue_tax)
         }
 
@@ -8685,6 +8846,9 @@ add_traits_measures <- function(new_data,
       }
 
 
+
+
+
       ### identify if measures are already within DB
       message("\n Identifying if imported values are already in DB")
       trait_id <- unique(data_trait$id_trait)
@@ -8704,17 +8868,19 @@ add_traits_measures <- function(new_data,
         dplyr::filter(traitid == trait_id) %>% #, !is.na(id_sub_plots)
         dplyr::collect()
 
-      if(valuetype$valuetype == "numeric")
+      if (valuetype$valuetype == "numeric")
         all_vals <-
         all_vals %>%
         dplyr::rename(id_trait = traitid,
                       id_liste_plots = id_table_liste_plots,
-                      trait=traitvalue) %>%
+                      trait = traitvalue) %>%
         dplyr::select(-traitvalue_char)
 
-      if(valuetype$valuetype == "character")
+      if (valuetype$valuetype == "character")
         all_vals <- all_vals %>%
-        dplyr::rename(id_trait = traitid, id_liste_plots = id_table_liste_plots, trait=traitvalue_char) %>%
+        dplyr::rename(id_trait = traitid,
+                      id_liste_plots = id_table_liste_plots,
+                      trait = traitvalue_char) %>%
         dplyr::select(-traitvalue) %>%
         dplyr::mutate(trait = stringr::str_trim(trait))
 
@@ -8793,7 +8959,6 @@ add_traits_measures <- function(new_data,
 
         if(nrow(data_trait)<1) stop("no new values anymore to import after excluding duplicates")
       }
-
 
       # data_trait <-
       #   data_trait %>%
@@ -10257,6 +10422,28 @@ replace_NA <- function(vec, inv = FALSE) {
     sorted_matches %>%
     dplyr::slice(selected_name)
 
+
+  if (select_trait_features$valuetype == "numeric") {
+
+    if (!is.numeric(data_stand$trait)) {
+
+      cli::cli_alert_warning("Expected numeric values but some are not")
+
+      data_stand %>%
+        mutate(trait = as.numeric(trait)) %>%
+        filter(is.na(trait)) %>%
+        print()
+
+      cli::cli_alert_warning("Removing non numeric values")
+
+      data_stand <-
+        data_stand %>%
+        mutate(trait = as.numeric(trait)) %>%
+        filter(!is.na(trait))
+
+    }
+  }
+
   issues <- vector(mode = "character", length = nrow(data_stand))
   if(select_trait_features$valuetype != "character") {
     if(any(data_stand$trait<select_trait_features$minallowedvalue)) {
@@ -10683,11 +10870,11 @@ process_trimble_data <- function(PATH = NULL, plot_name = NULL, format = "dbf") 
 
   ncol_list <- list()
   nbe_herb <- list()
-
   all_plot_list <- list()
   all_traits_list <- list()
   logs_process <- list()
   gps_plot_list <- list()
+  gps_quadrat_list <- vector(mode = 'list', length(unique(files_prop$number)))
   for (j in sort(unique(files_prop$number))) {
 
     logs_tb <-
@@ -10754,11 +10941,17 @@ process_trimble_data <- function(PATH = NULL, plot_name = NULL, format = "dbf") 
         FUN = function(x)
           x[[3]]
       )))) %>%
-      dplyr::select(Longitude, Latitude, date, date_y, date_m, date_d)
+      dplyr::select(Longitude, Latitude, date, date_y, date_m, date_d, From_X, From_Y)
+
+    gps_quadrat_list[[j]] <-
+      gps_data_subset %>%
+      dplyr::rename(ddlat = Latitude,
+                    ddlon = Longitude) %>%
+      dplyr::mutate(plot_name = rep(paste0(plot_name, ifelse(j < 10, "00", "0") , j), nrow(.)))
 
     gps_data_subset_one_plot <-
       gps_data_subset %>%
-      tibble::add_column(plot_name = rep(paste0(plot_name, ifelse(j < 10, "00", "0") , j), nrow(.))) %>%
+      dplyr::mutate(plot_name = rep(paste0(plot_name, ifelse(j < 10, "00", "0") , j), nrow(.))) %>%
       dplyr::group_by(plot_name) %>%
       dplyr::summarise(
         ddlat = mean(Latitude),
@@ -10771,27 +10964,45 @@ process_trimble_data <- function(PATH = NULL, plot_name = NULL, format = "dbf") 
 
     gps_data_subset_one_plot <-
       gps_data_subset_one_plot %>%
-      tibble::add_column(data_provider = "AMAP") %>%
-      tibble::add_column(co_authorship = "AMAP") %>%
-      tibble::add_column(country = "Cameroun") %>%
-      tibble::add_column(area_plot = 10000) %>%
-      tibble::add_column(method = "1ha-IRD") %>%
-      tibble::add_column(locality_name = plot_name)
+      dplyr::mutate(data_provider = "AMAP") %>%
+      dplyr::mutate(co_authorship = "AMAP") %>%
+      dplyr::mutate(country = "Cameroun") %>%
+      dplyr::mutate(area_plot = 10000) %>%
+      dplyr::mutate(method = "1ha-IRD") %>%
+      dplyr::mutate(locality_name = plot_name)
 
 
     gps_plot_list[[j]] <- gps_data_subset_one_plot
+
     ### individuals data
     print(occ_data_dir)
 
-    data. <-
-      list.files(path = paste0(PATH,
-                               occ_data_dir, "/"), full.names = TRUE, pattern = "^[^~]")
-    data. <- data.[grep(".xlsx", data.)]
+    if(format == "dbf") {
 
-    if(length(data.)==0) stop("not xlsx file in directory")
+      data. <-
+        list.files(path = paste0(PATH,
+                                 occ_data_dir, "/"), full.names = TRUE, pattern = "^[^~]")
+      data. <- data.[grep(".dbf", data.)]
 
-    occ_data <-
-      readxl::read_excel(data.)
+      occ_data <-
+        foreign::read.dbf(file = data.) %>%
+        dplyr::as_tibble()
+
+    } else {
+
+
+      data. <-
+        list.files(path = paste0(PATH,
+                                 occ_data_dir, "/"), full.names = TRUE, pattern = "^[^~]")
+      data. <- data.[grep(".xlsx", data.)]
+
+      if(length(data.)==0) stop("not xlsx file in directory")
+
+      occ_data <-
+        readxl::read_excel(data.)
+
+    }
+
 
     # check ID
     dupl_id <-
@@ -10853,13 +11064,13 @@ process_trimble_data <- function(PATH = NULL, plot_name = NULL, format = "dbf") 
 
     all_quadrat <-
       occ_data %>%
-      dplyr::filter(New_quadra=="yes") %>%
+      dplyr::filter(New_quadra == "yes") %>%
       dplyr::select(ID, New_quadra, X_theo, Y_theo) %>%
-      dplyr::mutate(quadrat =paste(X_theo, Y_theo, sep="_"))
+      dplyr::mutate(quadrat = paste(X_theo, Y_theo, sep = "_"))
 
     missing_quadrats <-
       all_expected_combination %>%
-      dplyr::left_join(all_quadrat, by=c("quadrat"="quadrat")) %>%
+      dplyr::left_join(all_quadrat, by = c("quadrat" = "quadrat")) %>%
       dplyr::filter(is.na(ID)) %>%
       dplyr::select(quadrat) %>%
       dplyr::pull()
@@ -10984,7 +11195,7 @@ process_trimble_data <- function(PATH = NULL, plot_name = NULL, format = "dbf") 
     if (!any(colnames(all_quadrat) == "quadrat_corrected"))
       all_quadrat <-
       all_quadrat %>%
-      dplyr::rename(quadrat_good_format = quadrat)
+      dplyr::mutate(quadrat_good_format = quadrat)
     # add_column(quadrat_good_format = unlist(lapply(strsplit(x = all_quadrat$quadrat, split = "_"), FUN = function(x) paste("(", x[1], ";", x[2], ")",sep=""))))
 
     quadrats <-
@@ -11075,8 +11286,15 @@ process_trimble_data <- function(PATH = NULL, plot_name = NULL, format = "dbf") 
     ### rename and check original taxa name
     occ_data <-
       occ_data %>%
-      dplyr::mutate(original_tax_name = ifelse(!is.na(Species), Species, ifelse(!is.na(Genus), Genus, Family))) %>%
-      dplyr::mutate(original_tax_name = ifelse(!is.na(original_tax_name), original_tax_name, Identif_co))
+      dplyr::mutate(Species = as.character(Species),
+                    Genus = as.character(Genus),
+                    Family = as.character(Family),
+                    Identif_co = as.character(Identif_co)) %>%
+      dplyr::mutate(original_tax_name =
+                      ifelse(!is.na(Species), Species, ifelse(!is.na(Genus), Genus, Family))) %>%
+      dplyr::mutate(original_tax_name =
+                      ifelse(!is.na(original_tax_name), original_tax_name, Identif_co)) %>%
+      dplyr::mutate(original_tax_name = tidyr::replace_na(original_tax_name, "indet."))
 
     ### multistem check
     multi_stem_ind <-
@@ -11325,6 +11543,9 @@ process_trimble_data <- function(PATH = NULL, plot_name = NULL, format = "dbf") 
   final_gps <-
     dplyr::bind_rows(gps_plot_list)
 
+  final_gps_quadrat <-
+    dplyr::bind_rows(gps_quadrat_list)
+
   writexl::write_xlsx(final_gps, paste("final_meta_data_", plot_name,".xlsx", sep = ""))
 
   writexl::write_xlsx(final_output, paste("final_process_plot_", plot_name,".xlsx", sep = ""))
@@ -11333,8 +11554,14 @@ process_trimble_data <- function(PATH = NULL, plot_name = NULL, format = "dbf") 
 
   writexl::write_xlsx(final_logs, paste("final_process_plot_logs_", plot_name,".xlsx", sep = ""))
 
+  writexl::write_xlsx(final_gps_quadrat, paste("final_gps_quadrat_", plot_name,".xlsx", sep = ""))
 
-  return(list(final_output, final_output_traits, final_gps, final_logs))
+
+  return(list(final_output = final_output,
+              final_output_traits = final_output_traits,
+              final_gps = final_gps,
+              final_logs = final_logs,
+              final_gps_quadrat = final_gps_quadrat))
 }
 
 
