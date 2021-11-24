@@ -144,7 +144,6 @@ launch_stand_tax_app <- function() {
       ### Save table des individus original
       original.data$df <- DATA
 
-
       shinybusy::show_spinner()
 
       data(table_taxa_tb)
@@ -1587,9 +1586,9 @@ query_plots <- function(team_lead = NULL,
                         remove_ids = FALSE,
                         collapse_multiple_val = FALSE) {
 
-  if(!exists("mydb")) call.mydb()
+  if (!exists("mydb")) call.mydb()
 
-  if(!is.null(id_individual))
+  if (!is.null(id_individual))
   {
 
     cli::cli_rule(left = "Extracting from queried individuals - id_individual")
@@ -1607,7 +1606,7 @@ query_plots <- function(team_lead = NULL,
 
   }
 
-  if(!is.null(id_diconame))
+  if (!is.null(id_diconame))
   {
 
     cli::cli_rule(left = "Extracting from queried taxa - idtax_n")
@@ -1628,7 +1627,7 @@ query_plots <- function(team_lead = NULL,
 
   }
 
-  if(is.null(id_plot)) {
+  if (is.null(id_plot)) {
 
     query <- 'SELECT * FROM data_liste_plots WHERE MMM'
 
@@ -1814,7 +1813,6 @@ query_plots <- function(team_lead = NULL,
     res <-
       res %>%
       dplyr::select(-id_old)
-
 
 
   } else {
@@ -2286,6 +2284,8 @@ query_plots <- function(team_lead = NULL,
       res_individuals_full %>%
       dplyr::filter(idtax_f %in% !!id_diconame)
 
+
+    ### Removing old fields not used anymore
     res_individuals_full <-
       res_individuals_full %>%
       dplyr::select(
@@ -2300,7 +2300,8 @@ query_plots <- function(team_lead = NULL,
         -observations_census_2,
         -id_census2,
         -dbh_census2,
-        -id_specimen_old
+        -id_specimen_old,
+        -tax_tax
       )
 
     if(!is.null(tag)) {
@@ -2373,7 +2374,13 @@ query_plots <- function(team_lead = NULL,
       coordinates = NA,
       coordinates_sf = NA
     )
-  res_list$extract <- res
+
+  res_list$extract <- res %>%
+    dplyr::relocate(plot_name,
+                    team_leader,
+                    country,
+                    locality_name,
+                    .before = data_provider)
 
   if(show_multiple_census)
     res_list$census_features <- census_features
@@ -3376,6 +3383,27 @@ add_plots <- function(new_data,
   }
 
 
+  ## Checking team_leader
+  if(!any(names(new_data_renamed) == "team_leader")) {
+
+    stop("missing team_leader information")
+
+  } else {
+
+    new_data_renamed <-
+      .link_colnam(data_stand = new_data_renamed,
+                   collector_field = "team_leader")
+
+    new_data_renamed <-
+      new_data_renamed %>%
+      dplyr::select(-col_name)
+
+    col_names_corresp[which(col_names_corresp == "team_leader")] <-
+      "id_colnam"
+
+  }
+
+
   ## Checking coordinates
   if (any(new_data_renamed$ddlat > 90) |
       any(new_data_renamed$ddlon < -90))
@@ -3399,7 +3427,6 @@ add_plots <- function(new_data,
     message(paste("\nMeta data of plots added:", nrow(new_data_renamed)))
     DBI::dbWriteTable(mydb, "data_liste_plots", new_data_renamed, append = TRUE, row.names = FALSE)
   }
-
 
   if(!add)
      message("no data added")
@@ -6297,7 +6324,8 @@ add_individuals <- function(new_data ,
       print(all_herb_ref)
       cli::cli_alert_warning("Number of herbarium specimen type and reference are not identical")
 
-      missing_herb_ref <- all_herb_type %>%
+      missing_herb_ref <-
+        all_herb_type %>%
         filter(!herbarium_nbe_type %in% all_herb_ref$herbarium_nbe_char)
 
       if(nrow(missing_herb_ref) > 0) {
@@ -7467,7 +7495,8 @@ query_specimens <- function(collector = NULL,
       detvalue,
       morpho_species,
       id_specimen,
-      idtax_f
+      idtax_f,
+      id_tropicos
     )
 
   ## filter by collector or id_colnam (id of people table)
@@ -12748,7 +12777,13 @@ merge_individuals_taxa <- function(id_individual = NULL, id_plot = NULL) {
   # getting taxo identification from specimens
   specimens_id_diconame <-
     dplyr::tbl(mydb, "specimens") %>%
-    dplyr::select(id_specimen, idtax_n)
+    dplyr::select(id_specimen,
+                  idtax_n,
+                  id_colnam,
+                  colnbr,
+                  suffix,
+                  id_tropicos,
+                  id_brlu)
 
   # getting all ids from diconames
   diconames_id <-
@@ -12760,8 +12795,10 @@ merge_individuals_taxa <- function(id_individual = NULL, id_plot = NULL) {
   specimens_linked <-
     specimens_id_diconame %>%
     dplyr::left_join(diconames_id, by = c("idtax_n" = "idtax_n")) %>%
-    dplyr::rename(idtax_specimen_f = idtax_f)
-
+    dplyr::rename(idtax_specimen_f = idtax_f) %>%
+    dplyr::left_join(tbl(mydb, "table_colnam") %>%
+                       dplyr::select(id_table_colnam, colnam),
+                     by = c("id_colnam" = "id_table_colnam"))
 
   if (!is.null(id_individual)) {
 
@@ -12802,17 +12839,25 @@ merge_individuals_taxa <- function(id_individual = NULL, id_plot = NULL) {
                        dplyr::select(idtax_n, idtax_f),
                      # dplyr::rename(id_diconame_good_n = idtax_good_n),
                      by = c("idtax_n" = "idtax_n")) %>%
-    dplyr::left_join(specimens_linked %>%
-                       dplyr::select(id_specimen, idtax_specimen_f),
-                     by = c("id_specimen" = "id_specimen")) %>% # adding id_diconame for specimens
-    dplyr::mutate(idtax_individual_f = ifelse(
-      !is.na(idtax_specimen_f),
-      idtax_specimen_f,
-      idtax_f
-    )) %>% #### selecting id_dico_name from specimens if any
+    dplyr::left_join(
+      specimens_linked %>%
+        dplyr::select(
+          id_specimen,
+          idtax_specimen_f,
+          colnam,
+          colnbr,
+          suffix,
+          id_tropicos,
+          id_brlu
+        ),
+      by = c("id_specimen" = "id_specimen")
+    ) %>% # adding id_diconame for specimens
+    dplyr::mutate(idtax_individual_f = ifelse(!is.na(idtax_specimen_f),
+                                              idtax_specimen_f,
+                                              idtax_f)) %>% #### selecting id_dico_name from specimens if any
     dplyr::left_join(
       add_taxa_table_taxa() %>%
-        dplyr::select(-data_modif_d, -data_modif_m, -data_modif_y),
+        dplyr::select(-data_modif_d,-data_modif_m,-data_modif_y),
       by = c("idtax_individual_f" = "idtax_n")
     )
 

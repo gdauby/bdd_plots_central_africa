@@ -6,7 +6,7 @@ Author: Gilles Dauby
 Maintainer: The package maintainer <yourself@somewhere.net>
 Description: Exploring and updating the database containing plot data from Central Africa
 License: GPL-2
-Imports: methods, shiny, DBI, rstudioapi, dplyr, DT, ggplot2, rlang, sf, mapview, magrittr, RPostgres, lubridate, utils, stats, tidyr, tibble, readxl, readr, RecordLinkage, foreign, stringr, writexl, date, kableExtra, shinybusy
+Imports: methods, shiny, DBI, rstudioapi, dplyr, DT, ggplot2, rlang, sf, mapview, magrittr, RPostgres, lubridate, utils, stats, tidyr, tibble, readxl, readr, RecordLinkage, foreign, stringr, writexl, kableExtra, shinybusy
 Suggests: cli, ggrepel, herblabel, measurements, knitr,
     rmarkdown
 Encoding: UTF-8

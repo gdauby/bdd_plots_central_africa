@@ -17,6 +17,8 @@ update_ident_specimens(
   new_dety = NULL,
   new_detby = NULL,
   new_detvalue = NULL,
+  new_colnbr = NULL,
+  new_suffix = NULL,
   add_backup = TRUE,
   show_results = TRUE,
   only_new_ident = TRUE,

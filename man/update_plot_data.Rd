@@ -20,6 +20,7 @@ update_plot_data(
   new_method = NULL,
   new_province = NULL,
   new_data_provider = NULL,
+  new_locality_name = NULL,
   add_backup = TRUE,
   ask_before_update = TRUE
 )

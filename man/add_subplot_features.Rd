@@ -13,7 +13,8 @@ add_subplot_features(
   id_plot_name = NULL,
   id_plot_name_corresp = "id_table_liste_plots_n",
   subplottype_field,
-  add_data = FALSE
+  add_data = FALSE,
+  ask_before_update = TRUE
 )
 }
 \arguments{
@@ -32,6 +33,8 @@ add_subplot_features(
 \item{subplottype_field}{string vector listing trait columns names in new_data}
 
 \item{add_data}{logical whether or not data should be added - by default FALSE}
+
+\item{ask_before_update}{logical ask before adding}
 }
 \value{
 list of tibbles that should be/have been added
