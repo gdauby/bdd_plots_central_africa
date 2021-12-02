@@ -12705,16 +12705,16 @@ query_taxa <-
         traitsqueried <-
           query_traits_measures(idtax = res$idtax_n, idtax_good = res$idtax_good_n)
 
-        if (!is.na(traitsqueried$traits_idtax_num))
+        if (!any(is.na(traitsqueried$traits_idtax_num)))
           res <-
             res %>%
-            left_join(traits_idtax_num,
+            left_join(traitsqueried$traits_idtax_num,
                       by = c("idtax_n" = "idtax"))
 
-        if (!is.na(traitsqueried$traits_idtax_char))
+        if (!any(is.na(traitsqueried$traits_idtax_char)))
           res <-
             res %>%
-            left_join(traits_idtax_char,
+            left_join(traitsqueried$traits_idtax_char,
                       by = c("idtax_n" = "idtax"))
 
       }
@@ -13212,3 +13212,72 @@ species_plot_matrix <- function(data_tb, tax_col = "tax_sp_level", plot_col = "p
 }
 
 
+
+
+#' Add link between specimen and individual
+#'
+#' Generate link between individual and specimens
+#'
+#' @return A tibble of all subplots
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#'
+#' @param new_data tibble fuzzy person name to look for
+#' @param col_names_select a vector of string that select columns of new_data to consider, it must be 3 columns
+#' @param col_names_corresp a vector of string of same length of col_names_select, should not be changed
+#' @param launch_adding_data logical, if TRUE links are added, by default it is FALSE for security
+#'
+#' @export
+.add_link_specimens <- function(new_data,
+                                col_names_select = NULL,
+                                col_names_corresp = c("id_specimen", "id_n", "type"),
+                                launch_adding_data = FALSE) {
+
+  new_data_renamed <-
+    .rename_data(dataset = new_data,
+                 col_old = col_names_select,
+                 col_new = col_names_corresp)
+
+  message(paste0("Number of new links: ", nrow(new_data_renamed)))
+
+  message(paste0("adding link for: ", nrow(distinct(new_data_renamed, id_specimen)), " different specimens"))
+
+  check_dup <-
+    tbl(mydb, "data_link_specimens") %>%
+    dplyr::select(id_n, id_specimen) %>%
+    collect() %>%
+    bind_rows(new_data_renamed %>%
+                dplyr::select(id_n, id_specimen)) %>%
+    group_by(id_n, id_specimen) %>%
+    count() %>%
+    filter(n>1) %>%
+    ungroup()
+
+  if(nrow(check_dup)>0) {
+
+    print(check_dup)
+    message("some link to be added are already in the database")
+    message("Excluding existing link from the new data")
+
+    new_data_renamed <-
+      new_data_renamed %>%
+      filter(!id_n %in% check_dup$id_n)
+
+    message(paste0("New links to be added are now: ", nrow(new_data_renamed)))
+
+  }
+
+  data_to_add <-
+    new_data_renamed %>%
+    dplyr::select(all_of(col_names_corresp))
+
+  print(data_to_add)
+
+  if(launch_adding_data) {
+
+    message(paste("adding data:", nrow(data_to_add), "rows to link table"))
+    DBI::dbWriteTable(mydb, "data_link_specimens",
+                      data_to_add, append = TRUE, row.names = FALSE)
+  }
+
+}
