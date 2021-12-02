@@ -24,8 +24,9 @@ query_plots(
   id_diconame = NULL,
   show_multiple_census = FALSE,
   show_all_coordinates = FALSE,
-  remove_ids = FALSE,
-  collapse_multiple_val = FALSE
+  remove_ids = TRUE,
+  collapse_multiple_val = FALSE,
+  extract_traits = TRUE
 )
 }
 \arguments{
@@ -66,6 +67,8 @@ query_plots(
 \item{remove_ids}{logical remove all ids columns, by default TRUE}
 
 \item{collapse_multiple_val}{logical whether multiple traits measures should be collapsed (resulting values as character, separated by dash)}
+
+\item{extract_traits}{whether species level traits should be extracted as well}
 }
 \value{
 A tibble of all plots or individuals

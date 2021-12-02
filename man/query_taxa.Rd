@@ -5,7 +5,7 @@
 \title{List, extract taxa}
 \usage{
 query_taxa(
-  class = NULL,
+  class = c("Magnoliopsida", "Pinopsida", "Lycopsida", "Pteropsida"),
   family = NULL,
   genus = NULL,
   order = NULL,
@@ -20,7 +20,7 @@ query_taxa(
   verbose = TRUE,
   exact_match = FALSE,
   check_synonymy = TRUE,
-  extract_traits = FALSE
+  extract_traits = TRUE
 )
 }
 \arguments{

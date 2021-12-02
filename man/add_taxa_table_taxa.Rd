@@ -4,7 +4,10 @@
 \alias{add_taxa_table_taxa}
 \title{List, extract taxa}
 \usage{
-add_taxa_table_taxa()
+add_taxa_table_taxa(ids = NULL)
+}
+\arguments{
+\item{ids}{idtax to filter the table}
 }
 \value{
 A tibble of all taxa

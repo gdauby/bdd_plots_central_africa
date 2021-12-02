@@ -1557,7 +1557,7 @@ traits_list <- function() {
 #' @param show_multiple_census logical whether multiple census should be shown, by default FALSE
 #' @param remove_ids logical remove all ids columns, by default TRUE
 #' @param collapse_multiple_val logical whether multiple traits measures should be collapsed (resulting values as character, separated by dash)
-#'
+#' @param extract_traits whether species level traits should be extracted as well
 #'
 #' @importFrom DBI dbSendQuery dbFetch dbClearResult dbWriteTable
 #' @importFrom stringr str_flatten str_trim str_extract
@@ -1583,8 +1583,9 @@ query_plots <- function(team_lead = NULL,
                         id_diconame = NULL,
                         show_multiple_census = FALSE,
                         show_all_coordinates = FALSE,
-                        remove_ids = FALSE,
-                        collapse_multiple_val = FALSE) {
+                        remove_ids = TRUE,
+                        collapse_multiple_val = FALSE,
+                        extract_traits = TRUE) {
 
   if (!exists("mydb")) call.mydb()
 
@@ -2014,7 +2015,8 @@ query_plots <- function(team_lead = NULL,
                     dplyr::select(type, valuetype, typedescription, id_subplotype),
                   by=c("id_type_sub_plot"= "id_subplotype")) %>%
         dplyr::collect() %>%
-        dplyr::relocate(c("typevalue", "type", "plot_name", "typedescription", "valuetype"), .before = year)
+        dplyr::relocate(c("typevalue", "type", "plot_name", "typedescription", "valuetype"),
+                        .before = year)
 
       all_coordinates_subplots_rf <-
         all_coordinates_subplots %>%
@@ -2301,7 +2303,14 @@ query_plots <- function(team_lead = NULL,
         -id_census2,
         -dbh_census2,
         -id_specimen_old,
-        -tax_tax
+        -tax_tax,
+        -a_habit,
+        -a_habit_secondary,
+        -id_korup_ctfs,
+        -tag_korup_ctfs,
+        -id_table_data_senterre,
+        -id_diconame,
+        -code_individu
       )
 
     if(!is.null(tag)) {
@@ -2323,8 +2332,9 @@ query_plots <- function(team_lead = NULL,
       dplyr::left_join(selec_plot_tables,
                        by = c("id_table_liste_plots_n" = "id_liste_plots"))
 
-    all_traits <- traits_list()
 
+    #### Add traits at individual levels
+    all_traits <- traits_list()
     all_traits_list <-
       .get_trait_individuals_values(
         traits = all_traits$trait,
@@ -2345,6 +2355,34 @@ query_plots <- function(team_lead = NULL,
       }
     }
 
+    if (extract_traits) {
+
+      cli::cli_alert_info("Extracting taxa-level traits")
+
+      queried_traits_tax <-
+        query_traits_measures(idtax = res_individuals_full$idtax_individual_f)
+
+      if (nrow(queried_traits_tax$traits_found) > 0) {
+
+        if (nrow(queried_traits_tax$traits_idtax_num) > 0)
+          res_individuals_full <-
+            res_individuals_full %>%
+            left_join(queried_traits_tax$traits_idtax_num,
+                      by = c("idtax_individual_f" = "idtax"))
+
+        if (nrow(queried_traits_tax$traits_idtax_char) > 0)
+          res_individuals_full <-
+            res_individuals_full %>%
+            left_join(queried_traits_tax$traits_idtax_char,
+                      by = c("idtax_individual_f" = "idtax"))
+
+
+      } else {
+
+        cli::cli_alert_info("No taxa-level traits found for extracted taxa")
+      }
+
+    }
 
     res <-
       res_individuals_full %>%
@@ -2353,16 +2391,64 @@ query_plots <- function(team_lead = NULL,
       #               liane, strate_cat,
       #               id_specimen, id_old,
       #               all_traits$trait, paste0(all_traits$trait, "_issue")) %>%
-      dplyr::arrange(id_n)
+      dplyr::arrange(id_n) %>%
+      dplyr::relocate(plot_name, .before = id_old) %>%
+      dplyr::relocate(locality_name, .before = id_old) %>%
+      dplyr::relocate(sous_plot_name, .before = id_old) %>%
+      dplyr::relocate(ind_num_sous_plot, .before = id_old) %>%
+      dplyr::relocate(tax_sp_level, .before = id_old) %>%
+      dplyr::relocate(tax_infra_level, .before = id_old) %>%
+      dplyr::relocate(tax_gen, .before = id_old) %>%
+      dplyr::relocate(tax_fam, .before = id_old) %>%
+      dplyr::relocate(colnam, .before = id_old) %>%
+      dplyr::relocate(colnbr, .before = id_old) %>%
+      dplyr::relocate(suffix, .before = id_old) %>%
+      dplyr::relocate(position_x, .before = strate_cat) %>%
+      dplyr::relocate(position_y, .before = strate_cat)
+
+    if (any(names(res_individuals_full) == "stem_diameter"))
+      res <-
+      res %>%
+      dplyr::relocate(stem_diameter, .before = ind_num_sous_plot)
+
+    if (any(names(res_individuals_full) == "tree_height"))
+      res <-
+      res %>%
+      dplyr::relocate(tree_height, .before = ind_num_sous_plot)
+
+
   }
 
-  if(remove_ids) {
+  if(remove_ids & extract_individuals) {
 
     cli::cli_alert_warning("ids removed - remove_ids = {remove_ids} ")
 
+    # res <-
+    #   res %>%
+    #   dplyr::select_at(which(!grepl("id_", colnames(res))))
+
     res <-
       res %>%
-      dplyr::select_at(which(!grepl("id_", colnames(res))))
+      dplyr::rename(idDB = id_n) %>%
+      dplyr::select(-tidyselect::starts_with("id_")) %>%
+      dplyr::rename(id_n = idDB)
+
+  }
+
+  if(remove_ids & !extract_individuals) {
+
+    cli::cli_alert_warning("ids removed - remove_ids = {remove_ids} ")
+
+    # res <-
+    #   res %>%
+    #   dplyr::select_at(which(!grepl("id_", colnames(res))))
+
+    res <-
+      res %>%
+      dplyr::rename(idDB = id_liste_plots) %>%
+      dplyr::select(-tidyselect::starts_with("id_")) %>%
+      dplyr::rename(id_liste_plots = idDB)
+
   }
 
   # dbDisconnect(mydb)
@@ -2375,12 +2461,7 @@ query_plots <- function(team_lead = NULL,
       coordinates_sf = NA
     )
 
-  res_list$extract <- res %>%
-    dplyr::relocate(plot_name,
-                    team_leader,
-                    country,
-                    locality_name,
-                    .before = data_provider)
+  res_list$extract <- res
 
   if(show_multiple_census)
     res_list$census_features <- census_features
@@ -12248,7 +12329,7 @@ growth_computing <- function(dataset,
 #' @export
 query_taxa <-
   function(
-    class = NULL,
+    class = c("Magnoliopsida", "Pinopsida", "Lycopsida", "Pteropsida"),
     family = NULL,
     genus = NULL,
     order = NULL,
@@ -12263,7 +12344,7 @@ query_taxa <-
     verbose = TRUE,
     exact_match = FALSE,
     check_synonymy =TRUE,
-    extract_traits = FALSE
+    extract_traits = TRUE
   ) {
 
     if(!exists("mydb")) call.mydb()
@@ -12440,8 +12521,15 @@ query_taxa <-
           no_match <- TRUE
         }
 
+
+
       if(!no_match) {
         res <- res %>% collect()
+        # query <- gsub(pattern = "AND MMM", replacement = "", query)
+        # rs <- DBI::dbSendQuery(mydb, query)
+        # res <- DBI::dbFetch(rs)
+        # DBI::dbClearResult(rs)
+        # res <- dplyr::as_tibble(res)
       } else {
         res <- NULL
         message("no matching names")
@@ -12541,7 +12629,7 @@ query_taxa <-
           # %>%
           #   dplyr::select(tax_gen, idtax_n)
 
-          cli::cli_alert_info("{nrow(res)} taxa selected after checking synonymies")
+          if (verbose) cli::cli_alert_info("{nrow(res)} taxa selected after checking synonymies")
 
         }
       }
@@ -12613,119 +12701,31 @@ query_taxa <-
 
 
       if(extract_traits) {
-        temp_table <-
-          tibble(id = unique(res$idtax_n), look_for = 1)
 
-        ## create a temporary table with new data
-        DBI::dbWriteTable(
-          mydb,
-          "temp_table",
-          temp_table,
-          overwrite = T,
-          fileEncoding = "UTF-8",
-          row.names = F
-        )
+        traitsqueried <-
+          query_traits_measures(idtax = res$idtax_n, idtax_good = res$idtax_good_n)
 
-        traits_found <-
-          dplyr::tbl(mydb, "table_traits_measures") %>%
-          dplyr::left_join(
-            dplyr::tbl(mydb, "temp_table"),
-            by = c("idtax" = "id")
-          ) %>%
-          filter(!is.na(look_for)) %>%
-          dplyr::select(-look_for) %>%
-          dplyr::left_join(tbl(mydb, "table_traits") %>%
-                             dplyr::select(trait, id_trait, valuetype),
-                           by = c("id_trait" = "id_trait")) %>%
-          dplyr::collect()
-
-
-        # traits_found <-
-        #   dplyr::tbl(mydb, "table_traits_measures") %>%
-        #   dplyr::filter(idtax %in% !!res$idtax_n) %>%
-        #   dplyr::left_join(tbl(mydb, "table_traits") %>%
-        #                      dplyr::select(trait, id_trait, valuetype),
-        #                    by = c("id_trait" = "id_trait")) %>%
-        #   dplyr::collect()
-
-        # traits_found <-
-        #   dplyr::tbl(mydb, "table_traits_measures") %>%
-        #   dplyr::filter(idtax == 37) %>%
-        #   dplyr::left_join(tbl(mydb, "table_traits") %>%
-        #                      dplyr::select(trait, id_trait, valuetype),
-        #                    by = c("id_trait" = "id_trait")) %>%
-        #   dplyr::collect()
-
-        # dplyr::tbl(mydb, "table_traits_measures") %>%
-        #   dplyr::select(id_trait, id_trait_measures, idtax) %>%
-        #   collect() %>%
-        #   group_by(idtax, id_trait) %>%
-        #   count() %>%
-        #   filter(n > 1)
-
-        # duplicates <- dplyr::tbl(mydb, "table_traits_measures") %>%
-        #   dplyr::select(id_trait, id_trait_measures, idtax, traitvalue_char, id_trait_measures) %>%
-        #   collect() %>%
-        #   group_by(idtax, id_trait, traitvalue_char) %>%
-        #   count() %>%
-        #   filter(n > 1)
-        #
-        #
-        # for (i in 1:length(unique(duplicates$idtax))) {
-        #
-        #   test <- duplicates %>%
-        #     filter(idtax == !!unique(duplicates$idtax)[i])
-        #
-        #   for (j in 1:nrow(test)) {
-        #
-        #
-        #     test2 <-
-        #       dplyr::tbl(mydb, "table_traits_measures") %>%
-        #       filter(idtax == !!unique(test$idtax),
-        #              id_trait == !!test$id_trait[j]) %>%
-        #       collect()
-        #
-        #     delete_entry_trait_measure(id = test2$id_trait_measures[1])
-        #
-        #   }
-        #
-        # }
-
-
-        # traits_idtax <-
-        #   traits_found %>%
-        #   dplyr::select(idtax, trait,  traitvalue_char) %>%
-        #   tidyr::pivot_wider(names_from = c(trait),
-        #                      values_from = c(traitvalue_char),
-        #                      values_fn = list(traitvalue_char = list))
-
-        if(nrow(traits_found) > 0) {
-          traits_idtax <-
-            traits_found %>%
-            dplyr::select(idtax, trait,  traitvalue_char, basisofrecord, id_trait_measures) %>%
-            mutate(rn = data.table::rowid(trait)) %>%
-            tidyr::pivot_wider(names_from = trait,
-                               values_from = c(traitvalue_char, basisofrecord, id_trait_measures)) %>%
-            select(-rn) %>%
-            group_by(idtax) %>%
-            # summarise_at(vars(-group_cols()), ~ stringr::str_c(unique(.)[!is.na(unique(.))], collapse = ", "))
-            summarise_at(vars(-group_cols()), ~ stringr::str_c(.[!is.na(.)], collapse = ", "))
-
+        if (!is.na(traitsqueried$traits_idtax_num))
           res <-
             res %>%
-            # dplyr::select(-a_habit, a_habit_secondary) %>%
-            left_join(traits_idtax,
+            left_join(traits_idtax_num,
                       by = c("idtax_n" = "idtax"))
 
-        }
-
-
+        if (!is.na(traitsqueried$traits_idtax_char))
+          res <-
+            res %>%
+            left_join(traits_idtax_char,
+                      by = c("idtax_n" = "idtax"))
 
       }
 
 
 
     }
+    # if(!any(colnames(res)=="accepted_name"))
+    #   res <- res %>%
+    #   tibble::add_column(accepted_name=NA) %>%
+    #   mutate(accepted_name = as.character(accepted_name))
 
     if(!is.null(res)) {
       if (verbose & nrow(res) < 50) {
@@ -12854,7 +12854,10 @@ merge_individuals_taxa <- function(id_individual = NULL, id_plot = NULL) {
     ) %>% # adding id_diconame for specimens
     dplyr::mutate(idtax_individual_f = ifelse(!is.na(idtax_specimen_f),
                                               idtax_specimen_f,
-                                              idtax_f)) %>% #### selecting id_dico_name from specimens if any
+                                              idtax_f))
+
+  res_individuals_full <-
+    res_individuals_full %>% #### selecting id_dico_name from specimens if any
     dplyr::left_join(
       add_taxa_table_taxa() %>%
         dplyr::select(-data_modif_d,-data_modif_m,-data_modif_y),
@@ -12865,6 +12868,183 @@ merge_individuals_taxa <- function(id_individual = NULL, id_plot = NULL) {
 
 }
 
+#' Query for traits
+#'
+#' Query for traits for given taxa, include synonyms or not
+#'
+#' @return vector
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @param idtax vector of idtax_n
+#' @param idtax_good vector of idtax_good; NA if no synonym
+#' @param add_taxa_info logical
+#'
+#' @export
+query_traits_measures <- function(idtax,
+                                  idtax_good = NULL,
+                                  add_taxa_info = FALSE) {
+
+  if (!is.null(idtax_good))
+    idtax_tb <- tibble(idtax = idtax, idtax_good = idtax_good)
+
+  temp_table <-
+    tibble(id = unique(idtax), look_for = 1)
+
+  ## create a temporary table with new data
+  DBI::dbWriteTable(
+    mydb,
+    "temp_table",
+    temp_table,
+    overwrite = T,
+    fileEncoding = "UTF-8",
+    row.names = F
+  )
+
+  traits_found <-
+    dplyr::tbl(mydb, "table_traits_measures") %>%
+    dplyr::left_join(
+      dplyr::tbl(mydb, "temp_table"),
+      by = c("idtax" = "id")
+    ) %>%
+    filter(!is.na(look_for)) %>%
+    dplyr::select(-look_for) %>%
+    dplyr::left_join(tbl(mydb, "table_traits") %>%
+                       dplyr::select(trait, id_trait, valuetype),
+                     by = c("id_trait" = "id_trait")) %>%
+    dplyr::collect()
+
+  if (add_taxa_info) {
+
+    taxa_infos <-
+      add_taxa_table_taxa(ids = traits_found$idtax) %>%
+      collect() %>%
+      dplyr::select(idtax_n, idtax_good_n, tax_fam, tax_gen, tax_esp, tax_infra_level)
+
+    traits_found <-
+      traits_found %>%
+      left_join(taxa_infos,
+                by = c("idtax" = "idtax_n"))
+
+  }
+
+  if(nrow(traits_found) > 0) {
+
+    if (any(traits_found$valuetype == "categorical")) {
+
+      traits_idtax_char <-
+        traits_found %>%
+        filter(valuetype == "categorical") %>%
+        dplyr::select(idtax,
+                      trait,
+                      traitvalue_char,
+                      basisofrecord,
+                      id_trait_measures) %>%
+        dplyr::mutate(rn = data.table::rowid(trait)) %>%
+        tidyr::pivot_wider(
+          names_from = trait,
+          values_from = c(traitvalue_char, basisofrecord, id_trait_measures)
+        ) %>%
+        dplyr::select(-rn) %>%
+        dplyr::mutate(across(starts_with("id_trait_"), as.character))
+
+      if (!is.null(idtax_good))
+        traits_idtax_char <-
+          traits_idtax_char %>%
+          left_join(idtax_tb %>%
+                      dplyr::select(idtax, idtax_good),
+                    by = c("idtax" = "idtax")) %>%
+          # dplyr::select(idtax, idtax_good) %>%
+          dplyr::mutate(idtax = ifelse(is.na(idtax_good), idtax, idtax_good)) %>%
+          dplyr::select(-idtax_good)
+
+      traits_idtax_char <-
+        traits_idtax_char %>%
+        dplyr::group_by(idtax) %>%
+        dplyr::mutate(dplyr::across(where(is.character),
+                                    ~ stringr::str_c(unique(.)[!is.na(unique(.))], collapse = ", "))) %>%
+        distinct()
+
+      if (add_taxa_info) {
+
+        traits_idtax_char <-
+          traits_idtax_char %>%
+          left_join(taxa_infos,
+                    by = c("idtax" = "idtax_n"))
+      }
+
+
+    } else {
+
+      traits_idtax_char <- NA
+
+    }
+
+
+    if (any(traits_found$valuetype == "numeric")) {
+
+      traits_idtax_num <-
+        traits_found %>%
+        filter(valuetype == "numeric") %>%
+        dplyr::select(idtax,
+                      trait,
+                      traitvalue,
+                      basisofrecord,
+                      id_trait_measures) %>%
+        dplyr::mutate(rn = data.table::rowid(trait)) %>%
+        tidyr::pivot_wider(
+          names_from = trait,
+          values_from = c(traitvalue, basisofrecord, id_trait_measures)
+        ) %>%
+        dplyr::select(-rn) %>%
+        dplyr::mutate(across(starts_with("id_trait_"), as.character))
+
+      if (!is.null(idtax_good))
+        traits_idtax_num <-
+          traits_idtax_num %>%
+          left_join(idtax_tb %>%
+                      dplyr::select(idtax, idtax_good),
+                    by = c("idtax" = "idtax")) %>%
+          # dplyr::select(idtax, idtax_good) %>%
+          dplyr::mutate(idtax = ifelse(is.na(idtax_good), idtax, idtax_good)) %>%
+          dplyr::select(-idtax_good)
+
+      traits_idtax_num <-
+        traits_idtax_num %>%
+        dplyr::group_by(idtax) %>%
+        dplyr::mutate(dplyr::across(where(is.numeric),
+                                    mean, na.rm = T)) %>%
+        dplyr::mutate(dplyr::across(where(is.character),
+                                    ~ stringr::str_c(unique(.)[!is.na(unique(.))],
+                                                     collapse = ", "))) %>%
+        distinct()
+
+      if (add_taxa_info) {
+
+        traits_idtax_num <-
+          traits_idtax_num %>%
+          left_join(taxa_infos,
+                    by = c("idtax" = "idtax_n"))
+      }
+
+
+    } else {
+
+      traits_idtax_num <- NA
+
+    }
+
+  } else {
+
+    traits_found <- NA
+
+  }
+
+  return(list(traits_found = traits_found,
+              traits_idtax_num = traits_idtax_num,
+              traits_idtax_char = traits_idtax_char))
+}
+
+
 #' List, extract taxa
 #'
 #' Provide list of selected taxa
@@ -12872,12 +13052,12 @@ merge_individuals_taxa <- function(id_individual = NULL, id_plot = NULL) {
 #' @return A tibble of all taxa
 #'
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
-#'
+#' @param ids idtax to filter the table
 #'
 #'
 #' @return A src object with merged taxa
 #' @export
-add_taxa_table_taxa <- function() {
+add_taxa_table_taxa <- function(ids = NULL) {
 
   table_taxa <-
     dplyr::tbl(mydb, "table_taxa") %>%
@@ -12904,9 +13084,40 @@ add_taxa_table_taxa <- function() {
                                                 ifelse(!is.na(author3), paste0(" ", author3), "")),
                                          NA))
 
+  if (!is.null(ids)) {
+
+    # temp_table <-
+    #   tibble(id = ids, look_for = 1)
+    #
+    # ## create a temporary table with new data
+    # DBI::dbWriteTable(
+    #   mydb,
+    #   "temp_table",
+    #   temp_table,
+    #   overwrite = T,
+    #   fileEncoding = "UTF-8",
+    #   row.names = F
+    # )
+    #
+    # table_taxa <-
+    #   table_taxa %>%
+    #   dplyr::left_join(
+    #     dplyr::tbl(mydb, "temp_table"),
+    #     by = c("idtax_n" = "id")
+    #   ) %>%
+    #   filter(!is.na(look_for)) %>%
+    #   dplyr::select(-look_for)
+
+
+    # dplyr::collect()
+
+    table_taxa <-
+      table_taxa %>%
+      filter(idtax_n %in% ids)
+
+  }
   return(table_taxa)
 }
-
 
 
 #' Table taxa
