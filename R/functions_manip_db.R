@@ -2360,17 +2360,17 @@ query_plots <- function(team_lead = NULL,
       cli::cli_alert_info("Extracting taxa-level traits")
 
       queried_traits_tax <-
-        query_traits_measures(idtax = res_individuals_full$idtax_individual_f)
+        query_traits_measures(idtax = unique(res_individuals_full$idtax_individual_f))
 
       if (nrow(queried_traits_tax$traits_found) > 0) {
 
-        if (nrow(queried_traits_tax$traits_idtax_num) > 0)
+        if (!any(is.na(queried_traits_tax$traits_idtax_num)))
           res_individuals_full <-
             res_individuals_full %>%
             left_join(queried_traits_tax$traits_idtax_num,
                       by = c("idtax_individual_f" = "idtax"))
 
-        if (nrow(queried_traits_tax$traits_idtax_char) > 0)
+        if (!any(is.na(queried_traits_tax$traits_idtax_char)))
           res_individuals_full <-
             res_individuals_full %>%
             left_join(queried_traits_tax$traits_idtax_char,
@@ -10976,8 +10976,6 @@ process_trimble_data <- function(PATH = NULL, plot_name = NULL, format = "dbf") 
 
   }
 
-
-
   ncol_list <- list()
   nbe_herb <- list()
   all_plot_list <- list()
@@ -11311,10 +11309,10 @@ process_trimble_data <- function(PATH = NULL, plot_name = NULL, format = "dbf") 
     quadrats <-
       vector(mode = "character", length = nrow(occ_data))
     for (k in 1:(nrow(all_quadrat))) {
-      if (k == 25) {
+      if (k == nrow(all_quadrat)) {
         quadrats[all_quadrat$ID[k]:nrow(occ_data)] <-
           all_quadrat$quadrat_good_format[k]
-      } else{
+      } else {
         quadrats[all_quadrat$ID[k]:all_quadrat$ID[k + 1]] <-
           all_quadrat$quadrat_good_format[k]
         # print(all_quadrat$quadrat_good_format[k])
@@ -11585,8 +11583,20 @@ process_trimble_data <- function(PATH = NULL, plot_name = NULL, format = "dbf") 
       occ_data %>%
       dplyr::rename(id = ID)
 
-    if(any(occ_data$Total_heig>0)) stop("height values different of 0")
-    if(any(occ_data$H_branch>0)) stop("branch values different of 0")
+    if(any(occ_data$Total_heig > 0)) {
+
+      cli::cli_alert_info("tree height data processing")
+
+      occ_data <-
+        occ_data %>%
+        mutate(tree_height = Total_heig) %>%
+        mutate(tree_height = replace(tree_height, tree_height == 0, NA))
+
+      # stop("height values different of 0")
+
+    }
+
+    if(any(occ_data$H_branch > 0)) stop("branch values different of 0")
 
     ## subsetting traits datasets
     ## collection date
@@ -11660,7 +11670,7 @@ process_trimble_data <- function(PATH = NULL, plot_name = NULL, format = "dbf") 
 
   writexl::write_xlsx(final_output, paste("final_process_plot_", plot_name,".xlsx", sep = ""))
 
-  writexl::write_xlsx(all_traits_list, paste("final_process_traits_", plot_name,".xlsx", sep = ""))
+  writexl::write_xlsx(final_output_traits, paste("final_process_traits_", plot_name,".xlsx", sep = ""))
 
   writexl::write_xlsx(final_logs, paste("final_process_plot_logs_", plot_name,".xlsx", sep = ""))
 
@@ -12887,27 +12897,36 @@ query_traits_measures <- function(idtax,
   if (!is.null(idtax_good))
     idtax_tb <- tibble(idtax = idtax, idtax_good = idtax_good)
 
-  temp_table <-
-    tibble(id = unique(idtax), look_for = 1)
+  # temp_table <-
+  #   tibble(id = unique(idtax), look_for = 1)
+  #
+  # ## create a temporary table with new data
+  # DBI::dbWriteTable(
+  #   mydb,
+  #   "temp_table",
+  #   temp_table,
+  #   overwrite = T,
+  #   fileEncoding = "UTF-8",
+  #   row.names = F
+  # )
+  #
+  # traits_found <-
+  #   dplyr::tbl(mydb, "table_traits_measures") %>%
+  #   dplyr::left_join(
+  #     dplyr::tbl(mydb, "temp_table"),
+  #     by = c("idtax" = "id")
+  #   ) %>%
+  #   filter(!is.na(look_for)) %>%
+  #   dplyr::select(-look_for) %>%
+  #   dplyr::left_join(tbl(mydb, "table_traits") %>%
+  #                      dplyr::select(trait, id_trait, valuetype),
+  #                    by = c("id_trait" = "id_trait")) %>%
+  #   dplyr::collect()
 
-  ## create a temporary table with new data
-  DBI::dbWriteTable(
-    mydb,
-    "temp_table",
-    temp_table,
-    overwrite = T,
-    fileEncoding = "UTF-8",
-    row.names = F
-  )
 
   traits_found <-
     dplyr::tbl(mydb, "table_traits_measures") %>%
-    dplyr::left_join(
-      dplyr::tbl(mydb, "temp_table"),
-      by = c("idtax" = "id")
-    ) %>%
-    filter(!is.na(look_for)) %>%
-    dplyr::select(-look_for) %>%
+    dplyr::filter(idtax %in% !!idtax) %>%
     dplyr::left_join(tbl(mydb, "table_traits") %>%
                        dplyr::select(trait, id_trait, valuetype),
                      by = c("id_trait" = "id_trait")) %>%
@@ -13036,6 +13055,8 @@ query_traits_measures <- function(idtax,
   } else {
 
     traits_found <- NA
+    traits_idtax_num <- NA
+    traits_idtax_char <- NA
 
   }
 
@@ -13233,6 +13254,9 @@ species_plot_matrix <- function(data_tb, tax_col = "tax_sp_level", plot_col = "p
                                 col_names_corresp = c("id_specimen", "id_n", "type"),
                                 launch_adding_data = FALSE) {
 
+  if (is.null(col_names_select))
+    col_names_select <- names(new_data)
+
   new_data_renamed <-
     .rename_data(dataset = new_data,
                  col_old = col_names_select,
@@ -13242,6 +13266,9 @@ species_plot_matrix <- function(data_tb, tax_col = "tax_sp_level", plot_col = "p
 
   message(paste0("adding link for: ", nrow(distinct(new_data_renamed, id_specimen)), " different specimens"))
 
+  cli::cli_alert_info("Prepare to add links for: {nrow(distinct(new_data_renamed, id_specimen))} different specimens")
+
+
   check_dup <-
     tbl(mydb, "data_link_specimens") %>%
     dplyr::select(id_n, id_specimen) %>%
@@ -13250,10 +13277,11 @@ species_plot_matrix <- function(data_tb, tax_col = "tax_sp_level", plot_col = "p
                 dplyr::select(id_n, id_specimen)) %>%
     group_by(id_n, id_specimen) %>%
     count() %>%
-    filter(n>1) %>%
+    filter(n > 1) %>%
+    filter(id_n %in% unique(new_data_renamed$id_n)) %>%
     ungroup()
 
-  if(nrow(check_dup)>0) {
+  if(nrow(check_dup) > 0) {
 
     print(check_dup)
     message("some link to be added are already in the database")
@@ -13275,7 +13303,8 @@ species_plot_matrix <- function(data_tb, tax_col = "tax_sp_level", plot_col = "p
 
   if(launch_adding_data) {
 
-    message(paste("adding data:", nrow(data_to_add), "rows to link table"))
+    cli::cli_alert_success("Added links : {nrow(data_to_add)} rows to link table")
+
     DBI::dbWriteTable(mydb, "data_link_specimens",
                       data_to_add, append = TRUE, row.names = FALSE)
   }
