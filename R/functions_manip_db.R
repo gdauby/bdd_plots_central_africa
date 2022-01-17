@@ -2107,7 +2107,6 @@ query_plots <- function(team_lead = NULL,
     res %>%
     dplyr::select(-date)
 
-
   if(nrow(census_features) > 1) {
     cli::cli_rule(left = "Attaching census informations")
     cli::cli_alert_info("Number of census found : {unique(pull(census_features, typevalue))}")
@@ -2364,13 +2363,13 @@ query_plots <- function(team_lead = NULL,
 
       if (nrow(queried_traits_tax$traits_found) > 0) {
 
-        if (!any(is.na(queried_traits_tax$traits_idtax_num)))
+        if (any(class(queried_traits_tax$traits_idtax_num) == "data.frame"))
           res_individuals_full <-
             res_individuals_full %>%
             left_join(queried_traits_tax$traits_idtax_num,
                       by = c("idtax_individual_f" = "idtax"))
 
-        if (!any(is.na(queried_traits_tax$traits_idtax_char)))
+        if (any(class(queried_traits_tax$traits_idtax_char) == "data.frame"))
           res_individuals_full <-
             res_individuals_full %>%
             left_join(queried_traits_tax$traits_idtax_char,
@@ -12361,8 +12360,8 @@ query_taxa <-
 
     if(!is.null(class)) {
 
-      all_res <- list()
-      system.time(
+      all_res <- vector('list', length(class))
+
         for (i in 1:length(class)) {
           if(!exact_match)
             rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_tax_famclass WHERE tax_famclass ILIKE '%",
@@ -12380,7 +12379,7 @@ query_taxa <-
             dplyr::select(idtax_n, idtax_good_n) %>%
             collect()
         }
-      )
+
 
       res_class <- bind_rows(all_res)
 
@@ -12710,18 +12709,18 @@ query_taxa <-
         dplyr::relocate(tax_famclass, .after = tax_order)
 
 
-      if(extract_traits) {
+      if (extract_traits) {
 
         traitsqueried <-
           query_traits_measures(idtax = res$idtax_n, idtax_good = res$idtax_good_n)
 
-        if (!any(is.na(traitsqueried$traits_idtax_num)))
+        if (any(class(traitsqueried$traits_idtax_num) == "data.frame"))
           res <-
             res %>%
             left_join(traitsqueried$traits_idtax_num,
                       by = c("idtax_n" = "idtax"))
 
-        if (!any(is.na(traitsqueried$traits_idtax_char)))
+        if (any(class(traitsqueried$traits_idtax_char) == "data.frame"))
           res <-
             res %>%
             left_join(traitsqueried$traits_idtax_char,
@@ -12763,8 +12762,6 @@ query_taxa <-
       if(verbose & nrow(res) >= 20)
         message("\n Not showing html table because too many taxa")
     }
-
-
 
     if(!is.null(res)) return(res)
   }
@@ -12888,11 +12885,13 @@ merge_individuals_taxa <- function(id_individual = NULL, id_plot = NULL) {
 #' @param idtax vector of idtax_n
 #' @param idtax_good vector of idtax_good; NA if no synonym
 #' @param add_taxa_info logical
+#' @param trait_cat_mode vector string if "most_frequent" then the most frequent value for categorical trait is given, if "all_unique" then all unique value separated by comma
 #'
 #' @export
 query_traits_measures <- function(idtax,
                                   idtax_good = NULL,
-                                  add_taxa_info = FALSE) {
+                                  add_taxa_info = FALSE,
+                                  trait_cat_mode = "most_frequent") {
 
   if (!is.null(idtax_good))
     idtax_tb <- tibble(idtax = idtax, idtax_good = idtax_good)
@@ -12922,7 +12921,6 @@ query_traits_measures <- function(idtax,
   #                      dplyr::select(trait, id_trait, valuetype),
   #                    by = c("id_trait" = "id_trait")) %>%
   #   dplyr::collect()
-
 
   traits_found <-
     dplyr::tbl(mydb, "table_traits_measures") %>%
@@ -12963,8 +12961,9 @@ query_traits_measures <- function(idtax,
           names_from = trait,
           values_from = c(traitvalue_char, basisofrecord, id_trait_measures)
         ) %>%
-        dplyr::select(-rn) %>%
-        dplyr::mutate(across(starts_with("id_trait_"), as.character))
+        dplyr::select(-rn)
+      # %>%
+      #   dplyr::mutate(across(starts_with("id_trait_"), as.character))
 
       if (!is.null(idtax_good))
         traits_idtax_char <-
@@ -12976,12 +12975,56 @@ query_traits_measures <- function(idtax,
           dplyr::mutate(idtax = ifelse(is.na(idtax_good), idtax, idtax_good)) %>%
           dplyr::select(-idtax_good)
 
-      traits_idtax_char <-
+      names(traits_idtax_char) <- gsub("traitvalue_char_", "", names(traits_idtax_char))
+
+      traits_idtax_concat <-
         traits_idtax_char %>%
+        dplyr::select(idtax, starts_with("id_trait_")) %>%
+        dplyr::mutate(across(starts_with("id_trait_"), as.character)) %>%
         dplyr::group_by(idtax) %>%
         dplyr::mutate(dplyr::across(where(is.character),
-                                    ~ stringr::str_c(unique(.)[!is.na(unique(.))], collapse = ", "))) %>%
+                                    ~ stringr::str_c(.[!is.na(.)],
+                                                     collapse = ", "))) %>%
+        dplyr::ungroup() %>%
         distinct()
+
+
+      if (trait_cat_mode == "all_unique") {
+
+        cli::cli_alert_info("Extracting all unique values for categorical traits")
+
+        ### concatenate all distinct values
+        traits_idtax_char <-
+          traits_idtax_char %>%
+          dplyr::select(-starts_with("id_trait_")) %>%
+          dplyr::group_by(idtax) %>%
+          dplyr::mutate(dplyr::across(where(is.character),
+                                      ~ stringr::str_c(.[!is.na(.)],
+                                                       collapse = ", "))) %>%
+          distinct() %>%
+          dplyr::ungroup()
+
+      }
+
+      if (trait_cat_mode == "most_frequent") {
+
+        cli::cli_alert_info("Extracting most frequent value for categorical traits")
+
+        traits_idtax_char <-
+          traits_idtax_char %>%
+          dplyr::select(-starts_with("id_trait_")) %>%
+          group_by(idtax, across(where(is.character))) %>%
+          count() %>%
+          arrange(idtax, desc(n)) %>%
+          ungroup() %>%
+          group_by(idtax) %>%
+          dplyr::summarise_if(is.character, ~ first(.x[!is.na(.x)]))
+
+      }
+
+      traits_idtax_char <-
+        left_join(traits_idtax_char,
+                  traits_idtax_concat, by = c("idtax" = "idtax"))
 
       if (add_taxa_info) {
 
@@ -13016,6 +13059,9 @@ query_traits_measures <- function(idtax,
         ) %>%
         dplyr::select(-rn) %>%
         dplyr::mutate(across(starts_with("id_trait_"), as.character))
+
+      names(traits_idtax_num) <- gsub("traitvalue_", "", names(traits_idtax_num))
+
 
       if (!is.null(idtax_good))
         traits_idtax_num <-
