@@ -4,7 +4,12 @@
 \alias{query_traits_measures}
 \title{Query for traits}
 \usage{
-query_traits_measures(idtax, idtax_good = NULL, add_taxa_info = FALSE)
+query_traits_measures(
+  idtax,
+  idtax_good = NULL,
+  add_taxa_info = FALSE,
+  trait_cat_mode = "most_frequent"
+)
 }
 \arguments{
 \item{idtax}{vector of idtax_n}
@@ -12,6 +17,8 @@ query_traits_measures(idtax, idtax_good = NULL, add_taxa_info = FALSE)
 \item{idtax_good}{vector of idtax_good; NA if no synonym}
 
 \item{add_taxa_info}{logical}
+
+\item{trait_cat_mode}{vector string if "most_frequent" then the most frequent value for categorical trait is given, if "all_unique" then all unique value separated by comma}
 }
 \value{
 vector
