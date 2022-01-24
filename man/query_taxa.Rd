@@ -15,7 +15,6 @@ query_taxa(
   only_genus = FALSE,
   only_family = FALSE,
   only_class = FALSE,
-  habit = NULL,
   ids = NULL,
   verbose = TRUE,
   exact_match = FALSE,
@@ -24,43 +23,35 @@ query_taxa(
 )
 }
 \arguments{
-\item{team_lead}{string fuzzy person name to look for}
+\item{class}{character string of class}
 
-\item{plot_name}{string fuzzy plot name to look for}
+\item{family}{string}
 
-\item{tag}{numeric exact tag number of the plot}
+\item{genus}{string}
 
-\item{country}{string fuzzy country name to look for}
+\item{order}{string}
 
-\item{province}{string fuzzy province name to look for}
+\item{species}{string}
 
-\item{locality_name}{string fuzzy locality_name name to look for}
+\item{tax_nam01}{string}
 
-\item{method}{stringfuzzy method name to look for}
+\item{tax_nam02}{string}
 
-\item{date_y}{integer year of collect}
+\item{only_genus}{logical}
 
-\item{extract_individuals}{logical whether individuals instead of plot list as output}
+\item{only_family}{logical}
 
-\item{map}{logical whether map whould be produced}
+\item{only_class}{logical}
 
-\item{zoom}{integer positive values indicating zoom level for ggplot style map}
+\item{ids}{integer id of searched taxa}
 
-\item{label}{logical for ggplot map, whether adding label or not}
+\item{verbose}{logical}
 
-\item{try_optimal_label}{logical if map is ggplot}
+\item{exact_match}{logical}
 
-\item{map_type}{string mapview or ggplot, mapview by default}
+\item{check_synonymy}{logical}
 
-\item{id_individual}{numeric id of individual to be extracted}
-
-\item{id_plot}{numeric id of plot to be extracted}
-
-\item{show_multiple_census}{logical whether multiple census should be shown, by default FALSE}
-
-\item{remove_ids}{logical remove all ids columns, by default TRUE}
-
-\item{collapse_multiple_val}{logical whether multiple traits measures should be collapsed (resulting values as character, separated by dash)}
+\item{extract_traits}{logical#'}
 }
 \value{
 A tibble of all taxa
