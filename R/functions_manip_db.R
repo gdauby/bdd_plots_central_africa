@@ -2538,18 +2538,17 @@ query_plots <- function(team_lead = NULL,
                     by = c("tax_gen" = "tax_gen"))
 
         res_individuals_full <-
-          bind_rows(res_subset, res_completed) %>%
-          filter(!is.na(wood_density_mean))
+          bind_rows(res_subset, res_completed)
 
         # res_individuals_full %>%
         #   filter(!is.na(wood_density_mean))
 
         level_trait[which(res_individuals_full$id_n %in% list_genera$id_n)] <- "genus"
 
-        res_individuals_full %>%
-          filter(id_n %in% list_genera$id_n) %>%
-          group_by(wood_density_mean) %>%
-          count()
+        # res_individuals_full %>%
+        #   filter(id_n %in% list_genera$id_n) %>%
+        #   group_by(wood_density_mean) %>%
+        #   count()
 
       }
 
@@ -3860,7 +3859,7 @@ add_subplot_features <- function(new_data,
 
     data_subplottype <-
       data_subplottype %>%
-      dplyr::rename_at(dplyr::all_of(dplyr::vars(subplottype)), ~ subplottype_name)
+      dplyr::rename_at((dplyr::vars(dplyr::all_of(subplottype))), ~ subplottype_name)
 
     data_subplottype <-
       data_subplottype %>%
@@ -3868,7 +3867,8 @@ add_subplot_features <- function(new_data,
 
     ### adding subplot id and adding potential issues based on subplot
     data_subplottype <-
-      .link_subplotype(data_stand = data_subplottype, subplotype = subplottype)
+      .link_subplotype(data_stand = data_subplottype,
+                       subplotype = subplottype)
 
     print(".add_modif_field")
     data_subplottype <-
@@ -5651,7 +5651,7 @@ update_trait_list_table <- function(trait_searched = NULL,
     }else{
       query_trait <-
         dplyr::tbl(mydb, "traitlist") %>%
-        dplyr::filter(id_trait == trait_id) %>%
+        dplyr::filter(id_trait == !!trait_id) %>%
         dplyr::collect()
     }
   print(query_trait %>% as.data.frame())
@@ -13561,5 +13561,210 @@ species_plot_matrix <- function(data_tb, tax_col = "tax_sp_level", plot_col = "p
     DBI::dbWriteTable(mydb, "data_link_specimens",
                       data_to_add, append = TRUE, row.names = FALSE)
   }
+
+}
+
+
+
+
+
+#' Update subplottype table
+#'
+#' Update subplottype table
+#'
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#'
+#' @param subplottype_searched string genus name searched
+#' @param id_subplotype string genus name searched
+#' @param new_subplottype string new subplottype name
+#' @param new_maxallowedvalue numeric new maxallowedvalue
+#' @param new_minallowedvalue numeric new minallowedvalue
+#' @param new_traitdescription string new traitdescription
+#' @param new_expectedunit string new expectedunit
+#' @param ask_before_update logical TRUE by default, ask for confirmation before updating
+#' @param add_backup logical TRUE by default, add backup of modified data
+#' @param show_results logical TRUE by default, show the data that has been modified
+#'
+#' @return No return value individuals updated
+#' @export
+update_subplottype_list_table <- function(subplottype_searched = NULL,
+                                    id_subplotype = NULL,
+                                    new_subplottype = NULL,
+                                    new_maxallowedvalue = NULL,
+                                    new_minallowedvalue = NULL,
+                                    new_typedescription = NULL,
+                                    new_expectedunit = NULL,
+                                    ask_before_update = TRUE,
+                                    add_backup = TRUE,
+                                    show_results=TRUE) {
+
+  if(!exists("mydb")) call.mydb()
+
+  if(all(is.null(c(subplottype_searched, id_subplotype))))
+    stop("\n Provide subplottype_searched or id_subplotype to update")
+
+  ### checking if at least one modification is asked
+  new_vals <- c(new_subplottype, new_maxallowedvalue, new_minallowedvalue,
+                new_typedescription, new_expectedunit)
+  if(!any(!is.null(new_vals))) stop("\n No new values to be updated.")
+
+  ### querying for entries to be modified
+  if (!is.null(subplottype_searched)) {
+    query <- 'SELECT * FROM subplotype_list WHERE MMM'
+    query <- gsub(
+      pattern = "MMM",
+      replacement = paste0(" type ILIKE '%",
+                           subplottype_searched, "%'"),
+      x = query
+    )
+
+    rs <- DBI::dbSendQuery(mydb, query)
+    query_trait <- DBI::dbFetch(rs)
+    DBI::dbClearResult(rs)
+
+  } else {
+    query_subplotype <-
+      dplyr::tbl(mydb, "subplotype_list") %>%
+      dplyr::filter(id_subplotype == !!id_subplotype) %>%
+      dplyr::collect()
+  }
+
+  print(query_subplotype %>% as.data.frame())
+  if (nrow(query_subplotype) > 1)
+    stop("more than one subplotype selected, select one")
+  if (nrow(query_subplotype) == 0)
+    stop("no subplotype selected, select one")
+
+  modif_types <-
+    vector(mode = "character", length = nrow(query_subplotype))
+
+  new_vals <-
+    dplyr::tibble(type = ifelse(!is.null(new_subplottype), as.character(new_subplottype),
+                                 query_subplotype$type),
+                  maxallowedvalue = ifelse(!is.null(new_maxallowedvalue), as.numeric(new_maxallowedvalue),
+                                           query_subplotype$maxallowedvalue),
+                  minallowedvalue = ifelse(!is.null(new_minallowedvalue), as.numeric(new_minallowedvalue),
+                                           query_subplotype$minallowedvalue),
+                  typedescription = ifelse(!is.null(new_typedescription), as.character(new_typedescription),
+                                            query_subplotype$typedescription),
+                  expectedunit = ifelse(!is.null(new_expectedunit), as.character(new_expectedunit),
+                                        query_subplotype$expectedunit))
+
+  new_vals <-
+    new_vals %>%
+    replace(., is.na(.), -9999)
+
+  sel_query_subplotype <-
+    dplyr::bind_rows(new_vals, query_subplotype %>%
+                       dplyr::select(-valuetype, -id_subplotype))
+
+  # sel_query_subplotype <-
+  #   sel_query_subplotype %>%
+  #   replace(., is.na(.), -9999)
+
+  sel_query_subplotype <-
+    replace_NA(sel_query_subplotype)
+
+  comp_vals <-
+    apply(sel_query_subplotype, MARGIN = 2, FUN = function(x) x[1]!=x[2:length(x)])
+
+  # if(!is.null(nrow(comp_vals))) {
+  #   query_trait <-
+  #     query_trait[apply(comp_vals, MARGIN = 1, FUN = function(x) any(x)),]
+  #   comp_vals <-
+  #     apply(comp_vals, MARGIN = 2, FUN = function(x) any(x))
+  # }else{
+  #   query_trait <- query_trait
+  # }
+
+  if(any(is.na(comp_vals))) comp_vals <- comp_vals[!is.na(comp_vals)]
+
+  modif_types[1:length(modif_types)] <-
+    paste(modif_types, rep(paste(names(comp_vals)[comp_vals], sep=", "),
+                           length(modif_types)), collapse ="__")
+
+  # if(!any(comp_vals)) stop("No update performed because no values are different.")
+
+  if(any(comp_vals)) {
+
+    cat(paste("\n Number of rows selected to be updated :", nrow(query_subplotype), "\n"))
+
+    if (ask_before_update) {
+
+      sel_query_subplotype %>%
+        dplyr::select(!!names(comp_vals)) %>%
+        dplyr::select(which(comp_vals)) %>%
+        print()
+
+      Q <-
+        utils::askYesNo(msg = "Do you confirm you want to update these rows for selected fields?",
+                        default = FALSE)
+    } else{
+
+      Q <- TRUE
+
+    }
+
+    if (Q) {
+
+      if (add_backup) {
+        message("no back up for this table yet")
+        # query_trait <-
+        #   query_trait %>%
+        #   tibble::add_column(date_modified=Sys.Date()) %>%
+        #   tibble::add_column(modif_type=modif_types)
+        #
+        #
+        # DBI::dbWriteTable(mydb, "followup_updates_diconames", query_tax, append = TRUE, row.names = FALSE)
+
+      }
+
+      # query_subplotype <-
+      #   query_subplotype %>%
+      #   dplyr::select(-date_modif_d, -date_modif_m, -date_modif_y)
+
+      # query_subplotype <-
+      #   .add_modif_field(query_subplotype)
+
+      rs <-
+        DBI::dbSendQuery(mydb,
+                         statement="UPDATE subplotype_list SET type=$2, valuetype=$3, maxallowedvalue=$4, minallowedvalue=$5, typedescription=$6, expectedunit=$7 WHERE id_subplotype = $1", # , date_modif_d=$9 date_modif_m=$10, date_modif_y=$11
+                         params=list(query_subplotype$id_subplotype, # $1
+                                     rep(ifelse(!is.null(new_subplottype), as.character(new_subplottype),
+                                                query_subplotype$type), nrow(query_subplotype)), # $2
+                                     # rep(ifelse(!is.null(new_relatedterm), as.character(new_relatedterm),
+                                     #            query_trait$relatedterm), nrow(query_trait)), # $3
+                                     rep(query_subplotype$valuetype, nrow(query_subplotype)), # $3
+                                     rep(ifelse(!is.null(new_maxallowedvalue), as.numeric(new_maxallowedvalue),
+                                                query_subplotype$maxallowedvalue), nrow(query_subplotype)), # $4
+                                     rep(ifelse(!is.null(new_minallowedvalue), as.numeric(new_minallowedvalue),
+                                                query_subplotype$minallowedvalue), nrow(query_subplotype)), # $5
+                                     rep(ifelse(!is.null(new_typedescription), as.character(new_typedescription),
+                                                query_subplotype$typedescription), nrow(query_subplotype)), # $6
+                                     # rep(query_subplotype$factorlevels, nrow(query_subplotype)), # $7
+                                     rep(ifelse(!is.null(new_expectedunit), as.character(new_expectedunit),
+                                                query_subplotype$expectedunit), nrow(query_subplotype)))  # $7
+                         # ,
+                         #             rep(query_subplotype$date_modif_d, nrow(query_subplotype)), # $9
+                         #             rep(query_subplotype$date_modif_m, nrow(query_subplotype)), # $10
+                         #             rep(query_subplotype$date_modif_y, nrow(query_subplotype))# $11
+        )
+
+      DBI::dbClearResult(rs)
+
+      rs <-
+        DBI::dbSendQuery(mydb, statement="SELECT *FROM subplotype_list WHERE id_subplotype = $1",
+                         params=list(query_subplotype$id_subplotype))
+      if(show_results) print(DBI::dbFetch(rs))
+      DBI::dbClearResult(rs)
+
+    }
+  } else{
+
+    if(!any(comp_vals)) print("No update performed because no values are different.")
+  }
+
+  # dbDisconnect(mydb)
 
 }
