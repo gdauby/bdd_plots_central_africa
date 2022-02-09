@@ -1563,6 +1563,7 @@ traits_list <- function() {
 #' @importFrom stringr str_flatten str_trim str_extract
 #' @importFrom date as.date
 #' @importFrom tidyselect vars_select_helpers
+#' @importFrom BIOMASS correctCoordGPS
 #'
 #' @return A tibble of plots or individuals if extract_individuals is TRUE
 #'
@@ -2391,12 +2392,15 @@ query_plots <- function(team_lead = NULL,
         dplyr::filter(is.na(tax_sp_level)) %>%
         dplyr::select(id_n, tax_gen)
 
-      all_sp_genera <- query_taxa(genus = list_genera %>%
-                                    dplyr::filter(!is.na(tax_gen)) %>%
-                                    dplyr::distinct(tax_gen) %>%
-                                    dplyr::pull(tax_gen),
-                                  class = NULL,
-                                  extract_traits = F)
+      all_sp_genera <- query_taxa(
+        genus = list_genera %>%
+          dplyr::filter(!is.na(tax_gen)) %>%
+          dplyr::distinct(tax_gen) %>%
+          dplyr::pull(tax_gen),
+        class = NULL,
+        extract_traits = FALSE,
+        verbose = FALSE
+      )
 
       all_sp_genera <-
         all_sp_genera %>%
