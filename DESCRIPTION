@@ -1,10 +1,10 @@
 Package: plotsdatabase
 Type: Package
 Title: Exploring and updating the Central Africa plot database
-Version: 0.1.0
+Version: 0.1.2
 Author: Gilles Dauby
-Maintainer: The package maintainer <yourself@somewhere.net>
-Description: Exploring and updating the database containing plot data from Central Africa
+Maintainer: Gilles Dauby <gilles.dauby@ird.fr>
+Description: Exploring and updating the database containing plot data from Central Africa. This package contains several function for manipulating tree inventories data from Central Africa. Access is restricted.
 License: GPL-2
 Imports: 
     methods,
@@ -33,7 +33,8 @@ Imports:
     kableExtra,
     shinybusy,
     tidyselect,
-    BIOMASS
+    BIOMASS,
+    date
 Suggests: cli, ggrepel, herblabel, measurements, knitr,
     rmarkdown
 Encoding: UTF-8
