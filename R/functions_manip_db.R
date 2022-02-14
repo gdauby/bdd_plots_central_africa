@@ -1558,6 +1558,7 @@ traits_list <- function() {
 #' @param remove_ids logical remove all ids columns, by default TRUE
 #' @param collapse_multiple_val logical whether multiple traits measures should be collapsed (resulting values as character, separated by dash)
 #' @param extract_traits whether species level traits should be extracted as well
+#' @param traits_to_genera if species-level traits should be extrapolated to genus level, by default is FALSE
 #'
 #' @importFrom DBI dbSendQuery dbFetch dbClearResult dbWriteTable
 #' @importFrom stringr str_flatten str_trim str_extract
@@ -1589,7 +1590,8 @@ query_plots <- function(team_lead = NULL,
                         show_all_coordinates = FALSE,
                         remove_ids = TRUE,
                         collapse_multiple_val = FALSE,
-                        extract_traits = TRUE) {
+                        extract_traits = TRUE,
+                        traits_to_genera = FALSE) {
 
   if (!exists("mydb")) call.mydb()
 
@@ -2385,327 +2387,329 @@ query_plots <- function(team_lead = NULL,
 
       }
 
-      ### complete traits at genus level
 
-      list_genera <- res_individuals_full %>%
-        # dplyr::filter(is.na(tax_sp_level)) %>%
-        dplyr::select(id_n, tax_gen)
+      if (traits_to_genera) {
 
-      all_sp_genera <- query_taxa(
-        genus = list_genera %>%
-          dplyr::filter(!is.na(tax_gen)) %>%
-          dplyr::distinct(tax_gen) %>%
-          dplyr::pull(tax_gen),
-        class = NULL,
-        extract_traits = FALSE,
-        verbose = FALSE,
-        exact_match = TRUE
-      )
+        ### complete traits at genus level
 
-      all_sp_genera <-
-        all_sp_genera %>%
-        filter(tax_gen %in% unique(list_genera$tax_gen),
-               !is.na(tax_infra_level))
+        list_genera <- res_individuals_full %>%
+          # dplyr::filter(is.na(tax_sp_level)) %>%
+          dplyr::select(id_n, tax_gen)
 
-      all_val_sp <- query_traits_measures(idtax = all_sp_genera %>%
-                                            filter(!is.na(tax_esp)) %>%
-                                            pull(idtax_n),
-                                          add_taxa_info = T)
+        all_sp_genera <- query_taxa(
+          genus = list_genera %>%
+            dplyr::filter(!is.na(tax_gen)) %>%
+            dplyr::distinct(tax_gen) %>%
+            dplyr::pull(tax_gen),
+          class = NULL,
+          extract_traits = FALSE,
+          verbose = FALSE,
+          exact_match = TRUE
+        )
 
-      # level_trait <- rep("species", nrow(res))
+        all_sp_genera <-
+          all_sp_genera %>%
+          filter(tax_gen %in% unique(list_genera$tax_gen),
+                 !is.na(tax_infra_level))
 
-      if (any(class(all_val_sp$traits_idtax_char) == "data.frame")) {
+        all_val_sp <- query_traits_measures(idtax = all_sp_genera %>%
+                                              filter(!is.na(tax_esp)) %>%
+                                              pull(idtax_n),
+                                            idtax_good = all_sp_genera %>%
+                                              filter(!is.na(tax_esp)) %>%
+                                              pull(idtax_good_n),
+                                            add_taxa_info = T)
 
-        traits_idtax_char <-
-          all_val_sp$traits_found %>%
-          dplyr::filter(valuetype == "categorical") %>%
-          dplyr::select(idtax,
-                        trait,
-                        traitvalue_char,
-                        basisofrecord,
-                        id_trait_measures) %>%
-          dplyr::mutate(rn = data.table::rowid(trait)) %>%
-          tidyr::pivot_wider(
-            names_from = trait,
-            values_from = c(traitvalue_char, basisofrecord, id_trait_measures)
-          ) %>%
-          dplyr::select(-rn) %>%
-          left_join(all_val_sp$traits_idtax_char %>%
-                      dplyr::select(idtax, tax_gen),
-                    by = c("idtax" = "idtax"))
+        # level_trait <- rep("species", nrow(res))
 
-        names(traits_idtax_char) <- gsub("traitvalue_char_", "", names(traits_idtax_char))
+        if (any(class(all_val_sp$traits_idtax_char) == "data.frame")) {
 
-        traits_idtax_concat <-
-          traits_idtax_char %>%
-          dplyr::select(tax_gen, starts_with("id_trait_")) %>%
-          dplyr::mutate(across(starts_with("id_trait_"), as.character)) %>%
-          dplyr::group_by(tax_gen) %>%
-          dplyr::mutate(dplyr::across(where(is.character),
-                                      ~ stringr::str_c(.[!is.na(.)],
-                                                       collapse = ", "))) %>%
-          dplyr::ungroup() %>%
-          dplyr::distinct()
+          traits_idtax_char <-
+            all_val_sp$traits_found %>%
+            dplyr::filter(valuetype == "categorical") %>%
+            dplyr::select(idtax,
+                          trait,
+                          traitvalue_char,
+                          basisofrecord,
+                          id_trait_measures) %>%
+            dplyr::mutate(rn = data.table::rowid(trait)) %>%
+            tidyr::pivot_wider(
+              names_from = trait,
+              values_from = c(traitvalue_char, basisofrecord, id_trait_measures)
+            ) %>%
+            dplyr::select(-rn) %>%
+            left_join(all_val_sp$traits_idtax_char %>%
+                        dplyr::select(idtax, tax_gen),
+                      by = c("idtax" = "idtax"))
 
-        cli::cli_alert_info("Extracting most frequent value for categorical traits at genus level")
+          names(traits_idtax_char) <- gsub("traitvalue_char_", "", names(traits_idtax_char))
 
-        traits_idtax_char <-
-          traits_idtax_char %>%
-          dplyr::select(-starts_with("id_trait_")) %>%
-          group_by(tax_gen, across(where(is.character))) %>%
-          count() %>%
-          arrange(tax_gen, desc(n)) %>%
-          ungroup() %>%
-          group_by(tax_gen) %>%
-          dplyr::summarise_if(is.character, ~ first(.x[!is.na(.x)]))
+          traits_idtax_concat <-
+            traits_idtax_char %>%
+            dplyr::select(tax_gen, starts_with("id_trait_")) %>%
+            dplyr::mutate(across(starts_with("id_trait_"), as.character)) %>%
+            dplyr::group_by(tax_gen) %>%
+            dplyr::mutate(dplyr::across(where(is.character),
+                                        ~ stringr::str_c(.[!is.na(.)],
+                                                         collapse = ", "))) %>%
+            dplyr::ungroup() %>%
+            dplyr::distinct()
 
-        traits_idtax_char <-
-          left_join(traits_idtax_char,
-                    traits_idtax_concat, by = c("tax_gen" = "tax_gen"))
+          cli::cli_alert_info("Extracting most frequent value for categorical traits at genus level")
 
-        colnames_traits <- names(traits_idtax_char %>%
-                                   dplyr::select(
-                                     -tax_gen,
-                                     -starts_with("id_trait_"),
-                                     -starts_with("basisofrecord_")
-                                   ))
+          traits_idtax_char <-
+            traits_idtax_char %>%
+            dplyr::select(-starts_with("id_trait_")) %>%
+            group_by(tax_gen, across(where(is.character))) %>%
+            count() %>%
+            arrange(tax_gen, desc(n)) %>%
+            ungroup() %>%
+            group_by(tax_gen) %>%
+            dplyr::summarise_if(is.character, ~ first(.x[!is.na(.x)]))
 
-        for (j in 1:length(colnames_traits)) {
+          traits_idtax_char <-
+            left_join(traits_idtax_char,
+                      traits_idtax_concat, by = c("tax_gen" = "tax_gen"))
 
-          if (colnames_traits[j] %in% names(res_individuals_full)) {
+          colnames_traits <- names(traits_idtax_char %>%
+                                     dplyr::select(
+                                       -tax_gen,
+                                       -starts_with("id_trait_"),
+                                       -starts_with("basisofrecord_")
+                                     ))
 
-            var1 <- paste0(colnames_traits[j], ".y")
-            var2 <- paste0(colnames_traits[j], ".x")
+          for (j in 1:length(colnames_traits)) {
 
-            res_individuals_full <-
-              res_individuals_full %>%
-              left_join(
-                traits_idtax_char %>%
-                  dplyr::select(tax_gen, colnames_traits[j]),
-                by = c("tax_gen" = "tax_gen")
-              ) %>%
-              # dplyr::select(
-              #   tax_sp_level,
-              #   id_n,
-              #   tax_gen,
-              #   paste0(colnames_traits[j], ".x"),
-              #   paste0(colnames_traits[j], ".y")
-              # ) %>%
-              mutate("{colnames_traits[j]}" :=
-                       ifelse(is.na(!!rlang::parse_expr(quo_name(rlang::enquo(var2)))),
-                              ifelse(is.na(!!rlang::parse_expr(quo_name(rlang::enquo(var1)))),
-                                     NA,
-                                     !!rlang::parse_expr(quo_name(rlang::enquo(var1)))),
-                              !!rlang::parse_expr(quo_name(rlang::enquo(var2))))) %>%
-              mutate("source_{colnames_traits[j]}" :=
-                       ifelse(is.na(!!rlang::parse_expr(quo_name(rlang::enquo(var2)))),
-                              ifelse(is.na(!!rlang::parse_expr(quo_name(rlang::enquo(var1)))),
-                                     NA,
-                                     "genus"),
-                              "species")) %>%
-              dplyr::select(-paste0(colnames_traits[j], ".x"),
-                            -paste0(colnames_traits[j], ".y"))
+            if (colnames_traits[j] %in% names(res_individuals_full)) {
 
-          } else {
+              var1 <- paste0(colnames_traits[j], ".y")
+              var2 <- paste0(colnames_traits[j], ".x")
 
-            var1 <- colnames_traits[j]
+              res_individuals_full <-
+                res_individuals_full %>%
+                left_join(
+                  traits_idtax_char %>%
+                    dplyr::select(tax_gen, colnames_traits[j]),
+                  by = c("tax_gen" = "tax_gen")
+                ) %>%
+                # dplyr::select(
+                #   tax_sp_level,
+                #   id_n,
+                #   tax_gen,
+                #   paste0(colnames_traits[j], ".x"),
+                #   paste0(colnames_traits[j], ".y")
+                # ) %>%
+                mutate("{colnames_traits[j]}" :=
+                         ifelse(is.na(!!rlang::parse_expr(quo_name(rlang::enquo(var2)))),
+                                ifelse(is.na(!!rlang::parse_expr(quo_name(rlang::enquo(var1)))),
+                                       NA,
+                                       !!rlang::parse_expr(quo_name(rlang::enquo(var1)))),
+                                !!rlang::parse_expr(quo_name(rlang::enquo(var2))))) %>%
+                mutate("source_{colnames_traits[j]}" :=
+                         ifelse(is.na(!!rlang::parse_expr(quo_name(rlang::enquo(var2)))),
+                                ifelse(is.na(!!rlang::parse_expr(quo_name(rlang::enquo(var1)))),
+                                       NA,
+                                       "genus"),
+                                "species")) %>%
+                dplyr::select(-paste0(colnames_traits[j], ".x"),
+                              -paste0(colnames_traits[j], ".y"))
 
-            res_individuals_full <-
-              res_individuals_full %>%
-              left_join(
-                traits_idtax_char %>%
-                  dplyr::select(tax_gen, colnames_traits[j]),
-                by = c("tax_gen" = "tax_gen")
-              ) %>%
-              mutate("source_{colnames_traits[j]}" :=
-                       ifelse(is.na(!!rlang::parse_expr(quo_name(rlang::enquo(var1)))),
-                              NA,
-                              "genus"))
+            } else {
 
-          }
-        }
+              var1 <- colnames_traits[j]
 
+              res_individuals_full <-
+                res_individuals_full %>%
+                left_join(
+                  traits_idtax_char %>%
+                    dplyr::select(tax_gen, colnames_traits[j]),
+                  by = c("tax_gen" = "tax_gen")
+                ) %>%
+                mutate("source_{colnames_traits[j]}" :=
+                         ifelse(is.na(!!rlang::parse_expr(quo_name(rlang::enquo(var1)))),
+                                NA,
+                                "genus"))
 
-
-        # res_subset <- res_individuals_full %>%
-        #   filter(!id_n %in% list_genera$id_n)
-        #
-        # col_traits_char <- names(traits_idtax_char %>%
-        #         dplyr::select(-tax_gen))
-        #
-        # res_completed <-
-        #   res_individuals_full %>%
-        #   filter(id_n %in% list_genera$id_n) %>%
-        #   dplyr::select(-col_traits_char[col_traits_char %in% names(res_individuals_full)]) %>%
-        #   left_join(traits_idtax_char,
-        #             by = c("tax_gen" = "tax_gen"))
-        #
-        # res_individuals_full <- bind_rows(res_subset, res_completed)
-        #
-        # level_trait[which(res_individuals_full$id_n %in% list_genera$id_n)] <- "genus"
-
-        # res_individuals_full %>%
-        #   filter(id_n %in% list_genera$id_n) %>%
-        #   group_by(phenology) %>%
-        #   count()
-
-      }
-
-      if (any(class(all_val_sp$traits_idtax_num) == "data.frame")) {
-
-        traits_idtax_num <-
-          all_val_sp$traits_found %>%
-          dplyr::filter(valuetype == "numeric") %>%
-          dplyr::select(idtax,
-                        trait,
-                        traitvalue,
-                        basisofrecord,
-                        id_trait_measures) %>%
-          dplyr::mutate(rn = data.table::rowid(trait)) %>%
-          tidyr::pivot_wider(
-            names_from = trait,
-            values_from = c(traitvalue, basisofrecord, id_trait_measures)
-          ) %>%
-          dplyr::select(-rn) %>%
-          dplyr::left_join(all_val_sp$traits_idtax_num %>%
-                      dplyr::select(idtax, tax_gen),
-                    by = c("idtax" = "idtax"))
-
-        names(traits_idtax_num) <- gsub("traitvalue_", "", names(traits_idtax_num))
-
-        traits_idtax_concat <-
-          traits_idtax_num %>%
-          dplyr::select(tax_gen, starts_with("id_trait_")) %>%
-          dplyr::mutate(across(starts_with("id_trait_"), as.character)) %>%
-          dplyr::group_by(tax_gen) %>%
-          dplyr::mutate(dplyr::across(where(is.character),
-                                      ~ stringr::str_c(.[!is.na(.)],
-                                                       collapse = ", "))) %>%
-          dplyr::ungroup() %>%
-          dplyr::distinct()
-
-        traits_idtax_num <-
-          traits_idtax_num %>%
-          dplyr::select(-starts_with("id_trait_"), -idtax) %>%
-          dplyr::group_by(tax_gen) %>%
-          dplyr::summarise(dplyr::across(where(is.numeric),
-                                  .fns= list(mean = mean,
-                                             sd = sd,
-                                             n = length),
-                                  .names = "{.col}_{.fn}"))
-
-
-        colnames_traits <- names(traits_idtax_num %>%
-                                   dplyr::select(
-                                     -tax_gen,
-                                     -starts_with("id_trait_"),
-                                     -starts_with("basisofrecord_")
-                                   ))
-
-        for (j in 1:length(colnames_traits)) {
-
-          if (colnames_traits[j] %in% names(res_individuals_full)) {
-
-            var1 <- paste0(colnames_traits[j], ".y")
-            var2 <- paste0(colnames_traits[j], ".x")
-
-            res_individuals_full <-
-              res_individuals_full %>%
-              left_join(
-                traits_idtax_num %>%
-                  dplyr::select(tax_gen, colnames_traits[j]),
-                by = c("tax_gen" = "tax_gen")
-              ) %>%
-              # dplyr::select(
-              #   tax_sp_level,
-              #   id_n,
-              #   tax_gen,
-              #   paste0(colnames_traits[j], ".x"),
-              #   paste0(colnames_traits[j], ".y")
-              # ) %>%
-              mutate("{colnames_traits[j]}" :=
-                       ifelse(is.na(!!rlang::parse_expr(quo_name(rlang::enquo(var2)))),
-                              ifelse(is.na(!!rlang::parse_expr(quo_name(rlang::enquo(var1)))),
-                                     NA,
-                                     !!rlang::parse_expr(quo_name(rlang::enquo(var1)))),
-                              !!rlang::parse_expr(quo_name(rlang::enquo(var2))))) %>%
-              mutate("source_{colnames_traits[j]}" :=
-                       ifelse(is.na(!!rlang::parse_expr(quo_name(rlang::enquo(var2)))),
-                              ifelse(is.na(!!rlang::parse_expr(quo_name(rlang::enquo(var1)))),
-                                     NA,
-                                     "genus"),
-                              "species")) %>%
-              dplyr::select(-paste0(colnames_traits[j], ".x"),
-                            -paste0(colnames_traits[j], ".y"))
-
-
-          } else {
-
-            var1 <- colnames_traits[j]
-
-            res_individuals_full <-
-              res_individuals_full %>%
-              left_join(
-                traits_idtax_num %>%
-                  dplyr::select(tax_gen, colnames_traits[j]),
-                by = c("tax_gen" = "tax_gen")
-              ) %>%
-              mutate("source_{colnames_traits[j]}" :=
-                       ifelse(is.na(!!rlang::parse_expr(quo_name(rlang::enquo(var1)))),
-                              NA,
-                              "genus"))
-
-
-
+            }
           }
 
 
 
+          # res_subset <- res_individuals_full %>%
+          #   filter(!id_n %in% list_genera$id_n)
+          #
+          # col_traits_char <- names(traits_idtax_char %>%
+          #         dplyr::select(-tax_gen))
+          #
+          # res_completed <-
+          #   res_individuals_full %>%
+          #   filter(id_n %in% list_genera$id_n) %>%
+          #   dplyr::select(-col_traits_char[col_traits_char %in% names(res_individuals_full)]) %>%
+          #   left_join(traits_idtax_char,
+          #             by = c("tax_gen" = "tax_gen"))
+          #
+          # res_individuals_full <- bind_rows(res_subset, res_completed)
+          #
+          # level_trait[which(res_individuals_full$id_n %in% list_genera$id_n)] <- "genus"
+
+          # res_individuals_full %>%
+          #   filter(id_n %in% list_genera$id_n) %>%
+          #   group_by(phenology) %>%
+          #   count()
 
         }
 
-        # res_subset <- res_individuals_full %>%
-        #   filter(!id_n %in% list_genera$id_n)
-        #
-        # res_completed <- res_individuals_full %>%
-        #   filter(id_n %in% list_genera$id_n) %>%
-        #   dplyr::select(-names(traits_idtax_num %>% dplyr::select(-tax_gen))) %>%
-        #   left_join(traits_idtax_num,
-        #             by = c("tax_gen" = "tax_gen"))
-        #
-        # res_individuals_full <-
-        #   bind_rows(res_subset, res_completed)
-        #
-        # # res_individuals_full %>%
-        # #   filter(!is.na(wood_density_mean))
-        #
-        # level_trait[which(res_individuals_full$id_n %in% list_genera$id_n)] <- "genus"
+        if (any(class(all_val_sp$traits_idtax_num) == "data.frame")) {
 
-        # res_individuals_full %>%
-        #   filter(id_n %in% list_genera$id_n) %>%
-        #   group_by(wood_density_mean) %>%
-        #   count()
+          traits_idtax_num <-
+            all_val_sp$traits_found %>%
+            dplyr::filter(valuetype == "numeric") %>%
+            dplyr::select(idtax,
+                          trait,
+                          traitvalue,
+                          basisofrecord,
+                          id_trait_measures) %>%
+            dplyr::mutate(rn = data.table::rowid(trait)) %>%
+            tidyr::pivot_wider(
+              names_from = trait,
+              values_from = c(traitvalue, basisofrecord, id_trait_measures)
+            ) %>%
+            dplyr::select(-rn) %>%
+            dplyr::left_join(all_val_sp$traits_idtax_num %>%
+                               dplyr::select(idtax, tax_gen),
+                             by = c("idtax" = "idtax"))
+
+          names(traits_idtax_num) <- gsub("traitvalue_", "", names(traits_idtax_num))
+
+          traits_idtax_concat <-
+            traits_idtax_num %>%
+            dplyr::select(tax_gen, starts_with("id_trait_")) %>%
+            dplyr::mutate(across(starts_with("id_trait_"), as.character)) %>%
+            dplyr::group_by(tax_gen) %>%
+            dplyr::mutate(dplyr::across(where(is.character),
+                                        ~ stringr::str_c(.[!is.na(.)],
+                                                         collapse = ", "))) %>%
+            dplyr::ungroup() %>%
+            dplyr::distinct()
+
+          traits_idtax_num <-
+            traits_idtax_num %>%
+            dplyr::select(-starts_with("id_trait_"), -idtax) %>%
+            dplyr::group_by(tax_gen) %>%
+            dplyr::summarise(dplyr::across(where(is.numeric),
+                                           .fns= list(mean = mean,
+                                                      sd = sd,
+                                                      n = length),
+                                           .names = "{.col}_{.fn}"))
+
+
+          colnames_traits <- names(traits_idtax_num %>%
+                                     dplyr::select(
+                                       -tax_gen,
+                                       -starts_with("id_trait_"),
+                                       -starts_with("basisofrecord_")
+                                     ))
+
+          for (j in 1:length(colnames_traits)) {
+
+            if (colnames_traits[j] %in% names(res_individuals_full)) {
+
+              var1 <- paste0(colnames_traits[j], ".y")
+              var2 <- paste0(colnames_traits[j], ".x")
+
+              res_individuals_full <-
+                res_individuals_full %>%
+                left_join(
+                  traits_idtax_num %>%
+                    dplyr::select(tax_gen, colnames_traits[j]),
+                  by = c("tax_gen" = "tax_gen")
+                ) %>%
+                # dplyr::select(
+                #   tax_sp_level,
+                #   id_n,
+                #   tax_gen,
+                #   paste0(colnames_traits[j], ".x"),
+                #   paste0(colnames_traits[j], ".y")
+                # ) %>%
+                mutate("{colnames_traits[j]}" :=
+                         ifelse(is.na(!!rlang::parse_expr(quo_name(rlang::enquo(var2)))),
+                                ifelse(is.na(!!rlang::parse_expr(quo_name(rlang::enquo(var1)))),
+                                       NA,
+                                       !!rlang::parse_expr(quo_name(rlang::enquo(var1)))),
+                                !!rlang::parse_expr(quo_name(rlang::enquo(var2))))) %>%
+                mutate("source_{colnames_traits[j]}" :=
+                         ifelse(is.na(!!rlang::parse_expr(quo_name(rlang::enquo(var2)))),
+                                ifelse(is.na(!!rlang::parse_expr(quo_name(rlang::enquo(var1)))),
+                                       NA,
+                                       "genus"),
+                                "species")) %>%
+                dplyr::select(-paste0(colnames_traits[j], ".x"),
+                              -paste0(colnames_traits[j], ".y"))
+
+
+            } else {
+
+              var1 <- colnames_traits[j]
+
+              res_individuals_full <-
+                res_individuals_full %>%
+                left_join(
+                  traits_idtax_num %>%
+                    dplyr::select(tax_gen, colnames_traits[j]),
+                  by = c("tax_gen" = "tax_gen")
+                ) %>%
+                mutate("source_{colnames_traits[j]}" :=
+                         ifelse(is.na(!!rlang::parse_expr(quo_name(rlang::enquo(var1)))),
+                                NA,
+                                "genus"))
+
+            }
+          }
+
+          # res_subset <- res_individuals_full %>%
+          #   filter(!id_n %in% list_genera$id_n)
+          #
+          # res_completed <- res_individuals_full %>%
+          #   filter(id_n %in% list_genera$id_n) %>%
+          #   dplyr::select(-names(traits_idtax_num %>% dplyr::select(-tax_gen))) %>%
+          #   left_join(traits_idtax_num,
+          #             by = c("tax_gen" = "tax_gen"))
+          #
+          # res_individuals_full <-
+          #   bind_rows(res_subset, res_completed)
+          #
+          # # res_individuals_full %>%
+          # #   filter(!is.na(wood_density_mean))
+          #
+          # level_trait[which(res_individuals_full$id_n %in% list_genera$id_n)] <- "genus"
+
+          # res_individuals_full %>%
+          #   filter(id_n %in% list_genera$id_n) %>%
+          #   group_by(wood_density_mean) %>%
+          #   count()
+
+        }
+
+
+        #
+        #
+        # all_genera <- query_taxa(genus = unique(list_genera$tax_gen),
+        #                          only_genus = T,
+        #                             class = NULL, check_synonymy = F,
+        #                             extract_traits = F)
+        #
+        # tbl(mydb, "table_taxa") %>%
+        #   dplyr::filter(tax_gen %in% !!unique(list_genera$tax_gen)) %>%
+        #   dplyr::filter(is.na(tax_esp)) %>%
+        #   dplyr::select(idtax_n) %>%
+        #   dplyr::collect()
+        #
+        # all_genera_traits <- query_traits_measures(idtax = all_sp_genera %>%
+        #                                       filter(!is.na(tax_esp)) %>%
+        #                                       pull(idtax_n))
+
 
       }
-
-
-      #
-      #
-      # all_genera <- query_taxa(genus = unique(list_genera$tax_gen),
-      #                          only_genus = T,
-      #                             class = NULL, check_synonymy = F,
-      #                             extract_traits = F)
-      #
-      # tbl(mydb, "table_taxa") %>%
-      #   dplyr::filter(tax_gen %in% !!unique(list_genera$tax_gen)) %>%
-      #   dplyr::filter(is.na(tax_esp)) %>%
-      #   dplyr::select(idtax_n) %>%
-      #   dplyr::collect()
-      #
-      # all_genera_traits <- query_traits_measures(idtax = all_sp_genera %>%
-      #                                       filter(!is.na(tax_esp)) %>%
-      #                                       pull(idtax_n))
-
     }
 
     res <-
@@ -13239,8 +13243,28 @@ query_traits_measures <- function(idtax,
                                   add_taxa_info = FALSE,
                                   trait_cat_mode = "most_frequent") {
 
-  if (!is.null(idtax_good))
-    idtax_tb <- tibble(idtax = idtax, idtax_good = idtax_good)
+  if (!is.null(idtax_good)) {
+
+    idtax_tb <- dplyr::tibble(idtax = idtax, idtax_good = idtax_good)
+
+  } else {
+
+    ids_syn <- dplyr::tbl(mydb, "table_taxa") %>%
+      dplyr::select(idtax_n, idtax_good_n) %>%
+      dplyr::filter(idtax_good_n %in% !!idtax) %>%
+      dplyr::collect()
+
+    idtax <- unique(c(idtax, ids_syn$idtax_n))
+
+    idtax_tb <- dplyr::tbl(mydb, "table_taxa") %>%
+      dplyr::select(idtax_n, idtax_good_n) %>%
+      dplyr::filter(idtax_n %in% !!idtax) %>%
+      dplyr::collect() %>%
+      dplyr::rename(idtax = idtax_n,
+             idtax_good = idtax_good_n)
+
+  }
+
 
   # temp_table <-
   #   tibble(id = unique(idtax), look_for = 1)
@@ -13276,12 +13300,25 @@ query_traits_measures <- function(idtax,
                      by = c("id_trait" = "id_trait")) %>%
     dplyr::collect()
 
+  traits_found <-
+    traits_found %>%
+    dplyr::left_join(idtax_tb %>%
+                       dplyr::select(idtax, idtax_good),
+                     by = c("idtax" = "idtax")) %>%
+    dplyr::mutate(idtax = ifelse(is.na(idtax_good), idtax, idtax_good)) %>%
+    dplyr::select(-idtax_good)
+
   if (add_taxa_info) {
 
     taxa_infos <-
       add_taxa_table_taxa(ids = traits_found$idtax) %>%
       collect() %>%
-      dplyr::select(idtax_n, idtax_good_n, tax_fam, tax_gen, tax_esp, tax_infra_level)
+      dplyr::select(idtax_n,
+                    idtax_good_n,
+                    tax_fam,
+                    tax_gen,
+                    tax_esp,
+                    tax_infra_level)
 
     traits_found <-
       traits_found %>%
@@ -13289,6 +13326,8 @@ query_traits_measures <- function(idtax,
                 by = c("idtax" = "idtax_n"))
 
   }
+
+
 
   if(nrow(traits_found) > 0) {
 
@@ -13311,7 +13350,7 @@ query_traits_measures <- function(idtax,
       # %>%
       #   dplyr::mutate(across(starts_with("id_trait_"), as.character))
 
-      if (!is.null(idtax_good))
+      # if (!is.null(idtax_good))
         traits_idtax_char <-
           traits_idtax_char %>%
           dplyr::left_join(idtax_tb %>%
@@ -13406,7 +13445,7 @@ query_traits_measures <- function(idtax,
         dplyr::mutate(across(starts_with("id_trait_"), as.character))
 
 
-      if (!is.null(idtax_good))
+      # if (!is.null(idtax_good))
         traits_idtax_num <-
           traits_idtax_num %>%
           left_join(idtax_tb %>%
