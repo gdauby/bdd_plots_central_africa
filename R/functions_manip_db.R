@@ -1559,6 +1559,7 @@ traits_list <- function() {
 #' @param collapse_multiple_val logical whether multiple traits measures should be collapsed (resulting values as character, separated by dash)
 #' @param extract_traits whether species level traits should be extracted as well
 #' @param traits_to_genera if species-level traits should be extrapolated to genus level, by default is FALSE
+#' @param wd_fam_level logical, if wood density should be given at family level or not NOT YET FULLY AVAILABLE
 #'
 #' @importFrom DBI dbSendQuery dbFetch dbClearResult dbWriteTable
 #' @importFrom stringr str_flatten str_trim str_extract
@@ -1591,7 +1592,8 @@ query_plots <- function(team_lead = NULL,
                         remove_ids = TRUE,
                         collapse_multiple_val = FALSE,
                         extract_traits = TRUE,
-                        traits_to_genera = FALSE) {
+                        traits_to_genera = FALSE,
+                        wd_fam_level = FALSE) {
 
   if (!exists("mydb")) call.mydb()
 
@@ -1770,7 +1772,7 @@ query_plots <- function(team_lead = NULL,
       if (nrow(res_meth) == 0) {
         warning("no method selected!")
 
-      } else{
+      } else {
         message("\n method(s) selected")
         print(res_meth)
 
@@ -2291,7 +2293,6 @@ query_plots <- function(team_lead = NULL,
       res_individuals_full %>%
       dplyr::filter(idtax_f %in% !!id_diconame)
 
-
     ### Removing old fields not used anymore
     res_individuals_full <-
       res_individuals_full %>%
@@ -2337,7 +2338,6 @@ query_plots <- function(team_lead = NULL,
       dplyr::left_join(selec_plot_tables,
                        by = c("id_table_liste_plots_n" = "id_liste_plots"))
 
-
     #### Add traits at individual levels
     all_traits <- traits_list()
     all_traits_list <-
@@ -2366,6 +2366,7 @@ query_plots <- function(team_lead = NULL,
 
       queried_traits_tax <-
         query_traits_measures(idtax = unique(res_individuals_full$idtax_individual_f))
+
 
       if (nrow(queried_traits_tax$traits_found) > 0) {
 
@@ -2665,6 +2666,65 @@ query_plots <- function(team_lead = NULL,
 
             }
           }
+
+          if (any(colnames_traits == "wood_density_mean")) {
+
+            cli::cli_alert_info("Setting wood density SD to averaged species and genus level according to BIOMASS dataset")
+
+            sd_10 <- BIOMASS::sd_10
+
+            # subset_to_fill <- res_individuals_full %>%
+            #   dplyr::select(id_n,
+            #                 tax_fam,
+            #                 tax_gen,
+            #                 tax_sp_level,
+            #                 wood_density_sd,
+            #                 wood_density_n)
+
+
+            ### replacing wd sd to species and genus level sd from biomass
+            res_individuals_full <-
+              res_individuals_full %>%
+              mutate(wood_density_sd = replace(wood_density_sd,
+                                               source_wood_density_mean == "species",
+                                               sd_10$sd[1])) %>%
+              mutate(wood_density_sd = replace(wood_density_sd,
+                                               source_wood_density_mean == "genus",
+                                               sd_10$sd[2]))
+
+            if (wd_fam_level) {
+
+              res_individuals_full <-
+                res_individuals_full %>%
+                mutate(wood_density_sd = replace(
+                  wood_density_sd,
+                  is.na(tax_sp_level) &
+                    is.na(tax_gen) & !is.na(tax_fam),
+                  sd_10$sd[3]
+                ))
+
+            }
+
+            # %>%
+            #   filter(!is.na(tax_gen), is.na(tax_sp_level))
+          }
+
+          ### averaged wd for plots
+          wd_plot_level <- res_individuals_full %>%
+            dplyr::group_by(plot_name) %>%
+            dplyr::summarise(wood_density_mean_plot_level = mean(wood_density_mean, na.rm = T),
+                      wood_density_sd_plot_level = mean(wood_density_sd, na.rm = T))
+
+          res_individuals_full <- res_individuals_full %>%
+            dplyr::left_join(wd_plot_level,
+                             by = c("plot_name" = "plot_name")) %>%
+            dplyr::mutate(wood_density_mean = ifelse(is.na(wood_density_mean),
+                                                     wood_density_mean_plot_level,
+                                                     wood_density_mean)) %>%
+            dplyr::mutate(wood_density_sd = ifelse(is.na(wood_density_sd),
+                                                   wood_density_sd_plot_level,
+                                                   wood_density_sd)) %>%
+            dplyr::select(-wood_density_sd_plot_level, wood_density_mean_plot_level)
 
           # res_subset <- res_individuals_full %>%
           #   filter(!id_n %in% list_genera$id_n)
