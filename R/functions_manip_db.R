@@ -4006,12 +4006,14 @@ add_subplot_features <- function(new_data,
       new_data_renamed %>%
       dplyr::select(-plot_name)
 
-    if(id_plot_name_corresp == "id_table_liste_plots_n")
-    link_plot <-
-      new_data_renamed %>%
-      dplyr::left_join(dplyr::tbl(mydb, "data_liste_plots") %>%
-                         dplyr::select(plot_name, id_liste_plots) %>% dplyr::collect(),
-                       by=c("id_table_liste_plots_n" = "id_liste_plots"))
+    if (id_plot_name_corresp == "id_table_liste_plots_n")
+      link_plot <-
+        new_data_renamed %>%
+        dplyr::left_join(
+          dplyr::tbl(mydb, "data_liste_plots") %>%
+            dplyr::select(plot_name, id_liste_plots) %>% dplyr::collect(),
+          by = c("id_table_liste_plots_n" = "id_liste_plots")
+        )
 
 
     if(id_plot_name_corresp == "id_old")
@@ -4253,7 +4255,7 @@ update_plot_data <- function(team_lead = NULL,
         date_y = date_y,
         remove_ids = FALSE
       )
-  } else{
+  } else {
 
     quer_plots <-
       query_plots(id_plot = id_table_plot, remove_ids = FALSE)
@@ -4268,14 +4270,26 @@ update_plot_data <- function(team_lead = NULL,
 
     }
 
+    if(!is.null(new_team_leader)) {
+      new_id_colnam <-
+        .link_colnam(data_stand = tibble(colnam = new_colnam),
+                     collector_field = 1)
+
+      new_id_colnam <-
+        new_id_colnam$id_colnam
+
+    }else{
+      new_id_colnam <- NULL
+    }
+
     new_values <-
       dplyr::tibble(
         plot_name = ifelse(!is.null(new_plot_name), new_plot_name, quer_plots$plot_name),
         id_method  = ifelse(!is.null(new_method), id_new_method, quer_plots$id_method),
-        team_leader = ifelse(
-          !is.null(new_team_leader),
-          new_team_leader,
-          quer_plots$team_leader
+        id_colnam = ifelse(
+          !is.null(new_id_colnam),
+          new_id_colnam,
+          quer_plots$id_colnam
         ),
         country = ifelse(!is.null(new_country), new_country, quer_plots$country),
         ddlat = ifelse(!is.null(new_ddlat), new_ddlat, quer_plots$ddlat),
@@ -4379,11 +4393,11 @@ update_plot_data <- function(team_lead = NULL,
         }
 
         rs <-
-          DBI::dbSendQuery(mydb, statement="UPDATE data_liste_plots SET plot_name = $2, id_method = $3, team_leader = $4, country = $5, ddlat = $6, ddlon = $7, elevation = $8, province = $9, data_provider = $10, locality_name = $11, data_modif_d=$12, data_modif_m=$13, data_modif_y=$14 WHERE id_liste_plots = $1",
+          DBI::dbSendQuery(mydb, statement="UPDATE data_liste_plots SET plot_name = $2, id_method = $3, id_colnam = $4, country = $5, ddlat = $6, ddlon = $7, elevation = $8, province = $9, data_provider = $10, locality_name = $11, data_modif_d=$12, data_modif_m=$13, data_modif_y=$14 WHERE id_liste_plots = $1",
                       params=list(quer_plots$id_liste_plots, # $1
                                   new_values$plot_name, # $2
                                   new_values$id_method, # $3
-                                  new_values$team_leader, # $4
+                                  new_values$id_colnam, # $4
                                   new_values$country, # $5
                                   new_values$ddlat, # $6
                                   new_values$ddlon, # $7
@@ -7695,9 +7709,21 @@ add_entry_dico_name <- function(tax_gen = NULL,
 
   if(!exists("mydb")) call.mydb()
 
-  DBI::dbExecute(mydb,
-                 "DELETE FROM data_traits_measures WHERE id_trait_measures=$1", params=list(id)
-  )
+  # DBI::dbExecute(mydb,
+  #                "DELETE FROM data_traits_measures WHERE id_trait_measures=$1", params=list(id)
+  # )
+
+  query <- "DELETE FROM data_traits_measures WHERE MMM"
+  query <-
+    gsub(
+      pattern = "MMM",
+      replacement = paste0("id_trait_measures IN ('",
+                           paste(unique(id), collapse = "', '"), "')"),
+      x = query
+    )
+
+  rs <- DBI::dbSendQuery(mydb, query)
+  DBI::dbClearResult(rs)
 }
 
 
@@ -10641,14 +10667,15 @@ replace_NA <- function(vec, inv = FALSE) {
 
     all_colnames <-
       dplyr::tbl(mydb, "table_colnam") %>%
-      dplyr::collect()
+      dplyr::collect() %>%
+      dplyr::select(-id_table_colnam)
 
     sorted_matches <-
       .find_cat(
         value_to_search = dplyr::pull(all_names_collector)[i],
         compared_table = all_colnames,
         column_name = "colnam",
-        prompt_message = "Choose corresponding name (G for searching a pattern, 0 if none corresponding): "
+        prompt_message = "Choose corresponding name (choose the ID, see ID column) (G for searching a pattern, 0 if none corresponding): "
       )
 
     if(sorted_matches$selected_name == 0) {
