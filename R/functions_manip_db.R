@@ -2288,10 +2288,10 @@ query_plots <- function(team_lead = NULL,
       merge_individuals_taxa(id_individual = id_individual,
                              id_plot = selec_plot_tables$id_liste_plots)
 
-    if (!is.null(id_diconame))
+    if (!is.null(id_tax))
       res_individuals_full <-
       res_individuals_full %>%
-      dplyr::filter(idtax_f %in% !!id_diconame)
+      dplyr::filter(idtax_f %in% !!id_tax)
 
     ### Removing old fields not used anymore
     res_individuals_full <-
@@ -13198,17 +13198,38 @@ query_taxa <-
 
 
     }
-    # if(!any(colnames(res)=="accepted_name"))
-    #   res <- res %>%
-    #   tibble::add_column(accepted_name=NA) %>%
-    #   mutate(accepted_name = as.character(accepted_name))
+
+    if (!is.null(res)) {
+      if (any(names(queried_taxa) == "a_habit"))
+        res <-
+          res %>%
+          dplyr::select(-a_habit,-a_habit_secondary)
+
+      if (any(names(queried_taxa) == "fktax"))
+        res <-
+          res %>%
+          dplyr::select(-fktax)
+
+      if (any(names(queried_taxa) == "id_good"))
+        res <-
+          res %>%
+          dplyr::select(-id_good)
+
+      if (any(names(queried_taxa) == "tax_tax"))
+        res <-
+          res %>%
+          dplyr::select(-tax_tax)
+
+
+    }
+
 
     if(!is.null(res)) {
       if (verbose & nrow(res) < 50) {
 
         res_print <-
           res %>%
-          dplyr::select(-fktax,-id_good,-tax_tax) %>%
+          # dplyr::select(-fktax,-id_good,-tax_tax) %>%
           dplyr::relocate(tax_infra_level_auth, .before = tax_order) %>%
           dplyr::relocate(idtax_n, .before = tax_order) %>%
           dplyr::relocate(idtax_good_n, .before = tax_order)
