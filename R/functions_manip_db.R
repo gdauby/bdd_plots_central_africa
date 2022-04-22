@@ -4278,7 +4278,7 @@ update_plot_data <- function(team_lead = NULL,
       new_id_colnam <-
         new_id_colnam$id_colnam
 
-    }else{
+    } else {
       new_id_colnam <- NULL
     }
 
@@ -4342,7 +4342,21 @@ update_plot_data <- function(team_lead = NULL,
 #
 #     print(comp_values)
 
-    if(any(comp_values %>% pull())) {
+    if (comp_values) {
+
+      if (any(comp_values %>% pull())) {
+
+        modif <- TRUE
+
+      } else {
+        modif <- FALSE
+      }
+
+    } else {
+      modif <- FALSE
+    }
+
+    if (modif) {
 
       # col_sel <-
       #   comp_values %>%
