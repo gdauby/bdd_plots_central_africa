@@ -21,7 +21,7 @@ query_plots(
   map_type = "mapview",
   id_individual = NULL,
   id_plot = NULL,
-  id_diconame = NULL,
+  id_tax = NULL,
   show_multiple_census = FALSE,
   show_all_coordinates = FALSE,
   remove_ids = TRUE,
