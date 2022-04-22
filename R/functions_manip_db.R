@@ -1586,7 +1586,7 @@ query_plots <- function(team_lead = NULL,
                         map_type = "mapview",
                         id_individual = NULL,
                         id_plot = NULL,
-                        id_diconame = NULL,
+                        id_tax = NULL,
                         show_multiple_census = FALSE,
                         show_all_coordinates = FALSE,
                         remove_ids = TRUE,
@@ -1615,7 +1615,7 @@ query_plots <- function(team_lead = NULL,
 
   }
 
-  if (!is.null(id_diconame))
+  if (!is.null(id_tax))
   {
 
     cli::cli_rule(left = "Extracting from queried taxa - idtax_n")
@@ -1626,12 +1626,12 @@ query_plots <- function(team_lead = NULL,
 
     id_plot <-
       merge_individuals_taxa() %>%
-      filter(idtax_individual_f %in% !!id_diconame) %>%
+      filter(idtax_individual_f %in% !!id_tax) %>%
       pull(id_table_liste_plots_n)
 
     # id_plot <-
     #   tbl(mydb, "data_individuals") %>%
-    #   query_tax_all(id_search = id_diconame, extract_individuals = T, verbose = FALSE, simple_ind_extract = T) %>%
+    #   query_tax_all(id_search = idtax, extract_individuals = T, verbose = FALSE, simple_ind_extract = T) %>%
     #   pull(id_table_liste_plots_n)
 
   }
@@ -4342,7 +4342,7 @@ update_plot_data <- function(team_lead = NULL,
 #
 #     print(comp_values)
 
-    if (comp_values) {
+    if (!is.vector(comp_values)) {
 
       if (any(comp_values %>% pull())) {
 
@@ -4353,7 +4353,15 @@ update_plot_data <- function(team_lead = NULL,
       }
 
     } else {
-      modif <- FALSE
+
+      if (comp_values) {
+
+        modif <- TRUE
+
+      } else {
+        modif <- FALSE
+      }
+
     }
 
     if (modif) {
