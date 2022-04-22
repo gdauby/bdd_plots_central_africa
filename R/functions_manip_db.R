@@ -2885,6 +2885,9 @@ query_plots <- function(team_lead = NULL,
 #' @param locality_name string fuzzy locality_name name to look for
 #' @param method stringfuzzy method name to look for
 #' @param subtype string subtype to select
+#'
+#'
+#' @export
 query_subplots <- function(team_lead = NULL,
                         plot_name = NULL,
                         tag = NULL,
