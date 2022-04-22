@@ -2388,7 +2388,6 @@ query_plots <- function(team_lead = NULL,
 
       }
 
-
       if (traits_to_genera) {
 
         ### complete traits at genus level
@@ -4271,6 +4270,7 @@ update_plot_data <- function(team_lead = NULL,
     }
 
     if(!is.null(new_team_leader)) {
+
       new_id_colnam <-
         .link_colnam(data_stand = tibble(colnam = new_team_leader),
                      collector_field = 1)
@@ -10667,8 +10667,7 @@ replace_NA <- function(vec, inv = FALSE) {
 
     all_colnames <-
       dplyr::tbl(mydb, "table_colnam") %>%
-      dplyr::collect() %>%
-      dplyr::select(-id_table_colnam)
+      dplyr::collect()
 
     sorted_matches <-
       .find_cat(
@@ -12653,6 +12652,7 @@ growth_computing <- function(dataset,
     selected_name <- which(compared_table$perfect_match)
 
   } else {
+
     selected_name <- "S"
     slide <- 0
     while(any(selected_name == c("", "G", "S"))) {
@@ -12682,13 +12682,18 @@ growth_computing <- function(dataset,
       }
 
       if(nrow(sorted_matches) > 0) {
+
         sel_loc <-
           sorted_matches %>%
-          tibble::add_column(ID = seq(1, nrow(.), 1)) %>%
+          dplyr::mutate(ID = seq(1, nrow(.), 1)) %>%
+          dplyr::relocate(ID, .before = comp_value) %>%
           dplyr::slice((1 + (slide - 1) * 10):((slide) * 10))
+
       } else {
+
         sel_loc <-
           sorted_matches
+
       }
 
 
