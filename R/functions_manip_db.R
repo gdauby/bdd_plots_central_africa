@@ -4272,7 +4272,7 @@ update_plot_data <- function(team_lead = NULL,
 
     if(!is.null(new_team_leader)) {
       new_id_colnam <-
-        .link_colnam(data_stand = tibble(colnam = new_colnam),
+        .link_colnam(data_stand = tibble(colnam = new_team_leader),
                      collector_field = 1)
 
       new_id_colnam <-
