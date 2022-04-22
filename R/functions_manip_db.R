@@ -14430,7 +14430,7 @@ match_tax <- function(idtax, queried_tax = NULL, verbose = TRUE) {
     arrange(tax_fam, tax_gen, tax_esp)
 
 
-  if (verbose & nrow(res) < 100) {
+  if (verbose & nrow(results) < 100) {
 
     res_print <-
       results %>%
@@ -14452,7 +14452,7 @@ match_tax <- function(idtax, queried_tax = NULL, verbose = TRUE) {
   }
 
 
-  if(verbose & nrow(res) >= 100)
+  if(verbose & nrow(results) >= 100)
     message("\n Not showing html table because too many taxa")
 
   return(results)
