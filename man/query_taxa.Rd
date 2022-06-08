@@ -10,8 +10,6 @@ query_taxa(
   genus = NULL,
   order = NULL,
   species = NULL,
-  tax_nam01 = NULL,
-  tax_nam02 = NULL,
   only_genus = FALSE,
   only_family = FALSE,
   only_class = FALSE,
@@ -31,11 +29,7 @@ query_taxa(
 
 \item{order}{string}
 
-\item{species}{string}
-
-\item{tax_nam01}{string}
-
-\item{tax_nam02}{string}
+\item{species}{string genus followed by species name separated by one space}
 
 \item{only_genus}{logical}
 
@@ -51,7 +45,11 @@ query_taxa(
 
 \item{check_synonymy}{logical}
 
-\item{extract_traits}{logical#'}
+\item{extract_traits}{logical}
+
+\item{tax_nam01}{string}
+
+\item{tax_nam02}{string}
 }
 \value{
 A tibble of all taxa

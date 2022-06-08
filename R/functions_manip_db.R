@@ -1390,6 +1390,37 @@ call.mydb <- function(pass=NULL, user=NULL, offline = FALSE) {
   }
 }
 
+
+#' Load the taxonomic database
+#'
+#' Load the taxonomic database and ask for password
+#'
+#' @param pass string
+#' @param user string
+#'
+#' @return The database is loaded
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+call.mydb.taxa <- function(pass=NULL, user=NULL) {
+
+  if(!exists("mydb_taxa")) {
+
+    mydb_taxa <- DBI::dbConnect(
+      RPostgres::Postgres(),
+      dbname = 'rainbio',
+      host = 'dg474899-001.dbaas.ovh.net',
+      port = 35699,
+      # or any other port specified by your DBA
+      user = user,
+      password = pass
+    )
+
+    assign("mydb_taxa", mydb_taxa, envir = .GlobalEnv)
+
+  }
+}
+
+
 #' List of countries
 #'
 #' Provide list of countries where plots occur
@@ -11412,7 +11443,8 @@ process_trimble_data <- function(PATH = NULL, plot_name = NULL, format = "dbf") 
   if(format == "excell") {
     files_prop <-
       dplyr::tibble(dirs = all_dirs,
-                    number = as.numeric(stringr::str_extract(all_dirs, regexp)))
+                    number = as.numeric(stringr::str_extract(all_dirs, regexp)),
+                    gps = grepl("GPS", all_dirs))
 
     count_nbe_file <-
       files_prop %>%
@@ -11441,41 +11473,64 @@ process_trimble_data <- function(PATH = NULL, plot_name = NULL, format = "dbf") 
       files_prop %>%
       dplyr::filter(number == j)
 
-    if(format == "dbf") {
+    # if(format == "dbf") {
       occ_data_dir <-
         select_plot_dir %>%
         dplyr::filter(gps == FALSE) %>%
         dplyr::select(dirs) %>%
         dplyr::pull()
-    } else {
+    # } else {
+    #
+    #   occ_data_dir <-
+    #     select_plot_dir %>%
+    #     dplyr::select(dirs) %>%
+    #     dplyr::pull()
+    #
+    # }
 
-      occ_data_dir <-
-        select_plot_dir %>%
-        dplyr::select(dirs) %>%
-        dplyr::pull()
-
-    }
-
-    if(format == "dbf") {
+    # if(format == "dbf") {
       gps_data_dir <-
         select_plot_dir %>%
         dplyr::filter(gps==TRUE) %>%
         dplyr::select(dirs) %>%
         dplyr::pull()
-    } else {
-
-    }
+    # } else {
+    #
+    # }
 
 
     ## gps data
     data.gps <-
       list.files(path = paste0(PATH,
                                gps_data_dir, "/"), full.names = TRUE, pattern = "^[^~]")
-    data.gps <- data.gps[grep(".dbf", data.gps)]
 
-    gps_data <-
-      foreign::read.dbf(file = data.gps) %>%
-      dplyr::as_tibble()
+    if (format == "dbf") {
+
+      data.gps <- data.gps[grep(".dbf", data.gps)]
+      gps_data <-
+        foreign::read.dbf(file = data.gps) %>%
+        dplyr::as_tibble()
+    } else {
+
+      data.gps <- data.gps[grep(".xlsx", data.gps)]
+      gps_data <-
+        readxl::read_excel(path = data.gps)
+
+    }
+
+    missig_coord <- gps_data %>%
+      filter(is.na(Longitude),
+             is.na(Latitude))
+
+    if (nrow(missig_coord) >0) {
+      cli::cli_alert("GPS coordinates missing for {nrow(missig_coord)} point(s)")
+
+      gps_data <-
+        gps_data %>%
+        filter(!is.na(Longitude),
+               !is.na(Latitude))
+
+    }
 
     gps_data_subset <-
       gps_data %>%
@@ -11495,7 +11550,7 @@ process_trimble_data <- function(PATH = NULL, plot_name = NULL, format = "dbf") 
         FUN = function(x)
           x[[3]]
       )))) %>%
-      dplyr::select(Longitude, Latitude, date, date_y, date_m, date_d, From_X, From_Y)
+      dplyr::select(Longitude, Latitude, date, date_y, date_m, date_d, X_theo, Y_theo)
 
     gps_quadrat_list[[j]] <-
       gps_data_subset %>%
@@ -11543,7 +11598,6 @@ process_trimble_data <- function(PATH = NULL, plot_name = NULL, format = "dbf") 
         dplyr::as_tibble()
 
     } else {
-
 
       data. <-
         list.files(path = paste0(PATH,
@@ -11630,7 +11684,7 @@ process_trimble_data <- function(PATH = NULL, plot_name = NULL, format = "dbf") 
       dplyr::pull()
 
     if(length(missing_quadrats)>0) {
-      print("missing quadrat")
+      cli::cli_alert("missing quadrat")
       print(missing_quadrats)
     }
 
@@ -12759,6 +12813,104 @@ growth_computing <- function(dataset,
 }
 
 
+#' Query exact match
+#'
+#' Extract from a sql database an exact match on a given field
+#'
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#'
+#' @param tbl tibble with one field listing names to be searched
+#' @param field string column name to be search
+#' @param values_q string names to be searched
+#' @param con PqConnection connection to RPostgres database
+#'
+#'
+#' @return A list of two elements, one with the extract if any, two with the names with id not NA when matched
+#' @export
+query_exact_match <- function(tbl, field, values_q, con) {
+
+  if (length(field) == 1) {
+
+    field_col <- dplyr::sym(field)
+
+    query_tb <- tibble(!!field_col := tolower(values_q))
+
+  } else {
+
+    query_tb <- tibble(species := tolower(values_q))
+
+  }
+
+  if (length(field) == 1) sql <-glue::glue_sql("SELECT * FROM {`tbl`} WHERE lower({`field`}) IN ({vals*})",
+                                               vals = tolower(values_q), .con = con)
+  if (length(field) > 1) sql <-glue::glue_sql("SELECT * FROM {`tbl`} WHERE lower(concat({`field[1]`},' ',{`field[2]`})) IN ({vals*})",
+                                              vals = tolower(values_q), .con = con)
+
+
+  rs <- DBI::dbSendQuery(con, sql)
+  res_q <-DBI::dbFetch(rs) %>% as_tibble
+  DBI::dbClearResult(rs)
+
+  if (length(field) == 1) query_tb <- query_tb %>%
+    left_join(res_q %>% dplyr::select(!!field_col) %>% mutate(!!field_col := tolower(!!field_col)) %>% distinct() %>%
+                mutate(id = seq_len(nrow(.))))
+
+  if (length(field) > 1) query_tb <- query_tb %>%
+    left_join(res_q %>% dplyr::select(dplyr::all_of(field)) %>%
+                mutate(species = paste(!!dplyr::sym(field[1]), !!dplyr::sym(field[2]), sep = " ")) %>%
+                mutate(species = tolower(species)) %>%
+                distinct() %>%
+                mutate(id = seq_len(nrow(.))))
+
+  return(list(res_q = res_q,
+              query_tb = query_tb))
+
+}
+
+#' Query fuzzy match
+#'
+#' Extract from a sql database an exact match on a given field
+#'
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#'
+#' @param tbl tibble with one field listing names to be searched
+#' @param field string column name to be search
+#' @param values_q string names to be searched
+#' @param con PqConnection connection to RPostgres database
+#'
+#'
+#' @return A list of two elements, one with the extract if any, two with the names with id not NA when matched
+#' @export
+query_fuzzy_match <- function(tbl, field, values_q, con) {
+
+  # if (length(field) == 0) sql <-glue::glue_sql("SELECT * FROM {`tbl`} WHERE SIMILARITY (lower({`field`}), {values_q}) > {sim_thres} ;",
+  #                      .con = con)
+
+  if (length(field) == 0) sql <-glue::glue_sql("SELECT * FROM {`tbl`} ORDER BY SIMILARITY (lower({`field`}), {values_q}) DESC LIMIT 1;",
+                                               .con = con)
+
+  # if (length(field) > 0) sql <-glue::glue_sql("SELECT * FROM {`tbl`} WHERE SIMILARITY (lower(concat({`field[1]`},' ',{`field[2]`})), {values_q}) > {sim_thres} ;",
+  #                                              .con = con)
+
+  if (length(field) > 0)  sql <- glue::glue_sql("SELECT * FROM {`tbl`} ORDER BY SIMILARITY (lower(concat({`field[1]`},' ',{`field[2]`})), {values_q}) DESC LIMIT 1;",
+                                                .con = con)
+
+  rs <- DBI::dbSendQuery(con, sql)
+  res_q <-DBI::dbFetch(rs) %>% as_tibble
+  DBI::dbClearResult(rs)
+
+  if (nrow(res_q) == 0) {
+
+    cli::cli_alert_warning("Failed fuzzy match for {values_q[i]} in {field} field in {tbl}")
+
+  }
+
+  return(res_q)
+
+}
+
 
 #' List, extract taxa
 #'
@@ -12772,7 +12924,7 @@ growth_computing <- function(dataset,
 #' @param family string
 #' @param genus string
 #' @param order string
-#' @param species string
+#' @param species string genus followed by species name separated by one space
 #' @param tax_nam01 string
 #' @param tax_nam02 string
 #' @param only_genus logical
@@ -12782,7 +12934,8 @@ growth_computing <- function(dataset,
 #' @param verbose logical
 #' @param exact_match logical
 #' @param check_synonymy logical
-#' @param extract_traits logical#'
+#' @param extract_traits logical
+#'
 #'
 #' @return A tibble of plots or individuals if extract_individuals is TRUE
 #' @export
@@ -12793,8 +12946,6 @@ query_taxa <-
     genus = NULL,
     order = NULL,
     species = NULL,
-    tax_nam01 = NULL,
-    tax_nam02 = NULL,
     only_genus = FALSE,
     only_family = FALSE,
     only_class = FALSE,
@@ -12807,146 +12958,194 @@ query_taxa <-
 
     if(!exists("mydb")) call.mydb()
 
+    if(!exists("mydb_taxa")) call.mydb.taxa(pass = "Anyuser2022", user = "common")
+
     if(!is.null(class)) {
 
-      all_res <- vector('list', length(class))
+      res_q <- query_exact_match(
+        tbl = "table_tax_famclass",
+        field = "tax_famclass",
+        values_q = class,
+        con = mydb_taxa
+      )
 
-        for (i in 1:length(class)) {
-          if(!exact_match)
-            rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_tax_famclass WHERE tax_famclass ILIKE '%",
-                                                class[i], "%'"))
-          if(exact_match)
-            rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_tax_famclass WHERE tax_famclass ='",
-                                                class[i], "'"))
-
-          res <- DBI::dbFetch(rs)
-          DBI::dbClearResult(rs)
-
-          all_res[[i]] <-
-            tbl(mydb, "table_taxa") %>%
-            filter(id_tax_famclass %in% !!res$id_tax_famclass) %>%
-            dplyr::select(idtax_n, idtax_good_n) %>%
-            collect()
-        }
-
-
-      res_class <- bind_rows(all_res)
+      res_class <-
+        tbl(mydb_taxa, "table_taxa") %>%
+        filter(id_tax_famclass %in% !!res_q$res_q$id_tax_famclass) %>%
+        dplyr::select(idtax_n, idtax_good_n) %>%
+        collect()
 
     }
 
     if(is.null(ids)) {
 
       if(!is.null(order)) {
-        all_res <- list()
-        for (i in 1:length(order)) {
-          if(!exact_match)
-            rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_order ILIKE '%",
-                                                order[i], "%'"))
-          if(exact_match)
-            rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_order ='",
-                                                order[i], "'"))
 
-          res <- DBI::dbFetch(rs)
-          DBI::dbClearResult(rs)
-          all_res[[i]] <- dplyr::as_tibble(res) %>%
-            dplyr::select(idtax_n, id_good)
+        q_res <- query_exact_match(
+          tbl = "table_taxa",
+          field = "tax_order",
+          values_q = order,
+          con = mydb_taxa
+        )
+
+        if (!exact_match & any(is.na(q_res$query_tb$id))) {
+
+          if (verbose) cli::cli_alert_info("Fuzzy search for order for {sum(is.na(q_res$query_tb$id))} name(s)")
+
+          query_tb_miss <-
+            q_res$query_tb %>%
+            filter(is.na(id))
+
+          fuz_list <- vector('list', nrow(query_tb_miss))
+          for (i in 1:nrow(query_tb_miss)) {
+
+            fuz_list[[i]] <- query_fuzzy_match(
+              tbl = "table_taxa",
+              field = "tax_order",
+              values_q = query_tb_miss$tax_order[i],
+              con = mydb_taxa
+            )
+
+          }
+
+          fuz_res <- bind_rows(fuz_list) %>% distinct()
+
         }
-        res_order <- bind_rows(all_res)
+
+        if (!exact_match & any(is.na(q_res$query_tb$id))) {
+          res_order <- bind_rows(fuz_res, q_res$res_q)
+        } else {
+          res_order <- q_res$res_q
+        }
+
       }
 
       if(!is.null(family)) {
-        all_res <- list()
-        for (i in 1:length(family)) {
-          if(!exact_match)
-            rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_fam ILIKE '%",
-                                                family[i], "%'"))
-          if(exact_match)
-            rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_fam ='",
-                                                family[i], "'"))
 
-          res <- DBI::dbFetch(rs)
-          DBI::dbClearResult(rs)
-          all_res[[i]] <- dplyr::as_tibble(res) %>%
-            dplyr::select(idtax_n, id_good)
+        q_res <- query_exact_match(
+          tbl = "table_taxa",
+          field = "tax_fam",
+          values_q = family,
+          con = mydb_taxa
+        )
+
+        if (!exact_match & any(is.na(q_res$query_tb$id))) {
+
+          if (verbose) cli::cli_alert_info("Fuzzy search for family for {sum(is.na(q_res$query_tb$id))} name(s)")
+
+          query_tb_miss <-
+            q_res$query_tb %>%
+            filter(is.na(id))
+
+          fuz_list <- vector('list', nrow(query_tb_miss))
+          for (i in 1:nrow(query_tb_miss)) {
+
+            fuz_list[[i]] <- query_fuzzy_match(
+              tbl = "table_taxa",
+              field = "tax_fam",
+              values_q = query_tb_miss$tax_fam[i],
+              con = mydb_taxa
+            )
+
+          }
+
+          fuz_res <- bind_rows(fuz_list) %>% distinct()
+
         }
-        res_family <- bind_rows(all_res)
+
+        if (!exact_match & any(is.na(q_res$query_tb$id))) {
+          res_family <- bind_rows(fuz_res, q_res$res_q)
+        } else {
+          res_family <- q_res$res_q
+        }
+
       }
 
       if(!is.null(genus)) {
 
-        if (!exact_match) {
+        q_res <- query_exact_match(
+          tbl = "table_taxa",
+          field = "tax_gen",
+          values_q = genus,
+          con = mydb_taxa
+        )
 
-          all_res <- list()
-          for (i in 1:length(genus)) {
+        if (!exact_match & any(is.na(q_res$query_tb$id))) {
 
-            rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_gen ILIKE '%",
-                                                genus[i], "%'"))
-            res <- DBI::dbFetch(rs)
-            DBI::dbClearResult(rs)
-            all_res[[i]]  <- dplyr::as_tibble(res) %>%
-              dplyr::select(idtax_n, id_good)
+          if (verbose) cli::cli_alert_info("Fuzzy search for genus for {sum(is.na(q_res$query_tb$id))} name(s)")
 
-          }
-          res_genus <- bind_rows(all_res)
+          query_tb_miss <-
+            q_res$query_tb %>%
+            filter(is.na(id))
 
-        }
+          fuz_list <- vector('list', nrow(query_tb_miss))
+          for (i in 1:nrow(query_tb_miss)) {
 
-        if (exact_match) {
-          query <- "SELECT * FROM table_taxa WHERE MMM"
-          query <-
-            gsub(
-              pattern = "MMM",
-              replacement = paste0("tax_gen IN ('",
-                                   paste(unique(genus), collapse = "', '"), "')"),
-              x = query
+            fuz_list[[i]] <- query_fuzzy_match(
+              tbl = "table_taxa",
+              field = "tax_gen",
+              values_q = query_tb_miss$tax_gen[i],
+              con = mydb_taxa
             )
 
-          rs <- DBI::dbSendQuery(mydb, query)
-          res_genus <- DBI::dbFetch(rs)
-          DBI::dbClearResult(rs)
-          res_genus <- dplyr::as_tibble(res_genus)
+          }
+
+          fuz_res <- bind_rows(fuz_list) %>% distinct()
 
         }
-            # rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_gen ='",
-            #                                     genus[i], "'"))
 
+        if (!exact_match & any(is.na(q_res$query_tb$id))) {
+          res_genus <- bind_rows(fuz_res, q_res$res_q)
+        } else {
+          res_genus <- q_res$res_q
+        }
 
       }
 
       if(!is.null(species)) {
-        all_res <- list()
-        for (i in 1:length(species)) {
-          if(!exact_match)
-            rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_esp ILIKE '%",
-                                                species[i], "%'"))
-          if(exact_match)
-            rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_esp ='",
-                                                species[i], "'"))
 
-          res <- DBI::dbFetch(rs)
-          DBI::dbClearResult(rs)
-          all_res[[i]]  <- dplyr::as_tibble(res) %>%
-            dplyr::select(idtax_n, id_good)
+        q_res <- query_exact_match(
+          tbl = "table_taxa",
+          field = c("tax_gen", "tax_esp"),
+          values_q = species,
+          con = mydb_taxa
+        )
+
+        if (!exact_match & any(is.na(q_res$query_tb$id))) {
+
+          if (verbose) cli::cli_alert_info("Fuzzy search for species for {sum(is.na(q_res$query_tb$id))} name(s)")
+
+          query_tb_miss <-
+            q_res$query_tb %>%
+            filter(is.na(id))
+
+          fuz_list <- vector('list', nrow(query_tb_miss))
+          for (i in 1:nrow(query_tb_miss)) {
+
+            fuz_list[[i]] <- query_fuzzy_match(
+              tbl = "table_taxa",
+              field = c("tax_gen", "tax_esp"),
+              values_q = query_tb_miss$species[i],
+              con = mydb_taxa
+            )
+
+          }
+
+          fuz_res <- bind_rows(fuz_list) %>% distinct()
+
         }
-        res_species <- bind_rows(all_res)
-      }
 
-      # if(!is.null(habit)) {
-      #   all_res <- list()
-      #   for (i in 1:length(habit)) {
-      #     rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE a_habit ILIKE '%",
-      #                                         habit[i], "%'"))
-      #     res <- DBI::dbFetch(rs)
-      #     DBI::dbClearResult(rs)
-      #     all_res[[i]]  <- dplyr::as_tibble(res) %>%
-      #       dplyr::select(idtax_n, id_good)
-      #   }
-      #   res_habit <- bind_rows(all_res)
-      # }
+        if (!exact_match & any(is.na(q_res$query_tb$id))) {
+          res_species <- bind_rows(fuz_res, q_res$res_q)
+        } else {
+          res_species <- q_res$res_q
+        }
+
+      }
 
       no_match <- FALSE
       res <-
-        tbl(mydb, "table_taxa")
+        tbl(mydb_taxa, "table_taxa")
 
       if(!is.null(class))
         res <- res %>%
@@ -12957,8 +13156,10 @@ query_taxa <-
           res <-
             res %>%
             filter(idtax_n %in% !!res_order$idtax_n)
-        } else{
-          message("\n no match for order")
+
+        } else {
+
+          cli::cli_alert_danger("no match for order")
           no_match <- TRUE
         }
 
@@ -12968,7 +13169,7 @@ query_taxa <-
             res %>%
             filter(idtax_n %in% !!res_family$idtax_n)
         }else{
-          message("\n no match for family")
+          cli::cli_alert_danger("no match for family")
           no_match <- TRUE
         }
 
@@ -12978,7 +13179,7 @@ query_taxa <-
             res %>%
             filter(idtax_n %in% !!res_genus$idtax_n)
         }else{
-          message("\n no match for genus")
+          cli::cli_alert_danger("no match for genus")
           no_match <- TRUE
         }
 
@@ -12988,37 +13189,20 @@ query_taxa <-
             res %>%
             filter(idtax_n %in% !!res_species$idtax_n)
         } else{
-          message("\n no match for species")
+          cli::cli_alert_danger("\n no match for species")
           no_match <- TRUE
         }
 
-      # if (!is.null(habit))
-      #   if (nrow(res_habit) > 0) {
-      #     res <-
-      #       res %>%
-      #       filter(idtax_n %in% !!res_habit$idtax_n)
-      #   } else{
-      #     message("\n no match for habit")
-      #     no_match <- TRUE
-      #   }
-
       if(!no_match) {
         res <- res %>% collect()
-        # query <- gsub(pattern = "AND MMM", replacement = "", query)
-        # rs <- DBI::dbSendQuery(mydb, query)
-        # res <- DBI::dbFetch(rs)
-        # DBI::dbClearResult(rs)
-        # res <- dplyr::as_tibble(res)
       } else {
         res <- NULL
-        message("no matching names")
+        cli::cli_alert_danger("no matching names")
       }
 
     } else {
 
       if(!is.null(class)) {
-
-        # message("\n Filtering by class.")
 
         ids <-
           ids[ids %in% res_class$idtax_n]
@@ -13031,49 +13215,34 @@ query_taxa <-
 
       }
 
-      query <- "SELECT * FROM table_taxa WHERE MMM"
-      query <-
-        gsub(
-          pattern = "MMM",
-          replacement = paste0("idtax_n IN ('",
-                               paste(unique(ids), collapse = "', '"), "')"),
-          x = query
-        )
-
-      rs <- DBI::dbSendQuery(mydb, query)
+      tbl <- "table_taxa"
+      sql <-glue::glue_sql("SELECT * FROM {`tbl`} WHERE idtax_n IN ({vals*})",
+                           vals = ids, .con = mydb_taxa)
+      rs <- DBI::dbSendQuery(mydb_taxa, sql)
       res <- DBI::dbFetch(rs)
       DBI::dbClearResult(rs)
       res <- dplyr::as_tibble(res)
 
     }
 
-    if(only_genus) {
-
+    if (only_genus)
       res <-
         res %>%
         dplyr::filter(is.na(tax_esp))
 
-    }
-
-    if(only_family) {
-
+    if (only_family)
       res <-
         res %>%
         dplyr::filter(is.na(tax_esp),
                       is.na(tax_gen))
 
-    }
-
-    if(only_class) {
-
+    if (only_class)
       res <-
         res %>%
         dplyr::filter(is.na(tax_esp),
                       is.na(tax_gen),
                       is.na(tax_order),
                       is.na(tax_fam))
-
-    }
 
     ## checking synonymies
     if(!is.null(res) & check_synonymy) {
@@ -13086,7 +13255,6 @@ query_taxa <-
           if (verbose) {
 
             cli::cli_alert_info("{sum(res$idtax_good_n > 1, na.rm = TRUE)} taxa selected is/are synonym(s)")
-
             cli::cli_alert_info("{nrow(res)} taxa selected before checking synonymies")
 
           }
@@ -13100,23 +13268,27 @@ query_taxa <-
             dplyr::distinct(idtax_f) %>%
             dplyr::rename(idtax_n = idtax_f)
 
+          idtax_already_extracted <-
+            res %>%
+            filter(idtax_n %in% idtax_accepted$idtax_n)
+
+          idtax_missing <- idtax_accepted %>%
+            filter(!idtax_n %in% idtax_already_extracted$idtax_n)
+
           res <-
-            tbl(mydb, "table_taxa") %>%
-            dplyr::filter(idtax_n %in% !!idtax_accepted$idtax_n) %>%
-            collect()
+            tbl(mydb_taxa, "table_taxa") %>%
+            dplyr::filter(idtax_n %in% !!idtax_missing$idtax_n) %>%
+            collect() %>%
+            bind_rows(idtax_already_extracted)
 
-          # %>%
-          #   dplyr::select(tax_gen, idtax_n)
-
-          if (verbose) cli::cli_alert_info("{nrow(res)} taxa selected after checking synonymies")
+          if (verbose) cli::cli_alert_info("{nrow(res)} selected taxa after checking synonymies")
 
         }
       }
 
-
       ## retrieving all synonyms from selected taxa
       id_synonyms <-
-        tbl(mydb, "table_taxa") %>%
+        tbl(mydb_taxa, "table_taxa") %>%
         filter(idtax_good_n %in% !!res$idtax_n) %>% ## all taxa synonyms of selected taxa
         # filter(idtax_n %in% !!res$idtax_n) %>% ## excluding taxa already in extract
         dplyr::select(idtax_n, idtax_good_n) %>%
@@ -13143,7 +13315,6 @@ query_taxa <-
     }
 
     if(!is.null(res)) {
-
       res <-
         res %>%
         mutate(tax_sp_level = ifelse(!is.na(tax_esp), paste(tax_gen, tax_esp), NA)) %>%
@@ -13173,34 +13344,49 @@ query_taxa <-
                       tax_infra_level = as.character(tax_infra_level),
                       tax_infra_level_auth = as.character(tax_infra_level_auth)) %>%
         dplyr::select(-tax_famclass) %>%
-        left_join(dplyr::tbl(mydb, "table_tax_famclass") %>%
+        left_join(dplyr::tbl(mydb_taxa, "table_tax_famclass") %>%
                     dplyr::collect(),
                   by = c("id_tax_famclass" = "id_tax_famclass")) %>%
-        dplyr::relocate(tax_famclass, .after = tax_order)
+        dplyr::relocate(tax_famclass, .after = tax_order) %>%
+        dplyr::relocate(year_description, .after = citation) %>%
+        dplyr::relocate(data_modif_d, .after = morpho_species) %>%
+        dplyr::relocate(data_modif_m, .after = morpho_species) %>%
+        dplyr::relocate(data_modif_y, .after = morpho_species) %>%
+        dplyr::relocate(tax_sp_level, .before = idtax_n) %>%
+        dplyr::relocate(id_tax_famclass, .after = morpho_species)
 
-
-      if (extract_traits) {
+      if(extract_traits) {
 
         traitsqueried <-
           query_traits_measures(idtax = res$idtax_n, idtax_good = res$idtax_good_n)
 
-        if (any(class(traitsqueried$traits_idtax_num) == "data.frame"))
+        if (!any(is.na(traitsqueried$traits_idtax_num)))
           res <-
             res %>%
             left_join(traitsqueried$traits_idtax_num,
                       by = c("idtax_n" = "idtax"))
 
-        if (any(class(traitsqueried$traits_idtax_char) == "data.frame"))
+        if (!any(is.na(traitsqueried$traits_idtax_char)))
           res <-
             res %>%
             left_join(traitsqueried$traits_idtax_char,
                       by = c("idtax_n" = "idtax"))
 
-
-
-
+        # if (any(class(traitsqueried$traits_idtax_num) == "data.frame"))
+        #   res <-
+        #     res %>%
+        #     left_join(traitsqueried$traits_idtax_num,
+        #               by = c("idtax_n" = "idtax"))
+        #
+        # if (any(class(traitsqueried$traits_idtax_char) == "data.frame"))
+        #   res <-
+        #     res %>%
+        #     left_join(traitsqueried$traits_idtax_char,
+        #               by = c("idtax_n" = "idtax"))
 
       }
+
+
 
     }
 
@@ -13225,39 +13411,572 @@ query_taxa <-
           res %>%
           dplyr::select(-tax_tax)
 
-
     }
-
 
     if(!is.null(res)) {
       if (verbose & nrow(res) < 50) {
 
         res_print <-
           res %>%
-          # dplyr::select(-fktax,-id_good,-tax_tax) %>%
           dplyr::relocate(tax_infra_level_auth, .before = tax_order) %>%
           dplyr::relocate(idtax_n, .before = tax_order) %>%
           dplyr::relocate(idtax_good_n, .before = tax_order)
 
+        # res_print <-
+        #   res_print %>%
+        #   mutate_all(~ as.character(.)) %>%
+        #   mutate_all(~ tidyr::replace_na(., ""))
+
         res_print <-
           res_print %>%
-          mutate_all(~ as.character(.)) %>%
-          mutate_all(~ tidyr::replace_na(., ""))
+          mutate(across(where(is.character), ~ tidyr::replace_na(., "")))
 
-        as_tibble(cbind(columns = names(res_print), record = t(res_print))) %>%
+        res_print <- suppressMessages(as_tibble(cbind(columns = names(res_print), record = t(res_print)),
+                                                .name_repair = "universal"))
+
+        res_print %>%
           kableExtra::kable(format = "html", escape = F) %>%
           kableExtra::kable_styling("striped", full_width = F) %>%
           print()
 
       }
 
-
-      if(verbose & nrow(res) >= 50)
-        message("\n Not showing html table because too many taxa")
+      if(verbose & nrow(res) >= 20)
+        cli::cli_alert_info("Not showing html table because too many taxa")
     }
 
     if(!is.null(res)) return(res)
   }
+
+
+
+# query_taxa <-
+#   function(
+#     class = c("Magnoliopsida", "Pinopsida", "Lycopsida", "Pteropsida"),
+#     family = NULL,
+#     genus = NULL,
+#     order = NULL,
+#     species = NULL,
+#     tax_nam01 = NULL,
+#     tax_nam02 = NULL,
+#     only_genus = FALSE,
+#     only_family = FALSE,
+#     only_class = FALSE,
+#     ids = NULL,
+#     verbose = TRUE,
+#     exact_match = FALSE,
+#     check_synonymy =TRUE,
+#     extract_traits = TRUE
+#   ) {
+#
+#     if(!exists("mydb")) call.mydb()
+#
+#     if(!is.null(class)) {
+#
+#       # if(!exact_match) {
+#       #   all_res <- vector('list', length(class))
+#       #   for (i in 1:length(class)) {
+#       #
+#       #     rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_tax_famclass WHERE tax_famclass ILIKE '%",
+#       #                                         class[i], "%'"))
+#       #     res <- DBI::dbFetch(rs)
+#       #     DBI::dbClearResult(rs)
+#       #     all_res[[i]] <-
+#
+#       #     res_class <- bind_rows(all_res)
+#       #   }
+#       # }
+#       # if(exact_match)
+#         # rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_tax_famclass WHERE tax_famclass ='",
+#         #                                         class[i], "'"))
+#
+#           tbl <- "table_tax_famclass"
+#
+#           sql <-glue::glue_sql("SELECT * FROM {`tbl`} WHERE tax_famclass IN ({vals*})",
+#                    vals = class, .con = mydb)
+#           rs <- DBI::dbSendQuery(mydb, sql)
+#           res_class <-DBI::dbFetch(rs)
+#           DBI::dbClearResult(rs)
+#
+#           res_class <-
+#             tbl(mydb, "table_taxa") %>%
+#             filter(id_tax_famclass %in% !!res_class$id_tax_famclass) %>%
+#             dplyr::select(idtax_n, idtax_good_n) %>%
+#             collect()
+#
+#           # test <- tbl(mydb, "table_taxa") %>%
+#           #   dplyr::select(idtax_n, idtax_good_n, id_tax_famclass) %>%
+#           #   collect()
+#
+#         }
+#
+#     if(is.null(ids)) {
+#
+#       if(!is.null(order)) {
+#
+#
+#         query_tb <- tibble(tax_order = order)
+#
+#         tbl <- "table_taxa"
+#         field <- "tax_order"
+#         values_que <- order
+#         con_mydb <- mydb
+#
+#         sql <-glue::glue_sql("SELECT * FROM {`tbl`} WHERE lower({`field`}) IN ({vals*})",
+#                              vals = tolower(values_que), .con = con_mydb)
+#         rs <- DBI::dbSendQuery(con_mydb, sql)
+#         res_order <-DBI::dbFetch(rs) %>% as_tibble
+#         DBI::dbClearResult(rs)
+#
+#         query_tb <- query_tb %>%
+#           left_join(res_order %>% dplyr::select(tax_order) %>% distinct() %>%
+#                       mutate(id = seq_len(nrow(.))))
+#
+#         if (!exact_match & any(is.na(query_tb$id))) {
+#           query_tb_miss <-
+#             query_tb %>%
+#             filter(is.na(id))
+#
+#           for (i in 1:nrow(query_tb_miss)) {
+#
+#             tbl <- "table_taxa"
+#             field <- "tax_order"
+#             values_que <- query_tb_miss$tax_order[i]
+#             con_mydb <- mydb
+#
+#             sql <-glue::glue_sql("SELECT * FROM {`tbl`} WHERE SIMILARITY (lower({`field`}), {values_que}) > 0.5 ;", .con = con_mydb)
+#             rs <- DBI::dbSendQuery(con_mydb, sql)
+#             res_order <-DBI::dbFetch(rs) %>% as_tibble
+#             DBI::dbClearResult(rs)
+#
+#
+#
+#           }
+#
+#
+#         }
+#
+#         all_res <- list()
+#         for (i in 1:length(order)) {
+#           if(!exact_match)
+#             rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_order ILIKE '%",
+#                                                 order[i], "%'"))
+#           if(exact_match)
+#             rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_order ='",
+#                                                 order[i], "'"))
+#
+#           res <- DBI::dbFetch(rs)
+#           DBI::dbClearResult(rs)
+#           all_res[[i]] <- dplyr::as_tibble(res) %>%
+#             dplyr::select(idtax_n, id_good)
+#         }
+#         res_order <- bind_rows(all_res)
+#       }
+#
+#       if(!is.null(family)) {
+#         all_res <- list()
+#         for (i in 1:length(family)) {
+#           if(!exact_match)
+#             rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_fam ILIKE '%",
+#                                                 family[i], "%'"))
+#           if(exact_match)
+#             rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_fam ='",
+#                                                 family[i], "'"))
+#
+#           res <- DBI::dbFetch(rs)
+#           DBI::dbClearResult(rs)
+#           all_res[[i]] <- dplyr::as_tibble(res) %>%
+#             dplyr::select(idtax_n, id_good)
+#         }
+#         res_family <- bind_rows(all_res)
+#       }
+#
+#       if(!is.null(genus)) {
+#
+#         if (!exact_match) {
+#
+#           all_res <- list()
+#           for (i in 1:length(genus)) {
+#
+#             rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_gen ILIKE '%",
+#                                                 genus[i], "%'"))
+#             res <- DBI::dbFetch(rs)
+#             DBI::dbClearResult(rs)
+#             all_res[[i]]  <- dplyr::as_tibble(res) %>%
+#               dplyr::select(idtax_n, id_good)
+#
+#           }
+#           res_genus <- bind_rows(all_res)
+#
+#         }
+#
+#         if (exact_match) {
+#           query <- "SELECT * FROM table_taxa WHERE MMM"
+#           query <-
+#             gsub(
+#               pattern = "MMM",
+#               replacement = paste0("tax_gen IN ('",
+#                                    paste(unique(genus), collapse = "', '"), "')"),
+#               x = query
+#             )
+#
+#           rs <- DBI::dbSendQuery(mydb, query)
+#           res_genus <- DBI::dbFetch(rs)
+#           DBI::dbClearResult(rs)
+#           res_genus <- dplyr::as_tibble(res_genus)
+#
+#         }
+#             # rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_gen ='",
+#             #                                     genus[i], "'"))
+#
+#
+#       }
+#
+#       if(!is.null(species)) {
+#         all_res <- list()
+#         for (i in 1:length(species)) {
+#           if(!exact_match)
+#             rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_esp ILIKE '%",
+#                                                 species[i], "%'"))
+#           if(exact_match)
+#             rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE tax_esp ='",
+#                                                 species[i], "'"))
+#
+#           res <- DBI::dbFetch(rs)
+#           DBI::dbClearResult(rs)
+#           all_res[[i]]  <- dplyr::as_tibble(res) %>%
+#             dplyr::select(idtax_n, id_good)
+#         }
+#         res_species <- bind_rows(all_res)
+#       }
+#
+#       # if(!is.null(habit)) {
+#       #   all_res <- list()
+#       #   for (i in 1:length(habit)) {
+#       #     rs <- DBI::dbSendQuery(mydb, paste0("SELECT * FROM table_taxa WHERE a_habit ILIKE '%",
+#       #                                         habit[i], "%'"))
+#       #     res <- DBI::dbFetch(rs)
+#       #     DBI::dbClearResult(rs)
+#       #     all_res[[i]]  <- dplyr::as_tibble(res) %>%
+#       #       dplyr::select(idtax_n, id_good)
+#       #   }
+#       #   res_habit <- bind_rows(all_res)
+#       # }
+#
+#       no_match <- FALSE
+#       res <-
+#         tbl(mydb, "table_taxa")
+#
+#       if(!is.null(class))
+#         res <- res %>%
+#         filter(idtax_n %in% !!res_class$idtax_n)
+#
+#       if (!is.null(order))
+#         if (nrow(res_order) > 0) {
+#           res <-
+#             res %>%
+#             filter(idtax_n %in% !!res_order$idtax_n)
+#         } else{
+#           message("\n no match for order")
+#           no_match <- TRUE
+#         }
+#
+#       if(!is.null(family))
+#         if(nrow(res_family)>0) {
+#           res <-
+#             res %>%
+#             filter(idtax_n %in% !!res_family$idtax_n)
+#         }else{
+#           message("\n no match for family")
+#           no_match <- TRUE
+#         }
+#
+#       if(!is.null(genus))
+#         if(nrow(res_genus)>0) {
+#           res <-
+#             res %>%
+#             filter(idtax_n %in% !!res_genus$idtax_n)
+#         }else{
+#           message("\n no match for genus")
+#           no_match <- TRUE
+#         }
+#
+#       if (!is.null(species))
+#         if (nrow(res_species) > 0) {
+#           res <-
+#             res %>%
+#             filter(idtax_n %in% !!res_species$idtax_n)
+#         } else{
+#           message("\n no match for species")
+#           no_match <- TRUE
+#         }
+#
+#       # if (!is.null(habit))
+#       #   if (nrow(res_habit) > 0) {
+#       #     res <-
+#       #       res %>%
+#       #       filter(idtax_n %in% !!res_habit$idtax_n)
+#       #   } else{
+#       #     message("\n no match for habit")
+#       #     no_match <- TRUE
+#       #   }
+#
+#       if(!no_match) {
+#         res <- res %>% collect()
+#         # query <- gsub(pattern = "AND MMM", replacement = "", query)
+#         # rs <- DBI::dbSendQuery(mydb, query)
+#         # res <- DBI::dbFetch(rs)
+#         # DBI::dbClearResult(rs)
+#         # res <- dplyr::as_tibble(res)
+#       } else {
+#         res <- NULL
+#         message("no matching names")
+#       }
+#
+#     } else {
+#
+#       if(!is.null(class)) {
+#
+#         # message("\n Filtering by class.")
+#
+#         ids <-
+#           ids[ids %in% res_class$idtax_n]
+#
+#         if (length(ids) == 0) {
+#
+#           stop("id provided not found in the class queried")
+#
+#         }
+#
+#       }
+#
+#       query <- "SELECT * FROM table_taxa WHERE MMM"
+#       query <-
+#         gsub(
+#           pattern = "MMM",
+#           replacement = paste0("idtax_n IN ('",
+#                                paste(unique(ids), collapse = "', '"), "')"),
+#           x = query
+#         )
+#
+#       rs <- DBI::dbSendQuery(mydb, query)
+#       res <- DBI::dbFetch(rs)
+#       DBI::dbClearResult(rs)
+#       res <- dplyr::as_tibble(res)
+#
+#     }
+#
+#     if(only_genus) {
+#
+#       res <-
+#         res %>%
+#         dplyr::filter(is.na(tax_esp))
+#
+#     }
+#
+#     if(only_family) {
+#
+#       res <-
+#         res %>%
+#         dplyr::filter(is.na(tax_esp),
+#                       is.na(tax_gen))
+#
+#     }
+#
+#     if(only_class) {
+#
+#       res <-
+#         res %>%
+#         dplyr::filter(is.na(tax_esp),
+#                       is.na(tax_gen),
+#                       is.na(tax_order),
+#                       is.na(tax_fam))
+#
+#     }
+#
+#     ## checking synonymies
+#     if(!is.null(res) & check_synonymy) {
+#
+#       ## if selected taxa are synonyms
+#       if(any(!is.na(res$idtax_good_n))) {
+#
+#         if (any(res$idtax_good_n > 1)) {
+#
+#           if (verbose) {
+#
+#             cli::cli_alert_info("{sum(res$idtax_good_n > 1, na.rm = TRUE)} taxa selected is/are synonym(s)")
+#
+#             cli::cli_alert_info("{nrow(res)} taxa selected before checking synonymies")
+#
+#           }
+#
+#           ## retrieving good idtax_n if selected ones are considered synonyms
+#           idtax_accepted <-
+#             res %>%
+#             dplyr::select(idtax_n, idtax_good_n) %>%
+#             dplyr::mutate(idtax_f = ifelse(!is.na(idtax_good_n),
+#                                            idtax_good_n, idtax_n)) %>%
+#             dplyr::distinct(idtax_f) %>%
+#             dplyr::rename(idtax_n = idtax_f)
+#
+#           res <-
+#             tbl(mydb, "table_taxa") %>%
+#             dplyr::filter(idtax_n %in% !!idtax_accepted$idtax_n) %>%
+#             collect()
+#
+#           # %>%
+#           #   dplyr::select(tax_gen, idtax_n)
+#
+#           if (verbose) cli::cli_alert_info("{nrow(res)} taxa selected after checking synonymies")
+#
+#         }
+#       }
+#
+#
+#       ## retrieving all synonyms from selected taxa
+#       id_synonyms <-
+#         tbl(mydb, "table_taxa") %>%
+#         filter(idtax_good_n %in% !!res$idtax_n) %>% ## all taxa synonyms of selected taxa
+#         # filter(idtax_n %in% !!res$idtax_n) %>% ## excluding taxa already in extract
+#         dplyr::select(idtax_n, idtax_good_n) %>%
+#         collect()
+#
+#       if(nrow(id_synonyms) > 0) {
+#
+#         if(verbose) {
+#           cli::cli_alert_info("{sum(id_synonyms$idtax_good_n > 0, na.rm = TRUE)} taxa selected have synonym(s)")
+#           cli::cli_alert_info("{nrow(res)} taxa selected before checking synonymies")
+#         }
+#
+#         synonyms <- query_taxa(ids = id_synonyms$idtax_n,
+#                                check_synonymy = FALSE,
+#                                verbose = FALSE,
+#                                class = NULL,
+#                                extract_traits = FALSE)
+#
+#         res <-
+#           res %>%
+#           bind_rows(synonyms)
+#
+#       }
+#     }
+#
+#     if(!is.null(res)) {
+#
+#       res <-
+#         res %>%
+#         mutate(tax_sp_level = ifelse(!is.na(tax_esp), paste(tax_gen, tax_esp), NA)) %>%
+#         mutate(tax_infra_level = ifelse(!is.na(tax_esp),
+#                                         paste0(tax_gen,
+#                                                " ",
+#                                                tax_esp,
+#                                                ifelse(!is.na(tax_rank01), paste0(" ", tax_rank01), ""),
+#                                                ifelse(!is.na(tax_nam01), paste0(" ", tax_nam01), ""),
+#                                                ifelse(!is.na(tax_rank02), paste0(" ", tax_rank02), ""),
+#                                                ifelse(!is.na(tax_nam02), paste0(" ", tax_nam02), "")),
+#                                         NA)) %>%
+#         mutate(tax_infra_level_auth = ifelse(!is.na(tax_esp),
+#                                              paste0(tax_gen,
+#                                                     " ",
+#                                                     tax_esp,
+#                                                     ifelse(!is.na(author1), paste0(" ", author1), ""),
+#                                                     ifelse(!is.na(tax_rank01), paste0(" ", tax_rank01), ""),
+#                                                     ifelse(!is.na(tax_nam01), paste0(" ", tax_nam01), ""),
+#                                                     ifelse(!is.na(author2), paste0(" ", author2), ""),
+#                                                     ifelse(!is.na(tax_rank02), paste0(" ", tax_rank02), ""),
+#                                                     ifelse(!is.na(tax_nam02), paste0(" ", tax_nam02), ""),
+#                                                     ifelse(!is.na(author3), paste0(" ", author3), "")),
+#                                              NA)) %>%
+#         dplyr::mutate(introduced_status = stringr::str_trim(introduced_status)) %>%
+#         dplyr::mutate(tax_sp_level = as.character(tax_sp_level),
+#                       tax_infra_level = as.character(tax_infra_level),
+#                       tax_infra_level_auth = as.character(tax_infra_level_auth)) %>%
+#         dplyr::select(-tax_famclass) %>%
+#         left_join(dplyr::tbl(mydb, "table_tax_famclass") %>%
+#                     dplyr::collect(),
+#                   by = c("id_tax_famclass" = "id_tax_famclass")) %>%
+#         dplyr::relocate(tax_famclass, .after = tax_order)
+#
+#
+#       if (extract_traits) {
+#
+#         traitsqueried <-
+#           query_traits_measures(idtax = res$idtax_n, idtax_good = res$idtax_good_n)
+#
+#         if (any(class(traitsqueried$traits_idtax_num) == "data.frame"))
+#           res <-
+#             res %>%
+#             left_join(traitsqueried$traits_idtax_num,
+#                       by = c("idtax_n" = "idtax"))
+#
+#         if (any(class(traitsqueried$traits_idtax_char) == "data.frame"))
+#           res <-
+#             res %>%
+#             left_join(traitsqueried$traits_idtax_char,
+#                       by = c("idtax_n" = "idtax"))
+#
+#
+#
+#
+#
+#       }
+#
+#     }
+#
+#     if (!is.null(res)) {
+#       if (any(names(res) == "a_habit"))
+#         res <-
+#           res %>%
+#           dplyr::select(-a_habit,-a_habit_secondary)
+#
+#       if (any(names(res) == "fktax"))
+#         res <-
+#           res %>%
+#           dplyr::select(-fktax)
+#
+#       if (any(names(res) == "id_good"))
+#         res <-
+#           res %>%
+#           dplyr::select(-id_good)
+#
+#       if (any(names(res) == "tax_tax"))
+#         res <-
+#           res %>%
+#           dplyr::select(-tax_tax)
+#
+#
+#     }
+#
+#
+#     if(!is.null(res)) {
+#       if (verbose & nrow(res) < 50) {
+#
+#         res_print <-
+#           res %>%
+#           # dplyr::select(-fktax,-id_good,-tax_tax) %>%
+#           dplyr::relocate(tax_infra_level_auth, .before = tax_order) %>%
+#           dplyr::relocate(idtax_n, .before = tax_order) %>%
+#           dplyr::relocate(idtax_good_n, .before = tax_order)
+#
+#         res_print <-
+#           res_print %>%
+#           mutate_all(~ as.character(.)) %>%
+#           mutate_all(~ tidyr::replace_na(., ""))
+#
+#         as_tibble(cbind(columns = names(res_print), record = t(res_print))) %>%
+#           kableExtra::kable(format = "html", escape = F) %>%
+#           kableExtra::kable_styling("striped", full_width = F) %>%
+#           print()
+#
+#       }
+#
+#
+#       if(verbose & nrow(res) >= 50)
+#         message("\n Not showing html table because too many taxa")
+#     }
+#
+#     if(!is.null(res)) return(res)
+#   }
 
 #' Merge individuals and taxonomic backbone
 #'
