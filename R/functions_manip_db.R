@@ -15177,3 +15177,131 @@ match_tax <- function(idtax, queried_tax = NULL, verbose = TRUE) {
   return(results)
 
 }
+
+
+
+
+
+
+
+#' Find unlinked individual
+#'
+#' Extract individuals for which no links exist with herbarium specimens
+#'
+#' @return list
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @param ids vector of id_n of individuals for which we want to explore links
+#'
+#'
+#' @export
+get_ref_specimen_ind <- function(collector = NULL, ids = NULL) {
+
+  if (!is.null(collector)) {
+
+    collector <-
+      .link_colnam(data_stand = tibble(colnam = collector), collector_field = "colnam")
+
+  }
+
+  all_id_individuals_links <-
+    tbl(mydb, "data_link_specimens") %>%
+    dplyr::select(id_n) %>%
+    distinct(id_n) %>%
+    dplyr::collect()
+
+  if (!is.null(ids))
+    all_herb_individuals <-
+    tbl(mydb, "data_individuals") %>%
+    dplyr::select(id_n, id_specimen, herbarium_nbe_char,
+                  herbarium_code_char, herbarium_nbe_type) %>%
+    dplyr::filter(!id_n %in% !!all_id_individuals_links$id_n) %>%
+    dplyr::filter(id_n %in% !!ids) %>%
+    dplyr::collect()
+
+  if (is.null(ids))
+    all_herb_individuals <-
+    tbl(mydb, "data_individuals") %>%
+    dplyr::select(id_n, id_specimen, herbarium_nbe_char,
+                  herbarium_code_char, herbarium_nbe_type) %>%
+    dplyr::filter(!id_n %in% !!all_id_individuals_links$id_n) %>%
+    collect()
+
+  ## all individual with a link to specimen not linked to specimen table
+  all_herb_not_linked <-
+    all_herb_individuals %>%
+    filter(!is.na(herbarium_nbe_char) | !is.na(herbarium_code_char))
+
+  ## getting number of specimen
+  all_herb_not_linked <-
+    all_herb_not_linked %>%
+    filter(!is.na(herbarium_nbe_char)) %>%
+    mutate(herbarium_nbe_char = stringr::str_replace(string = herbarium_nbe_char,
+                                                     pattern = "-",
+                                                     replacement = " ")) %>%
+    mutate(nbrs = readr::parse_number(herbarium_nbe_char)) %>%
+    mutate(nbrs = ifelse(nbrs<1, nbrs*-1, nbrs)) %>%
+    arrange(desc(nbrs))
+
+  ## getting collector of specimen
+  all_herb_not_linked <-
+    all_herb_not_linked %>%
+    # filter(grepl("IDU", herbarium_nbe_char)) %>%
+    mutate(coll = stringr::str_replace(string = herbarium_nbe_char,
+                                       pattern = as.character(nbrs),
+                                       replacement = "")) %>%
+    mutate(coll = str_trim(coll))
+
+
+  ## linking collector to collector table
+  all_herb_not_linked <-
+    .link_colnam(data_stand = all_herb_not_linked, collector_field = "coll")
+
+  # if (!is.null(collector)) {
+  #   cli::cli_alert_info("filtering on collector : {collector$col_name}")
+  #
+  #   all_herb_not_linked <-
+  #     all_herb_not_linked %>%
+  #     filter(id_colnam == collector$id_colnam)
+  #
+  # }
+
+  ## getting information from data_liste_plot
+  all_herb_not_linked <-
+    all_herb_not_linked %>%
+    left_join(tbl(mydb, "data_individuals") %>%
+                select(id_n, id_table_liste_plots_n, idtax_n) %>%
+                collect(),
+              by=c("id_n"="id_n")) %>%
+    left_join(tbl(mydb, "data_liste_plots") %>%
+                select(id_liste_plots, plot_name, team_leader) %>%
+                collect(),
+              by=c("id_table_liste_plots_n"="id_liste_plots"))
+
+  # all_linked_individuals <-
+  #   tbl(mydb, "data_link_specimens") %>%
+  #   distinct(id_n) %>%
+  #   collect()
+
+  ### selection of all individuals with specimens linked but not included in link table
+  # all_herb_missing_link <-
+  #   all_herb_not_linked %>%
+  #   filter(!id_n %in% all_linked_individuals$id_n)
+
+  all_herb_missing_link_unique <-
+    all_herb_missing_link %>%
+    group_by(id_colnam, nbrs) %>%
+    count() %>%
+    ungroup()
+
+  cli::cli_alert_info("Missing link for {nrow(all_herb_missing_link_unique)} specimens")
+  print(all_herb_missing_link_unique %>%
+          dplyr::select(-n) %>%
+          group_by(id_colnam) %>%
+          count())
+
+  return(list(all_herb_not_linked = all_herb_not_linked,
+              all_herb_missing_link = all_herb_missing_link,
+              all_linked_individuals = all_linked_individuals))
+
+}
