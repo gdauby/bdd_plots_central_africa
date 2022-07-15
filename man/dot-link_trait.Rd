@@ -4,7 +4,7 @@
 \alias{.link_trait}
 \title{Internal function}
 \usage{
-.link_trait(data_stand, trait)
+.link_trait(data_stand, trait, column_name = "trait")
 }
 \arguments{
 \item{data_stand}{tibble}

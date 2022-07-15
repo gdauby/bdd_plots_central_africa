@@ -6,9 +6,9 @@
 \usage{
 update_individuals(
   new_data,
-  col_names_select,
-  col_names_corresp,
-  id_col,
+  col_names_select = NULL,
+  col_names_corresp = NULL,
+  id_col = 1,
   launch_update = FALSE,
   add_backup = TRUE
 )

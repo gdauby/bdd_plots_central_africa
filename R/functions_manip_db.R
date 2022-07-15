@@ -1393,7 +1393,7 @@ call.mydb <- function(pass=NULL, user=NULL, offline = FALSE) {
 
 #' Load the taxonomic database
 #'
-#' Load the taxonomic database and ask for password
+#' Load the database and ask for password
 #'
 #' @param pass string
 #' @param user string
@@ -1404,6 +1404,12 @@ call.mydb <- function(pass=NULL, user=NULL, offline = FALSE) {
 call.mydb.taxa <- function(pass=NULL, user=NULL) {
 
   if(!exists("mydb_taxa")) {
+
+    if(is.null(pass))
+      pass <- rstudioapi::askForPassword("Please enter your password")
+
+    if(is.null(user))
+      user <- rstudioapi::askForPassword("Please enter your user name")
 
     mydb_taxa <- DBI::dbConnect(
       RPostgres::Postgres(),
@@ -1419,6 +1425,7 @@ call.mydb.taxa <- function(pass=NULL, user=NULL) {
 
   }
 }
+
 
 
 #' List of countries
@@ -1522,6 +1529,46 @@ method_list <- function() {
 }
 
 
+
+
+#' Add a trait in trait list
+#'
+#' Add trait and associated descriptors in trait list table
+#'
+#' @return nothing
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @param new_trait string value with new trait descritors - try to avoid space
+#' @param new_description_method
+#'
+#'
+#' @export
+add_method <- function(new_method = NULL,
+                       new_description_method = NULL) {
+
+  if(is.null(new_method)) stop("define new method")
+
+  if(!exists("mydb")) call.mydb()
+
+  new_data_renamed <- tibble(
+    method = new_method,
+    description_method = ifelse(is.null(new_description_method), NA, new_description_method)
+  )
+
+  print(new_data_renamed)
+
+  Q <- utils::askYesNo("confirm adding this metho?")
+
+  if(Q) DBI::dbWriteTable(mydb, "methodslist", new_data_renamed, append = TRUE, row.names = FALSE)
+
+}
+
+
+
+
+
+
+
 #' List of subplot feature
 #'
 #' Provide list of subplot features of plot
@@ -1549,7 +1596,7 @@ subplot_list <- function() {
 #'
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
 #' @export
-traits_list <- function() {
+traits_list <- function(id_trait = NULL) {
 
   all_colnames_ind <-
     dplyr::tbl(mydb, "traitlist") %>%
@@ -1558,8 +1605,24 @@ traits_list <- function() {
                   traitdescription,
                   maxallowedvalue,
                   minallowedvalue,
-                  expectedunit) %>%
-    dplyr::collect()
+                  expectedunit,
+                  valuetype)
+
+  if (is.null(id_trait)) {
+
+    all_colnames_ind <- all_colnames_ind %>%
+      dplyr::collect()
+
+  } else {
+
+    all_colnames_ind <- all_colnames_ind %>%
+      filter(id_trait == !!id_trait) %>%
+      dplyr::collect()
+
+  }
+
+
+
 
   return(all_colnames_ind)
 }
@@ -1602,6 +1665,7 @@ traits_list <- function() {
 #' @importFrom date as.date
 #' @importFrom tidyselect vars_select_helpers
 #' @importFrom BIOMASS correctCoordGPS
+#' @importFrom glue glue_sql
 #'
 #' @return A tibble of plots or individuals if extract_individuals is TRUE
 #'
@@ -1642,11 +1706,15 @@ query_plots <- function(team_lead = NULL,
     if(!is.null(id_plot))
       cli::cli_alert_warning("id_plot not null replaced by id_plot of the id_individuals")
 
+    tbl <- "data_individuals"
+    sql <- glue::glue_sql("SELECT * FROM {`tbl`} WHERE id_n IN ({vals*})",
+                         vals = id_individual, .con = mydb)
+
+    res <- func_try_fetch(con = mydb, sql = sql)
+
     id_plot <-
-      tbl(mydb, "data_individuals") %>%
-      dplyr::filter(id_n %in% id_individual) %>%
+      res %>%
       dplyr::select(id_table_liste_plots_n) %>%
-      dplyr::collect() %>%
       pull()
 
   }
@@ -1661,8 +1729,7 @@ query_plots <- function(team_lead = NULL,
       cli::cli_alert_warning("id_plot not null replaced by id_plot where idtax_n are found")
 
     id_plot <-
-      merge_individuals_taxa() %>%
-      filter(idtax_individual_f %in% !!id_tax) %>%
+      merge_individuals_taxa(id_tax = id_tax) %>%
       pull(id_table_liste_plots_n)
 
     # id_plot <-
@@ -1684,10 +1751,13 @@ query_plots <- function(team_lead = NULL,
         query_colnam <-
           paste0("SELECT * FROM table_colnam WHERE colnam ILIKE '%", team_lead[i], "%'")
 
-        rs_col <- DBI::dbSendQuery(mydb, query_colnam)
-        rs_colnam <- DBI::dbFetch(rs_col)
-        DBI::dbClearResult(rs_col)
+        rs_colnam <- func_try_fetch(con = mydb, sql = query_colnam)
         rs_colnam <- dplyr::as_tibble(rs_colnam)
+
+        # rs_col <- DBI::dbSendQuery(mydb, query_colnam)
+        # rs_colnam <- DBI::dbFetch(rs_col)
+        # DBI::dbClearResult(rs_col)
+
         id_liste_plots_match[[i]] <- rs_colnam$id_table_colnam
       }
 
@@ -1733,13 +1803,16 @@ query_plots <- function(team_lead = NULL,
 
         id_liste_plots_match <- vector('list', length(locality_name))
         for (i in 1:length(locality_name)) {
+
           query_loc <-
             paste0("SELECT * FROM data_liste_plots WHERE locality_name ILIKE '%", locality_name[i], "%'")
 
-          rs_loc <- DBI::dbSendQuery(mydb, query_loc)
-          res_loc <- DBI::dbFetch(rs_loc)
-          DBI::dbClearResult(rs_loc)
-          res_loc <- dplyr::as_tibble(res_loc)
+          res_loc <- func_try_fetch(con = mydb, sql = query_loc)
+
+          # rs_loc <- DBI::dbSendQuery(mydb, query_loc)
+          # res_loc <- DBI::dbFetch(rs_loc)
+          # DBI::dbClearResult(rs_loc)
+          # res_loc <- dplyr::as_tibble(res_loc)
           id_liste_plots_match[[i]] <- res_loc$id_liste_plots
         }
 
@@ -1800,17 +1873,18 @@ query_plots <- function(team_lead = NULL,
       query_method <-
         gsub(pattern = "AND MMM", replacement = "", query_method)
 
-      rs_meth <- DBI::dbSendQuery(mydb, query_method)
-      res_meth <- DBI::dbFetch(rs_meth)
-      DBI::dbClearResult(rs_meth)
-      res_meth <- dplyr::as_tibble(res_meth)
+      res_meth <- func_try_fetch(con = mydb, sql = query_method)
+
+      # rs_meth <- DBI::dbSendQuery(mydb, query_method)
+      # res_meth <- DBI::dbFetch(rs_meth)
+      # DBI::dbClearResult(rs_meth)
+      # res_meth <- dplyr::as_tibble(res_meth)
 
       if (nrow(res_meth) == 0) {
         warning("no method selected!")
 
       } else {
-        message("\n method(s) selected")
-        print(res_meth)
+        cli::cli_alert_info("method(s) selected {res_meth}")
 
         query <-
           gsub(
@@ -1851,10 +1925,12 @@ query_plots <- function(team_lead = NULL,
 
     if(grepl("WHERE MMM", query)) query <- gsub(pattern = " WHERE MMM", replacement = "", query)
 
-    rs <- DBI::dbSendQuery(mydb, query)
-    res <- DBI::dbFetch(rs)
-    DBI::dbClearResult(rs)
-    res <- dplyr::as_tibble(res)
+    res <- func_try_fetch(con = mydb, sql = query)
+
+    # rs <- DBI::dbSendQuery(mydb, query)
+    # res <- DBI::dbFetch(rs)
+    # DBI::dbClearResult(rs)
+    # res <- dplyr::as_tibble(res)
     res <-
       res %>%
       dplyr::select(-id_old)
@@ -2266,7 +2342,8 @@ query_plots <- function(team_lead = NULL,
     }
 
     if(map_type == "mapview") {
-      map_types <- c("Esri.NatGeoWorldMap", "Esri.WorldImagery", "OpenStreetMap.DE",
+      map_types <- c("OpenStreetMap.DE",
+                     "Esri.WorldImagery",
                      "Esri.WorldPhysical")
 
       print(map_type)
@@ -2322,12 +2399,13 @@ query_plots <- function(team_lead = NULL,
 
     res_individuals_full <-
       merge_individuals_taxa(id_individual = id_individual,
-                             id_plot = selec_plot_tables$id_liste_plots)
+                             id_plot = selec_plot_tables$id_liste_plots,
+                             id_tax = id_tax)
 
-    if (!is.null(id_tax))
-      res_individuals_full <-
-      res_individuals_full %>%
-      dplyr::filter(idtax_f %in% !!id_tax)
+    # if (!is.null(id_tax))
+    #   res_individuals_full <-
+    #   res_individuals_full %>%
+    #   dplyr::filter(idtax_f %in% !!id_tax)
 
     ### Removing old fields not used anymore
     res_individuals_full <-
@@ -2346,8 +2424,6 @@ query_plots <- function(team_lead = NULL,
         -dbh_census2,
         -id_specimen_old,
         -tax_tax,
-        -a_habit,
-        -a_habit_secondary,
         -id_korup_ctfs,
         -tag_korup_ctfs,
         -id_table_data_senterre,
@@ -2365,7 +2441,7 @@ query_plots <- function(team_lead = NULL,
 
     res_individuals_full <-
       res_individuals_full %>%
-      dplyr::collect() %>%
+      # dplyr::collect() %>%
       dplyr::mutate(original_tax_name = stringr::str_trim(original_tax_name))
 
     #adding metada information
@@ -2379,9 +2455,10 @@ query_plots <- function(team_lead = NULL,
     all_traits_list <-
       .get_trait_individuals_values(
         traits = all_traits$trait,
-        id_individuals = res_individuals_full$id_n,
+        src_individuals = res_individuals_full,
+        # id_individuals = res_individuals_full$id_n,
         show_multiple_measures = show_multiple_census,
-        skip_dates = T,
+        skip_dates = TRUE,
         collapse_multiple_val = collapse_multiple_val
       )
 
@@ -2403,8 +2480,7 @@ query_plots <- function(team_lead = NULL,
       queried_traits_tax <-
         query_traits_measures(idtax = unique(res_individuals_full$idtax_individual_f))
 
-
-      if (nrow(queried_traits_tax$traits_found) > 0) {
+      if (!is.null(nrow(queried_traits_tax$traits_found))) {
 
         if (any(class(queried_traits_tax$traits_idtax_num) == "data.frame"))
           res_individuals_full <-
@@ -2970,8 +3046,8 @@ query_subplots <- function(team_lead = NULL,
     all_sub_type <-
       all_sub_type %>%
       dplyr::filter(grepl(subtype, type))
-    cli::cli_alert_info("Selected subplot features:")
-    print(all_sub_type)
+    cli::cli_alert_info("Selected subplot features: {all_sub_type$type}")
+
   }
 
   extracted_data <-
@@ -3109,7 +3185,7 @@ explore_allometric_taxa <- function(genus_searched = NULL,
       gg_plot2 <- NA
     }
   }else{
-    cat("\n No taxa found. Select at least one taxa")
+    cli::cli_alert_danger("No taxa found. Select at least one taxa")
     # cat(paste0("\n You currently selected ", nrow(tax_data), "taxa"))
     print(tax_data)
   }
@@ -4006,7 +4082,7 @@ add_subplot_features <- function(new_data,
 
   new_data_renamed <-
     new_data_renamed %>%
-    tibble::add_column(id_new_data=1:nrow(.))
+    mutate(id_new_data = 1:nrow(.))
 
   ### Linking collectors names
   if(!is.null(collector_field)) {
@@ -4022,8 +4098,8 @@ add_subplot_features <- function(new_data,
   }
 
   ### Linking plot names
-  if(!is.null(plot_name_field)) {
-    if(!any(colnames(new_data_renamed)==plot_name_field))
+  if (!is.null(plot_name_field)) {
+    if (!any(colnames(new_data_renamed) == plot_name_field))
       stop("plot_name_field not found in colnames")
 
     new_data_renamed <-
@@ -4082,7 +4158,7 @@ add_subplot_features <- function(new_data,
 
   }
 
-  ### preparing dataset to add for each trait
+  ### preparing dataset to add for each subplottype
   list_add_data <- vector('list', length(subplottype_field))
   for (i in 1:length(subplottype_field)) {
 
@@ -4099,7 +4175,8 @@ add_subplot_features <- function(new_data,
 
     data_subplottype <-
       data_subplottype %>%
-      dplyr::rename_at((dplyr::vars(dplyr::all_of(subplottype))), ~ subplottype_name)
+      dplyr::rename_with(.cols = dplyr::all_of(subplottype),
+                         .fn = ~ subplottype_name)
 
     data_subplottype <-
       data_subplottype %>%
@@ -4161,20 +4238,23 @@ add_subplot_features <- function(new_data,
     selected_new_data <-
       data_to_add %>%
       dplyr::select(id_table_liste_plots, id_type_sub_plot, typevalue) %>%
-      tibble::add_column(new = "new")
+      dplyr::rename(typevalue_new = typevalue)
 
     all_existing_data <-
       dplyr::tbl(mydb, "data_liste_sub_plots") %>%
       dplyr::select(id_table_liste_plots, id_type_sub_plot, typevalue) %>%
       dplyr::collect() %>%
-      tibble::add_column(old = "old")
+      dplyr::rename(typevalue_old = typevalue)
 
     crossing_data <-
       selected_new_data %>%
-      dplyr::left_join(all_existing_data,
-                by = c("id_table_liste_plots"="id_table_liste_plots",
-                       "id_type_sub_plot"="id_type_sub_plot")) %>%
-      dplyr::filter(new == "new", old == "old")
+      dplyr::left_join(
+        all_existing_data,
+        by = c(
+          "id_table_liste_plots" = "id_table_liste_plots",
+          "id_type_sub_plot" = "id_type_sub_plot"
+        )
+      )
 
     continue <- TRUE
     if(nrow(crossing_data)>0) {
@@ -4198,9 +4278,17 @@ add_subplot_features <- function(new_data,
   }
 
     if(add_data & response) {
+
       message(paste("adding data:", nrow(data_subplottype), "rows"))
       DBI::dbWriteTable(mydb, "data_liste_sub_plots",
                         data_to_add, append = TRUE, row.names = FALSE)
+
+      cli::cli_alert_success("{nrow(data_to_add)} line imported in data_liste_sub_plots")
+
+    } else {
+
+      cli::cli_alert_danger("Data not imported because add_data if FALSE")
+
     }
   }
 
@@ -4509,13 +4597,24 @@ update_plot_data <- function(team_lead = NULL,
 #' @return No return value individuals updated
 #' @export
 update_individuals <- function(new_data,
-                               col_names_select,
-                               col_names_corresp,
-                               id_col,
+                               col_names_select = NULL,
+                               col_names_corresp = NULL,
+                               id_col = 1,
                                launch_update = FALSE,
                                add_backup = TRUE) {
 
   if(!exists("mydb")) call.mydb()
+
+
+  if (is.null(col_names_select)) {
+    col_names_select <- names(new_data)
+    cli::cli_alert_info("col_names_select is set as all names of new_data")
+  }
+
+  if (is.null(col_names_corresp)) {
+    col_names_corresp <- col_names_select
+    cli::cli_alert_info("col_names_corresp is set to names of col_names_select (it should be names of columns of data_individuals")
+  }
 
   all_colnames_ind <-
     dplyr::tbl(mydb, "data_individuals") %>%
@@ -4565,7 +4664,7 @@ update_individuals <- function(new_data,
     var_new <- paste0(field, "_new")
     matches <- matches_all[[i]]
 
-    if(launch_update & nrow(matches)>0) {
+    if(launch_update & nrow(matches) > 0) {
 
       matches <-
         matches %>%
@@ -4626,10 +4725,15 @@ update_individuals <- function(new_data,
       rs@sql
       DBI::dbClearResult(rs)
 
+      cli::cli_alert_success("Successful update")
+
     } else{
 
       if (launch_update & nrow(matches) == 0)
         cat("\n No new values found")
+
+      if (!launch_update)
+        cli::cli_alert_danger("No update because launch_update is FALSE")
 
     }
   }
@@ -6294,7 +6398,7 @@ update_subplots_table <- function(subplots_id = NULL,
 #'
 #'
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
-#' @param new_data string name of the team leader of the selected plot
+#' @param new_data tibble
 #' @param trait_values_new_data string vector with columns names of new_data that contain traits measures
 #' @param col_names_trait_corresp string vector with trait names corresponding to trait_values_new_data
 #' @param measures_property_new_data string vector with columns names new_data others than traits measures values
@@ -6308,8 +6412,13 @@ update_subplots_table <- function(subplots_id = NULL,
 #' @return No return value individuals updated
 #' @export
 update_traits_measures <- function(new_data,
+                                   col_names_select = NULL,
+                                   col_names_corresp = NULL,
+                                   id_trait = NULL,
+                                   id_col,
+
                                    trait_values_new_data = NULL,
-                                   col_names_trait_corresp = NULL,
+                                   # col_names_trait_corresp = NULL,
                                    measures_property_new_data = NULL,
                                    col_names_property_corresp = NULL,
                                    id_new_data,
@@ -6319,129 +6428,114 @@ update_traits_measures <- function(new_data,
 
   if(!exists("mydb")) call.mydb()
 
-  if(!is.null(trait_values_new_data) & !is.null(col_names_trait_corresp)) {
+  if (is.null(col_names_corresp))
+    col_names_corresp <- col_names_select
 
-    if(length(trait_values_new_data)!=length(col_names_trait_corresp))
-      stop("trait_values_new_data and col_names_trait_corresp should have same length")
+  for (i in 1:length(col_names_select))
+    if(!any(col_names_select[i] == colnames(new_data)))
+      stop(paste(col_names_select[i], "not found in new_data"))
 
-    all_colnames_ind <- traits_list()
+  new_data <-
+    .link_trait(data_stand = new_data,
+                trait = col_names_select[id_trait])
 
-    for (i in 1:length(col_names_trait_corresp))
-      if(!any(col_names_trait_corresp[i] == all_colnames_ind$trait)) {
-        stop(paste(col_names_trait_corresp[i], "not found in trait list"))
-        print("check")
-        print(all_colnames_ind$trait)
-      }
+  found_trait <- traits_list(id_trait = new_data$id_trait)
+
+  new_data <-
+    new_data %>%
+    rename(traitvalue = trait)
+
+  if (found_trait$valuetype == "numeric") {
+
+    col_names_corresp[id_trait] <- "traitvalue"
+    col_names_select[id_trait] <- "traitvalue"
+
   }
 
-  if(!is.null(measures_property_new_data) & !is.null(col_names_property_corresp)) {
+  all_colnames_trait <-
+    dplyr::tbl(mydb, "data_traits_measures") %>%
+    colnames()
 
-    if(length(measures_property_new_data)!=length(col_names_property_corresp))
-      stop("measures_property_new_data and col_names_property_corresp should have same length")
+  if(length(col_names_select) != length(col_names_corresp))
+    stop("col_names_select and col_names_corresp should have same length")
 
-    colnames_property <-
-      dplyr::tbl(mydb, "data_traits_measures") %>%
-      dplyr::select(country, decimallatitude, decimallongitude, elevation,
-                    verbatimlocality,
-                    basisofrecord, year, month, day,
-                    issue, measurementmethod) %>%
-      colnames()
+  for (i in 1:length(col_names_corresp))
+    if(!any(col_names_corresp[i] == all_colnames_trait))
+      stop(paste(col_names_corresp[i], "not found in data_traits_measures"))
 
-    colnames_property <- c(colnames_property, "collector")
+  id_db <- col_names_corresp[id_col]
 
-    for (i in 1:length(col_names_property_corresp))
-      if(!any(col_names_property_corresp[i] == colnames_property)) {
-        stop(paste(col_names_property_corresp[i], "not found in property measureament"))
-        print("check")
-        print(colnames_property)
-      }
-  }
+  if (!any(id_db == c("id_trait_measures"))) stop("id for matching should be id_trait_measures")
 
-  # id_db <- col_id
+  new_data_renamed <-
+    .rename_data(dataset = new_data,
+                 col_old = col_names_select,
+                 col_new = col_names_corresp)
 
-  if(!any(col_name_id_corresp == c("id_trait_measures", "id_n", "id_old")))
-    stop("id for matching should be one of id_trait_measures, id_n, id_old")
+  output_matches <- .find_ids(dataset = new_data_renamed,
+                              col_new = col_names_corresp,
+                              id_col_nbr = id_col,
+                              type_data = "trait")
 
-  if(!is.null(trait_values_new_data) & !is.null(col_names_trait_corresp)) {
-    new_data <-
-      .rename_data(dataset = new_data,
-                   col_old = c(trait_values_new_data, id_new_data),
-                   col_new = c(col_names_trait_corresp, col_name_id_corresp))
-  }
+  matches_all <-
+    output_matches[[2]]
 
-  if(!is.null(measures_property_new_data) & !is.null(col_names_property_corresp)) {
-    new_data <-
-      .rename_data(dataset = new_data,
-                   col_old = c(measures_property_new_data, id_new_data),
-                   col_new = c(col_names_property_corresp, col_name_id_corresp))
-  }
+  for (i in 1:length(matches_all)) {
 
-  all_corresponding_matches <- list()
-  if(!is.null(trait_values_new_data) & !is.null(col_names_trait_corresp))
-    nbe_col_cor <- length(col_names_trait_corresp)
-  if(!is.null(measures_property_new_data) & !is.null(col_names_property_corresp))
-    nbe_col_cor <- length(col_names_property_corresp)
+    field <- names(matches_all)[i]
+    var_new <- paste0(field, "_new")
+    matches <- matches_all[[i]]
 
-  for (k in 1:nbe_col_cor) {
+    if(launch_update & nrow(matches)>0) {
 
-    if(!is.null(trait_values_new_data) & !is.null(col_names_trait_corresp))
-      output_matches <-
-        .find_ids(dataset = new_data,
-                                col_new = c(col_names_trait_corresp[k], col_name_id_corresp),
-                                id_col_nbr = 2,
-                                type_data = "trait")
-
-    if(!is.null(measures_property_new_data) & !is.null(col_names_property_corresp))
-      output_matches <-
-        .find_ids(dataset = new_data,
-                col_new = c(col_names_property_corresp[k], col_name_id_corresp),
-                id_col_nbr = 2,
-                type_data = "trait")
-
-    matches <-
-      output_matches[[2]][[1]]
-
-    if(launch_update & nrow(matches) > 0) {
       matches <-
         matches %>%
         dplyr::select(id, dplyr::contains("_new"))
-      matches <-
-        .add_modif_field(matches)
+      # matches <-
+      #   .add_modif_field(matches)
 
       all_id_match <- dplyr::pull(dplyr::select(matches, id))
 
-      if(col_name_id_corresp %in% c("id_n", "id_old")) {
-        ids_traits_measures <-
-          output_matches[[1]] %>%
-          dplyr::filter(id %in% all_id_match) %>%
-          dplyr::select(dplyr::contains("id_trait_measures"))
+      if(add_backup) {
 
-        matches <-
-          matches %>%
-          dplyr::mutate(id = dplyr::pull(ids_traits_measures))
+        quo_var_id <- rlang::parse_expr(quo_name(rlang::enquo(id_db)))
+
+        all_rows_to_be_updated <-
+          dplyr::tbl(mydb, "data_traits_measures") %>%
+          dplyr::filter(!!quo_var_id %in% all_id_match) %>%
+          dplyr::collect()
+
+        colnames_plots <-
+          dplyr::tbl(mydb, "followup_updates_traits_measures")  %>%
+          dplyr::select(-date_modified, -modif_type, -id_fol_up_traits_measures) %>%
+          dplyr::collect() %>%
+          dplyr::top_n(1) %>%
+          colnames()
+
+        all_rows_to_be_updated <-
+          all_rows_to_be_updated %>%
+          dplyr::select(dplyr::one_of(colnames_plots))
+
+        all_rows_to_be_updated <-
+          all_rows_to_be_updated %>%
+          mutate(date_modified = Sys.Date()) %>%
+          mutate(modif_type = field)
+
+        print(all_rows_to_be_updated %>%
+                dplyr::select(modif_type, date_modified))
+
+        DBI::dbWriteTable(mydb, "followup_updates_traits_measures",
+                          all_rows_to_be_updated, append = TRUE, row.names = FALSE)
       }
-
-      if(dplyr::tbl(mydb, "data_traits_measures") %>%
-        dplyr::filter(id_trait_measures %in% !!matches$id) %>%
-        dplyr::distinct(traitid) %>%
-        dplyr::collect() %>%
-        nrow()>2) stop("more than one trait to be updated whereas only one expected")
-
-      if(!is.null(trait_values_new_data) & !is.null(col_names_trait_corresp))
-        field <- "traitvalue"
-      if(!is.null(measures_property_new_data) & !is.null(col_names_property_corresp))
-        field <- col_names_property_corresp[k]
 
       ## create a temporary table with new data
       DBI::dbWriteTable(mydb, "temp_table", matches,
                         overwrite=T, fileEncoding = "UTF-8", row.names=F)
 
-      var_new <- matches %>%
-        dplyr::select(dplyr::contains("_new")) %>%
-        colnames()
-
       query_up <-
-        paste0("UPDATE data_traits_measures t1 SET (", field ,", date_modif_d, date_modif_m, date_modif_y) = (t2.", var_new, ", t2.date_modif_d, t2.date_modif_m, t2.date_modif_y) FROM temp_table t2 WHERE t1.id_trait_measures = t2.id")
+        paste0("UPDATE data_traits_measures t1 SET ",field," = t2.",var_new, " FROM temp_table t2 WHERE t1.", id_db," = t2.id")
+
+      DBI::dbClearResult(rs)
 
       rs <-
         DBI::dbSendStatement(mydb, query_up)
@@ -6450,47 +6544,210 @@ update_traits_measures <- function(new_data,
       rs@sql
       DBI::dbClearResult(rs)
 
-      if(add_backup) {
-        field <- col_names_trait_corresp[k]
+    } else{
 
-        ids_measures <- matches$id
+      if (launch_update & nrow(matches) == 0)
+        cat("\n No new values found")
 
-        all_rows_to_be_updated <-
-          dplyr::tbl(mydb, "data_traits_measures") %>%
-          dplyr::filter(id_trait_measures %in% ids_measures) %>%
-          dplyr::collect()
-
-        colnames_measures <-
-          dplyr::tbl(mydb, "followup_updates_traits_measures") %>%
-          dplyr::select(-date_modified, -modif_type, -id_fol_up_traits_measures) %>%
-          dplyr::collect() %>%
-          dplyr::top_n(1) %>%
-          colnames()
-
-        all_rows_to_be_updated <-
-          all_rows_to_be_updated %>%
-          dplyr::select(dplyr::one_of(colnames_measures))
-
-        all_rows_to_be_updated <-
-          all_rows_to_be_updated %>%
-          tibble::add_column(date_modified=Sys.Date()) %>%
-          tibble::add_column(modif_type=field)
-
-        print(all_rows_to_be_updated %>% dplyr::select(modif_type, date_modified))
-
-        DBI::dbWriteTable(mydb, "followup_updates_traits_measures",
-                          all_rows_to_be_updated, append = TRUE, row.names = FALSE)
-      }
-    }else{
-      if(launch_update & nrow(matches)==0) cat("\n No new values found")
     }
-
-    all_corresponding_matches[[k]] <- output_matches[[2]][[1]]
-    if(!is.null(trait_values_new_data) & !is.null(col_names_trait_corresp)) names(all_corresponding_matches)[k] <- col_names_trait_corresp[k]
-    if(!is.null(measures_property_new_data) & !is.null(col_names_property_corresp)) names(all_corresponding_matches)[k] <- col_names_property_corresp[k]
   }
+  return(matches_all)
 
-  return(all_corresponding_matches)
+
+
+
+
+
+
+
+  # if(!is.null(trait_values_new_data)) { #  & !is.null(col_names_trait_corresp)
+  #
+  #   # if (length(trait_values_new_data) != length(col_names_trait_corresp))
+  #   #   stop("trait_values_new_data and col_names_trait_corresp should have same length")
+  #
+  #   new_data <-
+  #     new_data %>%
+  #     rename(trait := all_of(trait_values_new_data))
+  #
+  #   new_data <-
+  #     .link_trait(data_stand = new_data, trait = trait_values_new_data)
+  #
+  #   col_names_trait_corresp
+  #
+  #   output_matches <-
+  #     .find_ids(dataset = new_data,
+  #               col_new = c("trait", col_name_id_corresp),
+  #               id_col_nbr = 2,
+  #               type_data = "trait")
+  #
+  #   # all_colnames_ind <- traits_list()
+  #   #
+  #   # for (i in 1:length(col_names_trait_corresp))
+  #   #   if(!any(col_names_trait_corresp[i] == all_colnames_ind$trait)) {
+  #   #     stop(paste(col_names_trait_corresp[i], "not found in trait list"))
+  #   #     print("check")
+  #   #     print(all_colnames_ind$trait)
+  #   #   }
+  # }
+  #
+  # if(!is.null(measures_property_new_data) & !is.null(col_names_property_corresp)) {
+  #
+  #   if(length(measures_property_new_data)!=length(col_names_property_corresp))
+  #     stop("measures_property_new_data and col_names_property_corresp should have same length")
+  #
+  #   colnames_property <-
+  #     dplyr::tbl(mydb, "data_traits_measures") %>%
+  #     dplyr::select(country, decimallatitude, decimallongitude, elevation,
+  #                   verbatimlocality,
+  #                   basisofrecord, year, month, day,
+  #                   issue, measurementmethod) %>%
+  #     colnames()
+  #
+  #   colnames_property <- c(colnames_property, "collector")
+  #
+  #   for (i in 1:length(col_names_property_corresp))
+  #     if(!any(col_names_property_corresp[i] == colnames_property)) {
+  #       stop(paste(col_names_property_corresp[i], "not found in property measureament"))
+  #       print("check")
+  #       print(colnames_property)
+  #     }
+  # }
+  #
+  # # id_db <- col_id
+  #
+  # if(!any(col_name_id_corresp == c("id_trait_measures", "id_n", "id_old")))
+  #   stop("id for matching should be one of id_trait_measures, id_n, id_old")
+  #
+  # # if(!is.null(trait_values_new_data) & !is.null(col_names_trait_corresp)) {
+  # #   new_data <-
+  # #     .rename_data(dataset = new_data,
+  # #                  col_old = c(trait_values_new_data, id_new_data),
+  # #                  col_new = c(col_names_trait_corresp, col_name_id_corresp))
+  # # }
+  #
+  # if(!is.null(measures_property_new_data) & !is.null(col_names_property_corresp)) {
+  #   new_data <-
+  #     .rename_data(dataset = new_data,
+  #                  col_old = c(measures_property_new_data, id_new_data),
+  #                  col_new = c(col_names_property_corresp, col_name_id_corresp))
+  # }
+  #
+  # all_corresponding_matches <- list()
+  #
+  # if(!is.null(trait_values_new_data) & !is.null(col_names_trait_corresp))
+  #   nbe_col_cor <- length(col_names_trait_corresp)
+  # if(!is.null(measures_property_new_data) & !is.null(col_names_property_corresp))
+  #   nbe_col_cor <- length(col_names_property_corresp)
+  #
+  # for (k in 1:nbe_col_cor) {
+  #
+  #   if(!is.null(trait_values_new_data) & !is.null(col_names_trait_corresp))
+  #     output_matches <-
+  #       .find_ids(dataset = new_data,
+  #                               col_new = c(col_names_trait_corresp[k], col_name_id_corresp),
+  #                               id_col_nbr = 2,
+  #                               type_data = "trait")
+  #
+  #   if(!is.null(measures_property_new_data) & !is.null(col_names_property_corresp))
+  #     output_matches <-
+  #       .find_ids(dataset = new_data,
+  #               col_new = c(col_names_property_corresp[k], col_name_id_corresp),
+  #               id_col_nbr = 2,
+  #               type_data = "trait")
+  #
+  #   matches <-
+  #     output_matches[[2]][[1]]
+  #
+  #   if(launch_update & nrow(matches) > 0) {
+  #     matches <-
+  #       matches %>%
+  #       dplyr::select(id, dplyr::contains("_new"))
+  #     matches <-
+  #       .add_modif_field(matches)
+  #
+  #     all_id_match <- dplyr::pull(dplyr::select(matches, id))
+  #
+  #     if(col_name_id_corresp %in% c("id_n", "id_old")) {
+  #       ids_traits_measures <-
+  #         output_matches[[1]] %>%
+  #         dplyr::filter(id %in% all_id_match) %>%
+  #         dplyr::select(dplyr::contains("id_trait_measures"))
+  #
+  #       matches <-
+  #         matches %>%
+  #         dplyr::mutate(id = dplyr::pull(ids_traits_measures))
+  #     }
+  #
+  #     if(dplyr::tbl(mydb, "data_traits_measures") %>%
+  #       dplyr::filter(id_trait_measures %in% !!matches$id) %>%
+  #       dplyr::distinct(traitid) %>%
+  #       dplyr::collect() %>%
+  #       nrow()>2) stop("more than one trait to be updated whereas only one expected")
+  #
+  #     if(!is.null(trait_values_new_data) & !is.null(col_names_trait_corresp))
+  #       field <- "traitvalue"
+  #     if(!is.null(measures_property_new_data) & !is.null(col_names_property_corresp))
+  #       field <- col_names_property_corresp[k]
+  #
+  #     ## create a temporary table with new data
+  #     DBI::dbWriteTable(mydb, "temp_table", matches,
+  #                       overwrite=T, fileEncoding = "UTF-8", row.names=F)
+  #
+  #     var_new <- matches %>%
+  #       dplyr::select(dplyr::contains("_new")) %>%
+  #       colnames()
+  #
+  #     query_up <-
+  #       paste0("UPDATE data_traits_measures t1 SET (", field ,", date_modif_d, date_modif_m, date_modif_y) = (t2.", var_new, ", t2.date_modif_d, t2.date_modif_m, t2.date_modif_y) FROM temp_table t2 WHERE t1.id_trait_measures = t2.id")
+  #
+  #     rs <-
+  #       DBI::dbSendStatement(mydb, query_up)
+  #
+  #     cat("Rows updated", RPostgres::dbGetRowsAffected(rs))
+  #     rs@sql
+  #     DBI::dbClearResult(rs)
+  #
+  #     if(add_backup) {
+  #       field <- col_names_trait_corresp[k]
+  #
+  #       ids_measures <- matches$id
+  #
+  #       all_rows_to_be_updated <-
+  #         dplyr::tbl(mydb, "data_traits_measures") %>%
+  #         dplyr::filter(id_trait_measures %in% ids_measures) %>%
+  #         dplyr::collect()
+  #
+  #       colnames_measures <-
+  #         dplyr::tbl(mydb, "followup_updates_traits_measures") %>%
+  #         dplyr::select(-date_modified, -modif_type, -id_fol_up_traits_measures) %>%
+  #         dplyr::collect() %>%
+  #         dplyr::top_n(1) %>%
+  #         colnames()
+  #
+  #       all_rows_to_be_updated <-
+  #         all_rows_to_be_updated %>%
+  #         dplyr::select(dplyr::one_of(colnames_measures))
+  #
+  #       all_rows_to_be_updated <-
+  #         all_rows_to_be_updated %>%
+  #         tibble::add_column(date_modified=Sys.Date()) %>%
+  #         tibble::add_column(modif_type=field)
+  #
+  #       print(all_rows_to_be_updated %>% dplyr::select(modif_type, date_modified))
+  #
+  #       DBI::dbWriteTable(mydb, "followup_updates_traits_measures",
+  #                         all_rows_to_be_updated, append = TRUE, row.names = FALSE)
+  #     }
+  #   }else{
+  #     if(launch_update & nrow(matches)==0) cat("\n No new values found")
+  #   }
+  #
+  #   all_corresponding_matches[[k]] <- output_matches[[2]][[1]]
+  #   if(!is.null(trait_values_new_data) & !is.null(col_names_trait_corresp)) names(all_corresponding_matches)[k] <- col_names_trait_corresp[k]
+  #   if(!is.null(measures_property_new_data) & !is.null(col_names_property_corresp)) names(all_corresponding_matches)[k] <- col_names_property_corresp[k]
+  # }
+  #
+  # return(all_corresponding_matches)
 }
 
 
@@ -8668,7 +8925,7 @@ add_traits_measures <- function(new_data,
 
   new_data_renamed <-
     new_data_renamed %>%
-    tibble::add_column(id_new_data = 1:nrow(.))
+    mutate(id_new_data = 1:nrow(.))
 
   ### Linking collectors names
   if(!is.null(collector_field)) {
@@ -8785,7 +9042,7 @@ add_traits_measures <- function(new_data,
 
       new_data_renamed <-
         new_data_renamed %>%
-        tibble::add_column(id_liste_plots = NA) %>%
+        dplyr::mutate(id_liste_plots = NA) %>%
         dplyr::mutate(id_liste_plots = as.integer(id_liste_plots))
 
     }
@@ -8811,7 +9068,7 @@ add_traits_measures <- function(new_data,
 
     if(nrow(censuses) > 0) { # & length(unique(censuses$typevalue))>1
 
-      message("\n multiple census for concerned plots")
+      cli::cli_alert_info("Multiple census for concerned plots")
       censuses %>%
         dplyr::select(plot_name, id_table_liste_plots, year, month, day, typevalue, type, colnam, additional_people) %>%
         as.data.frame() %>%
@@ -8882,9 +9139,11 @@ add_traits_measures <- function(new_data,
     link_specimen <-
       new_data_renamed %>%
       dplyr::filter(!is.na(id_specimen)) %>%
-      dplyr::left_join(dplyr::tbl(mydb, "specimens") %>%
-                  dplyr::select(id_diconame_n, id_specimen) %>% dplyr::collect(),
-                by=c("id_specimen"="id_specimen"))
+      dplyr::left_join(
+        dplyr::tbl(mydb, "specimens") %>%
+          dplyr::select(id_diconame_n, id_specimen) %>% dplyr::collect(),
+        by = c("id_specimen" = "id_specimen")
+      )
 
     if(dplyr::filter(link_specimen, is.na(id_diconame_n)) %>%
        nrow()>0) {
@@ -8897,7 +9156,7 @@ add_traits_measures <- function(new_data,
 
       new_data_renamed <-
         new_data_renamed %>%
-        tibble::add_column(id_specimen = NA) %>%
+        mutate(id_specimen = NA) %>%
         dplyr::mutate(id_specimen = as.integer(id_specimen))
 
     } else{
@@ -8919,11 +9178,12 @@ add_traits_measures <- function(new_data,
     data_trait <-
       new_data_renamed
 
-    trait_name <-
-      "trait"
-    data_trait <-
-      data_trait %>%
-      dplyr::rename_at(dplyr::vars(all_of(trait)), ~ trait_name)
+    # trait_name <-
+    #   trait
+
+    # data_trait <-
+    #   data_trait %>%
+    #   dplyr::rename_at(dplyr::vars(all_of(trait)), ~ trait_name)
 
     data_trait <-
       data_trait %>%
@@ -9239,6 +9499,7 @@ add_traits_measures <- function(new_data,
       ## adding id_diconame_n ONLY if no individuals or specimen linked
       # otherwise, identification retrieved from individual or specimen
       if (!any(colnames(data_trait) == "id_diconame")) {
+
         data_no_specimen_no_individual <-
           data_trait
 
@@ -9256,10 +9517,11 @@ add_traits_measures <- function(new_data,
 
         data_trait <-
           data_trait %>%
-          tibble::add_column(id_diconame = NA) %>%
+          dplyr::mutate(id_diconame = NA) %>%
           dplyr::mutate(id_diconame = as.integer(id_diconame))
 
       } else {
+
         data_no_specimen_no_individual <-
           data_trait %>%
           dplyr::filter(is.na(id_data_individuals) & is.na(id_specimen) & is.na(id_diconame))
@@ -9383,13 +9645,14 @@ add_traits_measures <- function(new_data,
 
         data_trait <-
           data_trait %>%
-          tibble::add_column(basisofrecord = rep(choices$basis[as.numeric(selected_basisofrecord)], nrow(.)))
+          dplyr::mutate(basisofrecord = rep(choices$basis[as.numeric(selected_basisofrecord)], nrow(.)))
       }
 
 
       ### comparing measures from previous census
-      if(multiple_census) {
-        message("\n comparing measures from previous censuses")
+      if(multiple_census &
+         valuetype$valuetype == "numeric") {
+        cli::cli_alert_info("Comparing measures from previous censuses")
 
         comparisons <-
           data_trait %>%
@@ -9405,8 +9668,7 @@ add_traits_measures <- function(new_data,
           dplyr::mutate(traitvalue = replace(traitvalue, traitvalue == -Inf, NA))
 
         ## comparison with previous census if new values is lower than previous --> issue annotated
-        if (any(!is.na(comparisons$traitvalue)) &
-            valuetype$valuetype == "numeric") {
+        if (any(!is.na(comparisons$traitvalue))) {
           # message("\n multiple data")
           finding_incoherent_values <-
             comparisons %>%
@@ -9414,7 +9676,7 @@ add_traits_measures <- function(new_data,
             dplyr::filter(diff < 0)
 
           if(any( finding_incoherent_values$diff < 0)) {
-            message("\n incoherent new values compared to previous censuses")
+            cli::cli_alert_danger("Incoherent new values compared to previous censuses")
             finding_incoherent_values <-
               finding_incoherent_values %>%
               dplyr::mutate(issue_new =
@@ -9432,12 +9694,8 @@ add_traits_measures <- function(new_data,
         }
       }
 
-
-
-
-
       ### identify if measures are already within DB
-      message("\n Identifying if imported values are already in DB")
+      cli::cli_alert_info("Identifying if imported values are already in DB")
       trait_id <- unique(data_trait$id_trait)
       selected_data_traits <-
         data_trait %>%
@@ -9526,7 +9784,8 @@ add_traits_measures <- function(new_data,
       #   filter(!id_data_individuals %in% selected_data_traits$id_data_individuals)
 
       if (nrow(duplicated_rows) > 1) {
-        message("\n Some values are already in DB")
+        cli::cli_alert_danger("Some values are already in DB")
+
         print(duplicated_rows %>%
                 dplyr::ungroup() %>%
                 dplyr::select(id_data_individuals, id_liste_plots, id_sub_plots))
@@ -10113,12 +10372,6 @@ add_specimens <- function(new_data ,
                                           show_multiple_measures = FALSE,
                                           collapse_multiple_val = FALSE) {
 
-  ## merging traits measures and trait informations
-  traits_measures <-
-    dplyr::tbl(mydb, "data_traits_measures") %>%
-    dplyr::left_join(dplyr::tbl(mydb, "traitlist"), by = c("traitid" = "id_trait")) %>%
-    dplyr::select(-id_specimen,-id_diconame)
-
   if (is.null(src_individuals)) {
 
     res_individuals_full <-
@@ -10129,6 +10382,14 @@ add_specimens <- function(new_data ,
     res_individuals_full <- src_individuals
 
   }
+
+  ## merging traits measures and trait informations
+  traits_measures <-
+    dplyr::tbl(mydb, "data_traits_measures") %>%
+    dplyr::left_join(dplyr::tbl(mydb, "traitlist"), by = c("traitid" = "id_trait")) %>%
+    dplyr::select(-id_specimen,-id_diconame) %>%
+    dplyr::filter(id_data_individuals %in% !!res_individuals_full$id_n) %>%
+    dplyr::collect()
 
   # ## filtering individuals based on ids of individuals and/or plots
   # if (is.null(id_individuals) & is.null(ids_plot))
@@ -10187,14 +10448,14 @@ add_specimens <- function(new_data ,
     dplyr::left_join(traits_measures, by = c("id_n" = "id_data_individuals")) %>%
     dplyr::select(id_n, id_old, id_trait_measures, id_sub_plots, traitvalue, traitvalue_char, trait, issue, day, month, year) %>%
     dplyr::filter(!is.na(trait)) %>%
-    dplyr::filter(trait  %in% traits) %>%
-    dplyr::collect()
+    dplyr::filter(trait  %in% traits)
 
   all_traits_list <- list()
   if(nrow(traits_linked) > 0) {
 
     all_trait <- dplyr::distinct(traits_linked, trait) %>% dplyr::pull() %>% sort()
-    print(all_trait)
+
+    # print(all_trait)
 
     for (i in 1:length(all_trait)) {
 
@@ -10249,7 +10510,8 @@ add_specimens <- function(new_data ,
       multiple_census <- FALSE
       if(nbe_individuals_double > 0) {
 
-        warning(paste("more than one trait value for at least one individual for", all_trait[i]))
+        # warning(paste("more than one trait value for at least one individual for", all_trait[i]))
+        cli::cli_alert_danger("more than one trait value for at least one individual for {all_trait[i]}")
 
         if(!show_multiple_measures) {
 
@@ -10293,9 +10555,11 @@ add_specimens <- function(new_data ,
 
               for (j in 1:max(subs_plots_concerned$typevalue)) {
 
-                cat(paste("\n", j, "census(es) for", trait_name), "for",
-                    nrow(subs_plots_concerned %>%
-                           dplyr::filter(type == "census", typevalue == j)), "plots")
+                # cat(paste("\n", j, "census(es) for", trait_name), "for",
+                #     nrow(subs_plots_concerned %>%
+                #            dplyr::filter(type == 'census', typevalue == j)), "plots")
+                cli::cli_alert_info("{j} census(es) for {trait_name} for {nrow(subs_plots_concerned %>%
+                           dplyr::filter(type == 'census', typevalue == j))}")
               }
 
               multiple_census <- TRUE
@@ -10575,13 +10839,14 @@ replace_NA <- function(vec, inv = FALSE) {
 
     if(col_new[id_col_nbr] %in% c("id_trait_measures")) {
 
-      new_name <- col_new[-id_col_nbr]
+      # new_name <- col_new[-id_col_nbr]
 
       corresponding_data <-
         dplyr::tbl(mydb, "data_traits_measures") %>%
-        dplyr::select(id_trait_measures, traitvalue) %>%
-        dplyr::collect() %>%
-        rename(!!new_name := traitvalue)
+        dplyr::select(id_trait_measures, traitvalue)
+      # %>%
+        # dplyr::collect() %>%
+        # rename(!!new_name := traitvalue)
 
     }
   }
@@ -10870,6 +11135,7 @@ replace_NA <- function(vec, inv = FALSE) {
 #'
 #' @export
 .link_plot_name <- function(data_stand, plot_name_field) {
+
   plot_name <- "plot_name"
 
   data_stand <-
@@ -10969,7 +11235,13 @@ replace_NA <- function(vec, inv = FALSE) {
 #' @param trait string vector
 #'
 #' @export
-.link_trait <- function(data_stand, trait) {
+.link_trait <- function(data_stand, trait, column_name = "trait") {
+
+  trait_newnames <- "trait"
+
+  data_stand <- data_stand %>%
+    dplyr::rename_with(.cols = dplyr::all_of(trait),
+                     .fn = ~ trait_newnames)
 
   all_traits <-
     dplyr::tbl(mydb, "traitlist") %>%
@@ -10977,21 +11249,23 @@ replace_NA <- function(vec, inv = FALSE) {
 
   sorted_matches <-
     .find_similar_string(input = trait,
-                         compared_table = all_traits, column_name = "trait")
+                         compared_table = all_traits,
+                         column_name = column_name)
   print(trait)
 
   selected_name <- ""
   slide <- 0
-  while(selected_name=="") {
+  while (selected_name == "") {
     slide <- slide + 1
     sorted_matches %>%
-      tibble::add_column(ID=seq(1, nrow(.), 1)) %>%
+      tibble::add_column(ID = seq(1, nrow(.), 1)) %>%
       dplyr::select(ID, trait, traitdescription) %>%
-      dplyr::slice((1+(slide-1)*10):((slide)*10)) %>%
+      dplyr::slice((1 + (slide - 1) * 10):((slide) * 10)) %>%
       print()
     selected_name <-
-      readline(prompt="Choose ID whose trait fit (if none enter 0): ")
-    if(slide*10>nrow(sorted_matches)) slide <- 0
+      readline(prompt = "Choose ID whose trait fit (if none enter 0): ")
+    if (slide * 10 > nrow(sorted_matches))
+      slide <- 0
   }
 
   selected_name <- as.integer(selected_name)
@@ -11008,7 +11282,6 @@ replace_NA <- function(vec, inv = FALSE) {
   select_trait_features <-
     sorted_matches %>%
     dplyr::slice(selected_name)
-
 
   if (select_trait_features$valuetype == "numeric") {
 
@@ -12342,7 +12615,7 @@ process_trimble_data <- function(PATH = NULL, plot_name = NULL, format = "dbf") 
 
   censuses <-
     censuses %>%
-    tibble::add_column(accepted_growth = accept)
+    mutate(accepted_growth = accept)
   return(censuses)
 }
 
@@ -12365,6 +12638,11 @@ process_trimble_data <- function(PATH = NULL, plot_name = NULL, format = "dbf") 
 #' @importFrom date as.date date.ddmmmyy
 #'
 #' @return tibble
+#'
+#' @details
+#' growthrate is in
+#'
+#'
 #' @export
 growth_computing <- function(dataset,
                              metadata,
@@ -12379,8 +12657,15 @@ growth_computing <- function(dataset,
   }
 
 
-  if(!any(metadata[[2]]$typevalue>1))
+  if (!is.list(metadata)) {
+    stop("metadata should be a list obtained with the function query_plot with show_multiple_census = T")
+  }
+
+  if (!any(metadata[[2]]$typevalue > 1))
     stop("Only one census recorded for all selected plots")
+
+  if (!any(names(dataset) == "id_table_liste_plots_n"))
+    stop("id_table_liste_plots_n column missing in dataset, make sure you obtain dataset with remove_ids = F")
 
   all_ids_plot <-
     metadata[[2]] %>%
@@ -12400,6 +12685,7 @@ growth_computing <- function(dataset,
     full_results_ind <-
     full_results_mortality <-
     vector('list', length = length(all_ids_plot)*10)
+
   for (plot in 1:length(all_ids_plot)) {
 
     cli::cli_alert_info(plot_names[plot])
@@ -12407,6 +12693,7 @@ growth_computing <- function(dataset,
     selected_dataset <-
       dataset %>%
       dplyr::filter(id_table_liste_plots_n == all_ids_plot[plot])
+
     selected_metadata_census <-
       metadata[[2]] %>%
       dplyr::filter(id_table_liste_plots == all_ids_plot[plot])
@@ -12416,8 +12703,7 @@ growth_computing <- function(dataset,
       dplyr::filter(is.na(year) | is.na(month))
 
     not_run <- FALSE
-    if(nrow(skipped_census_missing_dates)>0) {
-
+    if (nrow(skipped_census_missing_dates) > 0) {
       message(paste("Census excluded because missing year and/or month"))
       print(skipped_census_missing_dates)
       not_run <- TRUE
@@ -12427,8 +12713,10 @@ growth_computing <- function(dataset,
     if (length(unique(selected_metadata_census$year)) == 1 &
         length(unique(selected_metadata_census$month)) == 1 &
         length(unique(selected_metadata_census$day)) == 1) {
-      message(paste("Dates do not differ between censuses"))
+
+      cli::cli_alert_danger("Dates do not differ between censuses")
       not_run <- TRUE
+
     }
 
     selected_metadata_census <-
@@ -12497,6 +12785,7 @@ growth_computing <- function(dataset,
           colnames() %>%
           strsplit(split = "_") %>%
           unlist()
+
         select_census_2 <- select_census_2[length(select_census_2)]
 
         # splitted_census[[i+1]] <-
@@ -12558,7 +12847,7 @@ growth_computing <- function(dataset,
 
         censuses <-
           censuses %>%
-          tibble::add_column(growthrate = growthrate)
+          mutate(growthrate = growthrate)
 
         if (export_ind_growth) {
 
@@ -12691,11 +12980,13 @@ growth_computing <- function(dataset,
     full_results_mortality[unlist(lapply(full_results_mortality, function(x) !is.null(x)))]
 
   if(!export_ind_growth)
-    return(plot_results = full_results,
+    return(plot_results = bind_rows(lapply(full_results,
+                                           FUN = function(x) bind_rows(x))),
            mortality = full_results_mortality)
 
   if(export_ind_growth)
-    return(list(plot_results = full_results,
+    return(list(plot_results = bind_rows(lapply(full_results,
+                                                FUN = function(x) bind_rows(x))),
                 ind_results = full_results_ind,
                 mortality = full_results_mortality))
 
@@ -12842,15 +13133,12 @@ query_exact_match <- function(tbl, field, values_q, con) {
 
   }
 
-  if (length(field) == 1) sql <-glue::glue_sql("SELECT * FROM {`tbl`} WHERE lower({`field`}) IN ({vals*})",
+  if (length(field) == 1) sql <- glue::glue_sql("SELECT * FROM {`tbl`} WHERE lower({`field`}) IN ({vals*})",
                                                vals = tolower(values_q), .con = con)
-  if (length(field) > 1) sql <-glue::glue_sql("SELECT * FROM {`tbl`} WHERE lower(concat({`field[1]`},' ',{`field[2]`})) IN ({vals*})",
+  if (length(field) > 1) sql <- glue::glue_sql("SELECT * FROM {`tbl`} WHERE lower(concat({`field[1]`},' ',{`field[2]`})) IN ({vals*})",
                                               vals = tolower(values_q), .con = con)
 
-
-  rs <- DBI::dbSendQuery(con, sql)
-  res_q <-DBI::dbFetch(rs) %>% as_tibble
-  DBI::dbClearResult(rs)
+  res_q <- func_try_fetch(con = con, sql = sql)
 
   if (length(field) == 1) query_tb <- query_tb %>%
     left_join(res_q %>% dplyr::select(!!field_col) %>% mutate(!!field_col := tolower(!!field_col)) %>% distinct() %>%
@@ -12888,18 +13176,20 @@ query_fuzzy_match <- function(tbl, field, values_q, con) {
   # if (length(field) == 0) sql <-glue::glue_sql("SELECT * FROM {`tbl`} WHERE SIMILARITY (lower({`field`}), {values_q}) > {sim_thres} ;",
   #                      .con = con)
 
-  if (length(field) == 0) sql <-glue::glue_sql("SELECT * FROM {`tbl`} ORDER BY SIMILARITY (lower({`field`}), {values_q}) DESC LIMIT 1;",
+  if (length(field) == 1) sql <- glue::glue_sql("SELECT * FROM {`tbl`} ORDER BY SIMILARITY (lower({`field`}), {values_q}) DESC LIMIT 1;",
                                                .con = con)
 
   # if (length(field) > 0) sql <-glue::glue_sql("SELECT * FROM {`tbl`} WHERE SIMILARITY (lower(concat({`field[1]`},' ',{`field[2]`})), {values_q}) > {sim_thres} ;",
   #                                              .con = con)
 
-  if (length(field) > 0)  sql <- glue::glue_sql("SELECT * FROM {`tbl`} ORDER BY SIMILARITY (lower(concat({`field[1]`},' ',{`field[2]`})), {values_q}) DESC LIMIT 1;",
+  if (length(field) > 1)  sql <- glue::glue_sql("SELECT * FROM {`tbl`} ORDER BY SIMILARITY (lower(concat({`field[1]`},' ',{`field[2]`})), {values_q}) DESC LIMIT 1;",
                                                 .con = con)
 
-  rs <- DBI::dbSendQuery(con, sql)
-  res_q <-DBI::dbFetch(rs) %>% as_tibble
-  DBI::dbClearResult(rs)
+  res_q <- func_try_fetch(con = con, sql = sql)
+
+  # rs <- DBI::dbSendQuery(con, sql)
+  # res_q <-DBI::dbFetch(rs) %>% as_tibble
+  # DBI::dbClearResult(rs)
 
   if (nrow(res_q) == 0) {
 
@@ -12941,7 +13231,7 @@ query_fuzzy_match <- function(tbl, field, values_q, con) {
 #' @export
 query_taxa <-
   function(
-    class = c("Magnoliopsida", "Pinopsida", "Lycopsida", "Pteropsida"),
+    class = NULL, # c("Magnoliopsida", "Pinopsida", "Lycopsida", "Pteropsida")
     family = NULL,
     genus = NULL,
     order = NULL,
@@ -13189,7 +13479,7 @@ query_taxa <-
             res %>%
             filter(idtax_n %in% !!res_species$idtax_n)
         } else{
-          cli::cli_alert_danger("\n no match for species")
+          cli::cli_alert_danger("no match for species")
           no_match <- TRUE
         }
 
@@ -13218,10 +13508,13 @@ query_taxa <-
       tbl <- "table_taxa"
       sql <-glue::glue_sql("SELECT * FROM {`tbl`} WHERE idtax_n IN ({vals*})",
                            vals = ids, .con = mydb_taxa)
-      rs <- DBI::dbSendQuery(mydb_taxa, sql)
-      res <- DBI::dbFetch(rs)
-      DBI::dbClearResult(rs)
-      res <- dplyr::as_tibble(res)
+
+      res <- func_try_fetch(con = mydb_taxa, sql = sql)
+
+      # rs <- DBI::dbSendQuery(mydb_taxa, sql)
+      # res <- DBI::dbFetch(rs)
+      # DBI::dbClearResult(rs)
+      # res <- dplyr::as_tibble(res)
 
     }
 
@@ -13990,12 +14283,15 @@ query_taxa <-
 #'
 #' @return A src object with merged taxa
 #' @export
-merge_individuals_taxa <- function(id_individual = NULL, id_plot = NULL) {
+merge_individuals_taxa <- function(id_individual = NULL,
+                                   id_plot = NULL,
+                                   id_tax = NULL) {
 
+  specimens <- try_open_postgres_table(table = "specimens", con = mydb)
 
   # getting taxo identification from specimens
   specimens_id_diconame <-
-    dplyr::tbl(mydb, "specimens") %>%
+    specimens %>%
     dplyr::select(id_specimen,
                   idtax_n,
                   id_colnam,
@@ -14005,10 +14301,12 @@ merge_individuals_taxa <- function(id_individual = NULL, id_plot = NULL) {
                   id_brlu)
 
   # getting all ids from diconames
+
   diconames_id <-
-    dplyr::tbl(mydb, "table_taxa") %>%
+    dplyr::tbl(mydb, "table_idtax") %>%
     dplyr::select(idtax_n, idtax_good_n) %>%
     dplyr::mutate(idtax_f = ifelse(is.na(idtax_good_n), idtax_n, idtax_good_n))
+
 
   # getting correct id_diconame considering synonymies
   specimens_linked <-
@@ -14025,7 +14323,7 @@ merge_individuals_taxa <- function(id_individual = NULL, id_plot = NULL) {
       dplyr::tbl(mydb, "data_individuals") %>%
       dplyr::filter(id_n %in% id_individual)
 
-  } else{
+  } else {
 
     res_individuals_full <-
       dplyr::tbl(mydb, "data_individuals")
@@ -14075,13 +14373,23 @@ merge_individuals_taxa <- function(id_individual = NULL, id_plot = NULL) {
                                               idtax_specimen_f,
                                               idtax_f))
 
+  taxa_extract <- add_taxa_table_taxa(ids = res_individuals_full %>% pull(idtax_individual_f))
+  taxa_extract <- taxa_extract %>% collect()
+
+  res_individuals_full <- res_individuals_full %>% collect()
+
   res_individuals_full <-
     res_individuals_full %>% #### selecting id_dico_name from specimens if any
     dplyr::left_join(
-      add_taxa_table_taxa() %>%
+      taxa_extract %>%
         dplyr::select(-data_modif_d,-data_modif_m,-data_modif_y),
       by = c("idtax_individual_f" = "idtax_n")
     )
+
+  if (!is.null(id_tax))
+    res_individuals_full <-
+    res_individuals_full %>%
+    filter(idtax_individual_f %in% id_tax)
 
   return(res_individuals_full)
 
@@ -14111,14 +14419,16 @@ query_traits_measures <- function(idtax,
 
   } else {
 
-    ids_syn <- dplyr::tbl(mydb, "table_taxa") %>%
+    table_taxa <- try_open_postgres_table(table = "table_taxa", con = mydb_taxa)
+
+    ids_syn <- table_taxa %>%
       dplyr::select(idtax_n, idtax_good_n) %>%
       dplyr::filter(idtax_good_n %in% !!idtax) %>%
       dplyr::collect()
 
     idtax <- unique(c(idtax, ids_syn$idtax_n))
 
-    idtax_tb <- dplyr::tbl(mydb, "table_taxa") %>%
+    idtax_tb <- table_taxa %>%
       dplyr::select(idtax_n, idtax_good_n) %>%
       dplyr::filter(idtax_n %in% !!idtax) %>%
       dplyr::collect() %>%
@@ -14154,13 +14464,23 @@ query_traits_measures <- function(idtax,
   #                    by = c("id_trait" = "id_trait")) %>%
   #   dplyr::collect()
 
-  traits_found <-
-    dplyr::tbl(mydb, "table_traits_measures") %>%
-    dplyr::filter(idtax %in% !!idtax) %>%
-    dplyr::left_join(tbl(mydb, "table_traits") %>%
-                       dplyr::select(trait, id_trait, valuetype),
-                     by = c("id_trait" = "id_trait")) %>%
-    dplyr::collect()
+  tbl <- "table_traits_measures"
+  tbl2 <- "table_traits"
+  # sql <-glue::glue_sql("SELECT * FROM {`tbl`} WHERE idtax IN ({vals*}) LEFT OUTER JOIN table_traits ON table_traits_measures.id_trait = table_traits.id_trait",
+  #                      vals = idtax, .con = mydb_taxa)
+
+  sql <-glue::glue_sql("SELECT * FROM {`tbl`} LEFT JOIN {`tbl2`} ON {`tbl`}.id_trait = {`tbl2`}.id_trait  WHERE idtax IN ({vals*})",
+                       vals = idtax, .con = mydb_taxa)
+
+  traits_found <- func_try_fetch(con = mydb_taxa, sql = sql)
+
+  # traits_found <-
+  #   dplyr::tbl(mydb_taxa, "table_traits_measures") %>%
+  #   dplyr::filter(idtax %in% !!idtax) %>%
+  #   dplyr::left_join(tbl(mydb_taxa, "table_traits") %>%
+  #                      dplyr::select(trait, id_trait, valuetype),
+  #                    by = c("id_trait" = "id_trait")) %>%
+  #   dplyr::collect()
 
   traits_found <-
     traits_found %>%
@@ -14395,8 +14715,12 @@ query_traits_measures <- function(idtax,
 #' @export
 add_taxa_table_taxa <- function(ids = NULL) {
 
+  if(!exists("mydb_taxa")) call.mydb.taxa(pass = "Anyuser2022", user = "common")
+
+  table_taxa <- try_open_postgres_table(table = "table_taxa", con = mydb_taxa)
+
   table_taxa <-
-    dplyr::tbl(mydb, "table_taxa") %>%
+    table_taxa %>%
     mutate(tax_sp_level = ifelse(!is.na(tax_esp), paste(tax_gen, tax_esp), NA)) %>%
     mutate(tax_infra_level = ifelse(!is.na(tax_esp),
                                     paste0(tax_gen,
@@ -14452,6 +14776,9 @@ add_taxa_table_taxa <- function(ids = NULL) {
       filter(idtax_n %in% ids)
 
   }
+
+
+
   return(table_taxa)
 }
 
@@ -15304,4 +15631,93 @@ get_ref_specimen_ind <- function(collector = NULL, ids = NULL) {
               all_herb_missing_link = all_herb_missing_link,
               all_linked_individuals = all_linked_individuals))
 
+}
+
+
+
+#' Update id table for taxa
+#'
+#' Update and rewrite idtaxa to database, require administrator rights
+#'
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @export
+update_taxa_link_table <- function() {
+
+  rm(mydb_taxa)
+  call.mydb.taxa()
+
+  call.mydb()
+
+  id_taxa_table <- dplyr::tbl(mydb_taxa, "table_taxa") %>%
+    dplyr::select(idtax_n, idtax_good_n) %>%
+    dplyr::collect()
+
+  dbWriteTable(mydb,
+               name = "table_idtax",
+               value = id_taxa_table,
+               append = TRUE)
+
+  cli::cli_alert_success("table_idtax updated")
+
+  dplyr::tbl(mydb, "table_idtax")
+
+
+}
+
+
+
+func_try_fetch <- function(con, sql) {
+  rep <- TRUE
+  rep_try <- 1
+  while(rep) {
+
+    res_q <- try({rs <- DBI::dbSendQuery(con, sql);
+    DBI::dbFetch(rs)}, silent = T)
+
+    if (any(grepl("Lost connection to database", res_q[1])))
+      stop("Lost connection to database")
+
+    if (any(grepl("Failed to prepare query", res_q[1]))) {
+      rep <- TRUE
+      cat(rep_try, "failed to query, trying again")
+      rep_try <- rep_try + 1
+    } else {
+      rep <- FALSE
+    }
+
+    if (rep_try == 10)
+      stop("Failed to connect to database")
+  }
+  res_q <- res_q %>% as_tibble
+  DBI::dbClearResult(rs)
+
+  return(res_q)
+}
+
+
+try_open_postgres_table <- function(table, con) {
+
+  rep <- TRUE
+  rep_try <- 1
+  while(rep) {
+
+    res_q <- try({table_postgre <- dplyr::tbl(con, table)}, silent = T)
+
+    if (any(grepl("Lost connection to database", res_q[1])))
+      stop("Lost connection to database")
+
+    if (any(grepl("Failed to prepare query", res_q[1]))) {
+      rep <- TRUE
+      cat(rep_try, "failed to query, trying again")
+      rep_try <- rep_try + 1
+    } else {
+      rep <- FALSE
+    }
+
+    if (rep_try == 10)
+      stop("Failed to connect to database")
+  }
+
+  return(table_postgre)
 }

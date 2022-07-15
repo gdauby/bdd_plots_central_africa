@@ -4,7 +4,7 @@
 \alias{traits_list}
 \title{List of trait}
 \usage{
-traits_list()
+traits_list(id_trait = NULL)
 }
 \value{
 A tibble of all traits

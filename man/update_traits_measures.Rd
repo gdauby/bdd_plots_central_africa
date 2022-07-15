@@ -6,8 +6,11 @@
 \usage{
 update_traits_measures(
   new_data,
+  col_names_select = NULL,
+  col_names_corresp = NULL,
+  id_trait = NULL,
+  id_col,
   trait_values_new_data = NULL,
-  col_names_trait_corresp = NULL,
   measures_property_new_data = NULL,
   col_names_property_corresp = NULL,
   id_new_data,
@@ -17,11 +20,9 @@ update_traits_measures(
 )
 }
 \arguments{
-\item{new_data}{string name of the team leader of the selected plot}
+\item{new_data}{tibble}
 
 \item{trait_values_new_data}{string vector with columns names of new_data that contain traits measures}
-
-\item{col_names_trait_corresp}{string vector with trait names corresponding to trait_values_new_data}
 
 \item{measures_property_new_data}{string vector with columns names new_data others than traits measures values}
 
@@ -34,6 +35,8 @@ update_traits_measures(
 \item{launch_update}{logical if TRUE updates are performed}
 
 \item{add_backup}{logical whether backup of modified data should be recorded}
+
+\item{col_names_trait_corresp}{string vector with trait names corresponding to trait_values_new_data}
 }
 \value{
 No return value individuals updated

@@ -35,6 +35,9 @@ tibble
 \description{
 Growth computing for multiple census
 }
+\details{
+growthrate is in
+}
 \author{
 Gilles Dauby, \email{gilles.dauby@ird.fr}
 }

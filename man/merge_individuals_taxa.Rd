@@ -4,7 +4,7 @@
 \alias{merge_individuals_taxa}
 \title{Merge individuals and taxonomic backbone}
 \usage{
-merge_individuals_taxa(id_individual = NULL, id_plot = NULL)
+merge_individuals_taxa(id_individual = NULL, id_plot = NULL, id_tax = NULL)
 }
 \arguments{
 \item{id_individual}{numeric id of individuals to be extracted if any}
