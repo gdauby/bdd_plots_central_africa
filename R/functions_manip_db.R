@@ -8268,18 +8268,23 @@ query_specimens <- function(collector = NULL,
 
   if(!exists("mydb")) call.mydb()
 
+  diconames_id <-
+    dplyr::tbl(mydb, "table_idtax") %>%
+    dplyr::select(idtax_n, idtax_good_n) %>%
+    dplyr::mutate(idtax_f = ifelse(is.na(idtax_good_n), idtax_n, idtax_good_n))
+
   query_speci <-
     dplyr::tbl(mydb, "specimens") %>%
     dplyr::left_join(
-      dplyr::tbl(mydb, "table_taxa") %>%
-        dplyr::mutate(idtax_f = ifelse(is.na(idtax_good_n), idtax_n, idtax_good_n)) %>%
-        dplyr::select(idtax_n, idtax_f),
+      diconames_id %>%
+        dplyr::select(-idtax_good_n),
       by = c("idtax_n" = "idtax_n")
     ) %>%
-    left_join(add_taxa_table_taxa(),
-              by = c("idtax_f" = "idtax_n")) %>%
+    # left_join(add_taxa_table_taxa(),
+    #           by = c("idtax_f" = "idtax_n")) %>%
     dplyr::left_join(dplyr::tbl(mydb, "table_colnam"),
                      by = c("id_colnam" = "id_table_colnam"))
+
 
   # %>%
   #   dplyr::select(-id_specimen_old, -id_diconame, -photo_tranche, -id_colnam, -id_good, -id, -id_good_n)
@@ -8291,11 +8296,6 @@ query_specimens <- function(collector = NULL,
       colnam,
       colnbr,
       suffix,
-      tax_sp_level,
-      tax_infra_level_auth,
-      tax_fam,
-      tax_gen,
-      tax_esp,
       ddlat,
       ddlon,
       country,
@@ -8308,7 +8308,6 @@ query_specimens <- function(collector = NULL,
       colm,
       coly,
       detvalue,
-      morpho_species,
       id_specimen,
       idtax_f,
       id_tropicos
@@ -8397,6 +8396,16 @@ query_specimens <- function(collector = NULL,
     query_speci %>%
     dplyr::collect()
 
+  query_tax <- add_taxa_table_taxa(ids = unique(query$idtax_f))
+  query_tax <- query_tax %>% collect()
+
+  query <- left_join(
+    query,
+    query_tax %>%
+      dplyr::select(-data_modif_d,-data_modif_m,-data_modif_y),
+    by = c("idtax_f" = "idtax_n")
+  )
+
   # print(query)
 
   if(extract_linked_individuals) {
@@ -8453,152 +8462,152 @@ query_specimens <- function(collector = NULL,
     # }
   }
 
-  if(generate_labels) {
-
-    if (!any(rownames(utils::installed.packages()) == "measurements"))
-      stop("measurements package needed, please install it")
-
-    lat_convert <-
-      measurements::conv_unit(query$ddlat, from = "dec_deg", to = "deg_min_sec")
-    lat_convert_deg <-
-      as.double(unlist(lapply(strsplit(lat_convert, " "), function(x) x[[1]])))
-    lat_flag <-
-      ifelse(lat_convert_deg>0, "N", "S")
-    lat_convert_deg <-
-      abs(lat_convert_deg)
-    lat_convert_min <-
-      unlist(lapply(strsplit(lat_convert, " "), function(x) ifelse(length(x)>1, x[[2]], NA)))
-    lat_convert_sec <-
-      unlist(lapply(strsplit(lat_convert, " "), function(x) ifelse(length(x)>1, x[[3]], NA)))
-
-    long_convert <-
-      measurements::conv_unit(query$ddlon, from = "dec_deg", to = "deg_min_sec")
-    long_convert_deg <-
-      as.double(unlist(lapply(strsplit(long_convert, " "), function(x) x[[1]])))
-    long_flag <-
-      ifelse(lat_convert_deg>0, "E", "W")
-    long_convert_deg <-
-      abs(long_convert_deg)
-    long_convert_min <-
-      unlist(lapply(strsplit(long_convert, " "), function(x) ifelse(length(x)>1, x[[2]], NA)))
-    long_convert_sec <-
-      unlist(lapply(strsplit(long_convert, " "), function(x) ifelse(length(x)>1, x[[3]], NA)))
-
-    query_labels <-
-      query %>%
-      dplyr::mutate(specimen_code_up =
-                      paste0(colnam,' ' , ifelse(!is.na(specimen_nbe_char), specimen_nbe_char, colnbr))) %>%
-      tibble::add_column(
-        INSTITUTION_CODE = rep("BRLU", nrow(.)),
-        HERBARIUM = rep("BRLU", nrow(.)),
-        TITLE = rep(project_title, nrow(.)),
-        AUTHOR_OF_SPECIES = NA,
-        INFRASPECIFIC_RANK = NA,
-        INFRASPECIFIC_EPITHET = NA,
-        AUTHOR_OF_INFRASPECIFIC_RANK = NA,
-        COUNTY = NA,
-        IMAGE_URL = NA,
-        RELATED_INFORMATION = NA,
-        LAT_DEGREE = as.double(lat_convert_deg),
-        LAT_MINUTE = as.double(lat_convert_min),
-        LAT_SECOND = as.double(lat_convert_sec),
-        LON_DEGREE = as.double(long_convert_deg),
-        LON_MINUTE = as.double(long_convert_min),
-        LON_SECOND = as.double(long_convert_sec),
-        LAT_FLAG = lat_flag,
-        LON_FLAG = long_flag,
-        REMARKS = NA,
-        GEOREFERENCE_SOURCES = NA,
-        PROJECT = NA,
-        TYPE_STATUS = NA,
-        PROCESSED_BY = NA,
-        LOCAL_NAME = NA
-      ) %>%
-      dplyr::rename(
-        GLOBAL_UNIQUE_IDENTIFIER = id_specimen,
-        COLLECTION_CODE = colnbr,
-        COLLECTOR = colnam,
-        ADDITIONAL_COLLECTOR = add_col,
-        COLLECTOR_NUMBER = specimen_code_up,
-        FAMILY = tax_fam,
-        GENUS = tax_gen,
-        SPECIES = tax_esp,
-        COUNTRY = country,
-        STATE_PROVINCE = majorarea,
-        LOCALITY = locality,
-        ELEVATION = elevation,
-        ATTRIBUTES = description,
-        IDENTIFIED_BY = detby,
-        FULL_NAME = full_name
-      ) %>%
-      dplyr::mutate(
-        coly = ifelse(is.na(coly) | coly == 0, "", coly),
-        colm = ifelse(is.na(colm) | colm == 0, "", colm),
-        cold = ifelse(is.na(cold) | cold == 0, "", cold)
-      ) %>%
-      dplyr::mutate(
-        DATE_COLLECTED = paste(coly, colm, cold, sep = "-"),
-        DATE_IDENTIFIED = paste(
-          ifelse(is.na(dety) | dety == 0, "", dety),
-          ifelse(is.na(detm) |
-                   detm == 0, "", detm),
-          ifelse(is.na(detd) |
-                   detd == 0, "", detd),
-          sep = "-"
-        ),
-        DATE_LASTMODIFIED = paste(data_modif_y, data_modif_m, data_modif_d , sep =
-                                    "-")
-      ) %>%
-      dplyr::select(
-        INSTITUTION_CODE,
-        HERBARIUM,
-        TITLE,
-        AUTHOR_OF_SPECIES,
-        INFRASPECIFIC_RANK,
-        INFRASPECIFIC_EPITHET,
-        AUTHOR_OF_INFRASPECIFIC_RANK,
-        FULL_NAME,
-        COUNTY,
-        IMAGE_URL,
-        RELATED_INFORMATION,
-        LAT_DEGREE,
-        LAT_MINUTE,
-        LAT_SECOND,
-        LON_DEGREE,
-        LON_MINUTE,
-        LON_SECOND,
-        LAT_FLAG,
-        LON_FLAG,
-        REMARKS,
-        GEOREFERENCE_SOURCES,
-        PROJECT,
-        TYPE_STATUS,
-        PROCESSED_BY,
-        GLOBAL_UNIQUE_IDENTIFIER,
-        COLLECTION_CODE,
-        COLLECTOR,
-        ADDITIONAL_COLLECTOR,
-        COLLECTOR_NUMBER,
-        FAMILY,
-        GENUS,
-        SPECIES,
-        LOCAL_NAME,
-        COUNTRY,
-        STATE_PROVINCE,
-        LOCALITY,
-        ELEVATION,
-        ATTRIBUTES,
-        IDENTIFIED_BY,
-        DATE_COLLECTED,
-        DATE_IDENTIFIED,
-        DATE_LASTMODIFIED
-      )
-
-    herbarium_label(dat = query_labels,
-                    theme="GILLES",
-                    outfile = paste0(file_labels, ".rtf"))
-
-  }
+  # if(generate_labels) {
+  #
+  #   if (!any(rownames(utils::installed.packages()) == "measurements"))
+  #     stop("measurements package needed, please install it")
+  #
+  #   lat_convert <-
+  #     measurements::conv_unit(query$ddlat, from = "dec_deg", to = "deg_min_sec")
+  #   lat_convert_deg <-
+  #     as.double(unlist(lapply(strsplit(lat_convert, " "), function(x) x[[1]])))
+  #   lat_flag <-
+  #     ifelse(lat_convert_deg>0, "N", "S")
+  #   lat_convert_deg <-
+  #     abs(lat_convert_deg)
+  #   lat_convert_min <-
+  #     unlist(lapply(strsplit(lat_convert, " "), function(x) ifelse(length(x)>1, x[[2]], NA)))
+  #   lat_convert_sec <-
+  #     unlist(lapply(strsplit(lat_convert, " "), function(x) ifelse(length(x)>1, x[[3]], NA)))
+  #
+  #   long_convert <-
+  #     measurements::conv_unit(query$ddlon, from = "dec_deg", to = "deg_min_sec")
+  #   long_convert_deg <-
+  #     as.double(unlist(lapply(strsplit(long_convert, " "), function(x) x[[1]])))
+  #   long_flag <-
+  #     ifelse(lat_convert_deg>0, "E", "W")
+  #   long_convert_deg <-
+  #     abs(long_convert_deg)
+  #   long_convert_min <-
+  #     unlist(lapply(strsplit(long_convert, " "), function(x) ifelse(length(x)>1, x[[2]], NA)))
+  #   long_convert_sec <-
+  #     unlist(lapply(strsplit(long_convert, " "), function(x) ifelse(length(x)>1, x[[3]], NA)))
+  #
+  #   query_labels <-
+  #     query %>%
+  #     dplyr::mutate(specimen_code_up =
+  #                     paste0(colnam,' ' , ifelse(!is.na(specimen_nbe_char), specimen_nbe_char, colnbr))) %>%
+  #     tibble::add_column(
+  #       INSTITUTION_CODE = rep("BRLU", nrow(.)),
+  #       HERBARIUM = rep("BRLU", nrow(.)),
+  #       TITLE = rep(project_title, nrow(.)),
+  #       AUTHOR_OF_SPECIES = NA,
+  #       INFRASPECIFIC_RANK = NA,
+  #       INFRASPECIFIC_EPITHET = NA,
+  #       AUTHOR_OF_INFRASPECIFIC_RANK = NA,
+  #       COUNTY = NA,
+  #       IMAGE_URL = NA,
+  #       RELATED_INFORMATION = NA,
+  #       LAT_DEGREE = as.double(lat_convert_deg),
+  #       LAT_MINUTE = as.double(lat_convert_min),
+  #       LAT_SECOND = as.double(lat_convert_sec),
+  #       LON_DEGREE = as.double(long_convert_deg),
+  #       LON_MINUTE = as.double(long_convert_min),
+  #       LON_SECOND = as.double(long_convert_sec),
+  #       LAT_FLAG = lat_flag,
+  #       LON_FLAG = long_flag,
+  #       REMARKS = NA,
+  #       GEOREFERENCE_SOURCES = NA,
+  #       PROJECT = NA,
+  #       TYPE_STATUS = NA,
+  #       PROCESSED_BY = NA,
+  #       LOCAL_NAME = NA
+  #     ) %>%
+  #     dplyr::rename(
+  #       GLOBAL_UNIQUE_IDENTIFIER = id_specimen,
+  #       COLLECTION_CODE = colnbr,
+  #       COLLECTOR = colnam,
+  #       ADDITIONAL_COLLECTOR = add_col,
+  #       COLLECTOR_NUMBER = specimen_code_up,
+  #       FAMILY = tax_fam,
+  #       GENUS = tax_gen,
+  #       SPECIES = tax_esp,
+  #       COUNTRY = country,
+  #       STATE_PROVINCE = majorarea,
+  #       LOCALITY = locality,
+  #       ELEVATION = elevation,
+  #       ATTRIBUTES = description,
+  #       IDENTIFIED_BY = detby,
+  #       FULL_NAME = full_name
+  #     ) %>%
+  #     dplyr::mutate(
+  #       coly = ifelse(is.na(coly) | coly == 0, "", coly),
+  #       colm = ifelse(is.na(colm) | colm == 0, "", colm),
+  #       cold = ifelse(is.na(cold) | cold == 0, "", cold)
+  #     ) %>%
+  #     dplyr::mutate(
+  #       DATE_COLLECTED = paste(coly, colm, cold, sep = "-"),
+  #       DATE_IDENTIFIED = paste(
+  #         ifelse(is.na(dety) | dety == 0, "", dety),
+  #         ifelse(is.na(detm) |
+  #                  detm == 0, "", detm),
+  #         ifelse(is.na(detd) |
+  #                  detd == 0, "", detd),
+  #         sep = "-"
+  #       ),
+  #       DATE_LASTMODIFIED = paste(data_modif_y, data_modif_m, data_modif_d , sep =
+  #                                   "-")
+  #     ) %>%
+  #     dplyr::select(
+  #       INSTITUTION_CODE,
+  #       HERBARIUM,
+  #       TITLE,
+  #       AUTHOR_OF_SPECIES,
+  #       INFRASPECIFIC_RANK,
+  #       INFRASPECIFIC_EPITHET,
+  #       AUTHOR_OF_INFRASPECIFIC_RANK,
+  #       FULL_NAME,
+  #       COUNTY,
+  #       IMAGE_URL,
+  #       RELATED_INFORMATION,
+  #       LAT_DEGREE,
+  #       LAT_MINUTE,
+  #       LAT_SECOND,
+  #       LON_DEGREE,
+  #       LON_MINUTE,
+  #       LON_SECOND,
+  #       LAT_FLAG,
+  #       LON_FLAG,
+  #       REMARKS,
+  #       GEOREFERENCE_SOURCES,
+  #       PROJECT,
+  #       TYPE_STATUS,
+  #       PROCESSED_BY,
+  #       GLOBAL_UNIQUE_IDENTIFIER,
+  #       COLLECTION_CODE,
+  #       COLLECTOR,
+  #       ADDITIONAL_COLLECTOR,
+  #       COLLECTOR_NUMBER,
+  #       FAMILY,
+  #       GENUS,
+  #       SPECIES,
+  #       LOCAL_NAME,
+  #       COUNTRY,
+  #       STATE_PROVINCE,
+  #       LOCALITY,
+  #       ELEVATION,
+  #       ATTRIBUTES,
+  #       IDENTIFIED_BY,
+  #       DATE_COLLECTED,
+  #       DATE_IDENTIFIED,
+  #       DATE_LASTMODIFIED
+  #     )
+  #
+  #   herbarium_label(dat = query_labels,
+  #                   theme="GILLES",
+  #                   outfile = paste0(file_labels, ".rtf"))
+  #
+  # }
 
   nrow_query <-
     nrow(query)
@@ -8612,7 +8621,7 @@ query_specimens <- function(collector = NULL,
   #
   # }
 
-  if(nrow(query) < 20)
+  if(nrow(query) < 50)
   {
     res_html <-
       tibble(columns = names(query), data.frame(t(query),
@@ -8643,7 +8652,6 @@ query_specimens <- function(collector = NULL,
       kableExtra::kable_styling("striped", full_width = F) %>%
       print()
   }
-
 
   if(!extract_linked_individuals) return(query)
 
