@@ -3109,7 +3109,7 @@ explore_allometric_taxa <- function(genus_searched = NULL,
     ids =  id_search, verbose = F)
 
   tax_data <-
-    query_plots(id_diconame = res_taxa$idtax_n)
+    query_plots(id_tax = res_taxa$idtax_n)
 
   if(nrow(tax_data)>0) {
     # cat(paste0("\n ", nrow(tax_data), " taxa selected"))
