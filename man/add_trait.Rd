@@ -15,6 +15,18 @@ add_trait(
   new_expectedunit = NULL,
   new_comments = NULL
 )
+
+add_trait(
+  new_trait = NULL,
+  new_relatedterm = NULL,
+  new_valuetype = NULL,
+  new_maxallowedvalue = NULL,
+  new_minallowedvalue = NULL,
+  new_traitdescription = NULL,
+  new_factorlevels = NULL,
+  new_expectedunit = NULL,
+  new_comments = NULL
+)
 }
 \arguments{
 \item{new_trait}{string value with new trait descritors - try to avoid space}
@@ -37,10 +49,19 @@ add_trait(
 }
 \value{
 nothing
+
+nothing
 }
 \description{
 Add trait and associated descriptors in trait list table
+
+See https://terminologies.gfbio.org/terms/ets/pages/index.html for description of each field
+}
+\details{
+Add trait and associated descriptors in trait list table
 }
 \author{
+Gilles Dauby, \email{gilles.dauby@ird.fr}
+
 Gilles Dauby, \email{gilles.dauby@ird.fr}
 }

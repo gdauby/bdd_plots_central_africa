@@ -9837,9 +9837,9 @@ add_traits_measures <- function(new_data,
             any(colnames(data_trait) == "verbatimlocality"), nrow(data_trait)
           ), data_trait$verbatimlocality, NA),
           basisofrecord = data_trait$basisofrecord,
-          references = ifelse(rep(
-            any(colnames(data_trait) == "references"), nrow(data_trait)
-          ), data_trait$references, NA),
+          reference = ifelse(rep(
+            any(colnames(data_trait) == "reference"), nrow(data_trait)
+          ), data_trait$reference, NA),
           year = ifelse(rep(
             any(colnames(data_trait) == "year"), nrow(data_trait)
           ), data_trait$year, NA),
@@ -10821,11 +10821,23 @@ replace_NA <- function(vec, inv = FALSE) {
     dplyr::select(!!col_new[id_col_nbr]) %>%
     dplyr::pull()
 
+  if(type_data=="taxa")
+    corresponding_data <-
+      dplyr::tbl(mydb_taxa, "table_taxa")
+
   if(type_data=="individuals")
     corresponding_data <-
       dplyr::tbl(mydb, "data_individuals")
 
-  if(type_data == "trait") {
+  if(type_data == "trait")
+    corresponding_data <-
+      dplyr::tbl(mydb, "table_traits")
+
+  if(type_data == "sp_trait_measures")
+    corresponding_data <-
+      dplyr::tbl(mydb, "table_traits_measures")
+
+  if(type_data == "trait_measures") {
     # all_data <-
     #   dplyr::tbl(mydb, "data_traits_measures")
 
@@ -10842,7 +10854,7 @@ replace_NA <- function(vec, inv = FALSE) {
       # new_name <- col_new[-id_col_nbr]
 
       corresponding_data <-
-        dplyr::tbl(mydb, "data_traits_measures") %>%
+        dplyr::tbl(mydb_taxa, "data_traits_measures") %>%
         dplyr::select(id_trait_measures, traitvalue)
       # %>%
         # dplyr::collect() %>%
@@ -15720,4 +15732,2564 @@ try_open_postgres_table <- function(table, con) {
   }
 
   return(table_postgre)
+}
+
+
+
+
+
+#' Add new entry to taxonomic table
+#'
+#' Add new entry to taxonomic table
+#'
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#'
+#' @param tax_gen string genus name
+#' @param tax_esp string species name
+#' @param tax_fam string family name
+#' @param tax_rank1 string tax_rank1 name
+#' @param tax_name1 string tax_name1 name
+#' @param detvalue integer detvalue code
+#' @param morphocat integer morphocat code
+#' @param full_name string full name : genus + species + authors
+#' @param synonym_of list if the new entry should be put in synonymy with an existing taxa, add in a list at least one values to identify to which taxa it will be put in synonymy: genus, species or id
+#'
+#'
+#' @return A tibble
+#' @export
+add_entry_taxa <- function(search_name_tps = NULL,
+                           tax_gen = NULL,
+                           tax_esp = NULL,
+                           tax_fam = NULL,
+                           tax_order = NULL,
+                           tax_famclass = NULL,
+                           tax_rank1 = NULL,
+                           tax_name1 = NULL,
+                           tax_rank2 = NULL,
+                           tax_name2 = NULL,
+                           # a_habit = NULL,
+                           author1 = NULL,
+                           author2 = NULL,
+                           author3 = NULL,
+                           year_description = NULL,
+                           synonym_of = NULL,
+                           morpho_species = FALSE,
+                           TPS_KEY = "15ad0b4c-f0d3-46ab-b649-178f2c75724f")
+{
+
+  # if (!exists("mydb")) call.mydb()
+  if (exists("mydb_taxa")) rm(mydb_taxa)
+  if (!exists("mydb_taxa")) call.mydb.taxa()
+
+  if (is.null(search_name_tps) &
+      is.null(tax_gen) & is.null(tax_esp) & is.null(tax_fam))
+    search_name_tps <-
+      readline(prompt = "Enter name to search on Tropicos  : ")
+
+  if (!is.null(search_name_tps)) {
+
+    if (search_name_tps != "") {
+      res_tps <- taxize::tp_search(sci = search_name_tps, key = TPS_KEY)
+
+      if (ncol(res_tps) == 1) {
+
+        cli::cli_alert_info("Not found on Tropicos")
+
+
+        # tax_tax <- readline(prompt = "Enter tax_tax  : ")
+        # tax_tax <- stringr::str_squish(tax_tax)
+        # if (tax_tax == '')
+        #   tax_tax <- NULL
+
+        tax_gen <- readline(prompt = "Enter tax_gen  : ")
+        tax_gen <- stringr::str_squish(tax_gen)
+        if (tax_gen == '')
+          tax_gen <- NULL
+
+        tax_esp <- readline(prompt = "Enter tax_esp  : ")
+        tax_esp <- stringr::str_squish(tax_esp)
+        if (tax_esp == '')
+          tax_esp <- NULL
+
+        author1 <- readline(prompt = "Enter author1  : ")
+        author1 <- stringr::str_squish(author1)
+        if (author1 == '')
+          author1 <- NULL
+
+        tax_order <- readline(prompt = "Enter tax_order  : ")
+        if (tax_order == '')
+          tax_order <- NULL
+
+
+      } else {
+
+        cli::cli_alert_success("Match on Tropicos")
+
+        res_tps_view <- tibble(feat = names(res_tps))
+
+        for (h in 1:nrow(res_tps))
+          res_tps_view <- res_tps_view %>%
+          bind_cols(unlist(res_tps[h,]))
+
+        names(res_tps_view) <- c("feat", seq(1, nrow(res_tps), 1))
+
+        res_tps_view %>%
+          kableExtra::kable(format = "html", escape = F) %>%
+          kableExtra::kable_styling("striped", full_width = F) %>%
+          print()
+
+        tax_sel <- readline(prompt = "Choose the taxa  (0 if none) : ")
+
+        if (tax_sel != "0") {
+
+          res_tps_selected <- res_tps %>% slice(as.numeric(tax_sel))
+
+          tax_tax <- res_tps_selected$scientificnamewithauthors
+          cat(cli::bg_red(paste(tax_tax)))
+          cf_ <- readline(prompt = paste("Confirm tax_tax ? press enter"))
+          if (cf_ != '') {
+            tax_tax <- readline(prompt = "Enter tax_tax  : ")
+            if (tax_tax == '')
+              tax_tax <- NULL
+          }
+
+          tax_gen <- unlist(strsplit(res_tps_selected$scientificname, " "))[1]
+          cat(cli::bg_red(paste(tax_gen)))
+          cf_ <- readline(prompt = paste("Confirm tax_gen ? press enter"))
+          if (cf_ != '') {
+            tax_gen <- readline(prompt = "Enter tax_gen  : ")
+            if (tax_gen == '')
+              tax_gen <- NULL
+          }
+
+          tax_esp <- unlist(strsplit(res_tps_selected$scientificname, " "))[2]
+          cat(cli::bg_red(paste(tax_esp)))
+          cf_ <- readline(prompt = paste("Confirm tax_esp ? press enter"))
+          if (cf_ != '') {
+            tax_esp <- readline(prompt = "Enter tax_esp  : ")
+            if (tax_esp == '')
+              tax_esp <- NULL
+          }
+
+          tax_fam <- res_tps_selected$family
+          cat(cli::bg_red(paste(tax_fam)))
+          cf_ <- readline(prompt = paste("Confirm tax_fam ? press enter"))
+          if (cf_ != '') {
+            tax_fam <- readline(prompt = "Enter tax_fam  : ")
+            if (tax_fam == '')
+              tax_fam <- NULL
+          }
+
+          author1 <- res_tps_selected$author
+          cat(cli::bg_red(paste(author1)))
+          cf_ <- readline(prompt = paste("Confirm author1 ? press enter"))
+          if (cf_ != '') {
+            author1 <- readline(prompt = "Enter author1  : ")
+            if (author1 == '')
+              author1 <- NULL
+          }
+
+          year_description <- as.numeric(res_tps_selected$displaydate)
+
+        }
+
+      }
+
+    }
+
+  }
+
+  all_growth_form <- choose_growth_form()
+
+  if(is.null(tax_tax) & !is.null(tax_esp) & is.null(author1))
+    stop("Provide full name with authors")
+
+  if(is.null(tax_gen) & is.null(tax_esp) & is.null(tax_fam) & is.null(tax_order) & is.null(tax_famclass))
+    stop("Provide at least one genus/family/order/class new name to enter")
+
+  if(!is.null(tax_fam) & is.null(tax_tax) & is.null(tax_gen)) {
+    tax_tax <- tax_fam
+  }
+
+  if(!is.null(tax_order) & is.null(tax_tax) & is.null(tax_gen)) {
+    tax_tax <- tax_order
+  }
+
+  if(!is.null(tax_famclass) & is.null(tax_tax) & is.null(tax_gen)) {
+    tax_tax <- tax_famclass
+  }
+
+  check_taxo <- TRUE
+
+  if (is.null(tax_fam) & !is.null(tax_gen)) {
+    tax_fam <-
+      query_taxa(
+        genus = tax_gen,
+        verbose = F,
+        exact_match = T,
+        class = NULL,
+        check_synonymy = FALSE,
+        extract_traits = FALSE
+      )
+    if(is.null(nrow(tax_fam)))
+      stop("genus not in database")
+
+    tax_fam <- tax_fam %>%
+      dplyr::distinct(tax_fam) %>%
+      dplyr::pull()
+    tax_fam <- tax_fam[which(!is.na(tax_fam))]
+
+    if (length(tax_fam) > 1)
+      cli::cli_alert_warning("No tax_fam provided, and two different family names for this genus {tax_fam}.")
+    if (length(tax_fam) > 1)
+      check_taxo <- FALSE
+    if (length(tax_fam) == 1)
+      cli::cli_alert_info("No tax_fam provided, based on genus, the following family is chosen {tax_fam}.")
+  }
+
+  if(is.null(tax_order) & !is.null(tax_fam)) {
+    tax_order <-
+      plotsdatabase::query_taxa(
+        family = tax_fam,
+        verbose = F,
+        exact_match = T,
+        class = NULL,
+        check_synonymy = FALSE,
+        extract_traits = FALSE
+      ) %>%
+      dplyr::distinct(tax_order) %>%
+      dplyr::pull()
+    tax_order <- tax_order[which(!is.na(tax_order))]
+    if (length(tax_order) > 1)
+      cli::cli_alert_warning("No tax_order provided, and two different order names for this family: {tax_order}")
+    if (length(tax_order) > 1)
+      check_taxo <- FALSE
+    if (length(tax_order) == 1)
+      cli::cli_alert_info("No tax_order provided, based on family, the following order is chosen: {tax_order}")
+  }
+
+  if(is.null(tax_famclass) & !is.null(tax_order)) {
+    tax_famclass <-
+      plotsdatabase::query_taxa(
+        order = tax_order,
+        verbose = F,
+        exact_match = T,
+        class = NULL,
+        check_synonymy = FALSE,
+        extract_traits = FALSE
+      ) %>%
+      dplyr::distinct(tax_famclass) %>%
+      dplyr::pull()
+    tax_famclass <- tax_famclass[which(!is.na(tax_famclass))]
+    if (length(tax_famclass) > 1)
+      cli::cli_alert_warning("No tax_famclass provided, and two different class names for this order: {tax_famclass}")
+    if (length(tax_famclass) > 1)
+      check_taxo <- FALSE
+    if (length(tax_famclass) == 1)
+      cli::cli_alert_info("No tax_famclass provided, based on order, the following class is chosen: {tax_famclass}")
+  }
+
+  tax_fam_new <- TRUE
+  if(!is.null(tax_fam) & check_taxo) {
+    searched_tax_fam <-
+      dplyr::tbl(mydb_taxa, "table_taxa") %>%
+      dplyr::distinct(tax_fam) %>%
+      dplyr::filter(tax_fam == !!tax_fam) %>%
+      dplyr::collect()
+    if(nrow(searched_tax_fam)==0) {
+      tax_fam_new <-
+        utils::askYesNo(msg = "The provided family name is currently not present in the dictionnary. Are you sure it is correctly spelled?", default = FALSE)
+    }
+  }
+
+  if(!is.null(tax_tax) & !is.null(tax_gen)) {
+    if(!grepl(tax_gen, tax_tax)) stop("\n Genus and tax_tax are provided, but genus is not found within full name, there must be an ERROR")
+  }
+
+  if(!is.null(tax_tax) & !is.null(tax_esp)) {
+    if(!grepl(tax_esp, tax_tax)) stop("\n Species and tax_tax are provided, but tax_esp is not found within tax_tax, there must be an ERROR")
+  }
+
+  if(is.null(tax_gen) & !is.null(tax_esp)) {
+    stop("\n species epithet provided but no genus (provide tax_gen)")
+  }
+
+  if(!is.null(tax_gen)) {
+
+    family_check <-
+      query_taxa(family = tax_fam, exact_match = T, verbose = F, class = NULL, check_synonymy = FALSE, extract_traits = F)
+
+    genus_check <-
+      query_taxa(genus = tax_gen,
+                                exact_match = T,
+                                verbose = F,
+                                class = NULL,
+                                check_synonymy = FALSE, extract_traits = F)
+
+    family_check %>%
+      filter(tax_gen == tax_gen)
+
+    if (!is.null(genus_check)) {
+      if (nrow(genus_check) > 0 & !any(family_check$tax_gen[!is.na(family_check$tax_gen)] == tax_gen)) {
+        cat(
+          paste(
+            "\n The provided genus is present in the taxonomic backbone, but with different family name:",
+            genus_check$tax_fam[1]
+          )
+        )
+        check_taxo <- FALSE
+      }
+    }
+  }
+
+  # tbl(mydb, "diconame") %>% collect() %>% slice(n())
+
+  if (check_taxo & tax_fam_new) {
+    if (!is.null(tax_gen) &
+        !is.null(tax_esp))
+      paste_taxa <- paste(tax_gen, tax_esp)
+    if (!is.null(tax_gen) & is.null(tax_esp))
+      paste_taxa <- tax_gen
+    if (!is.null(tax_fam) & is.null(tax_gen))
+      paste_taxa <- tax_fam
+    if (is.null(tax_tax) &
+        !is.null(tax_gen) & is.null(tax_esp))
+      tax_tax <- tax_gen
+
+    if (is.null(tax_esp))
+      tax_esp <- NA
+    if (is.null(tax_gen))
+      tax_gen <- NA
+    if (is.null(tax_fam))
+      tax_fam <- NA
+    if (is.null(tax_order))
+      tax_order <- NA
+    if (is.null(tax_rank1))
+      tax_rank1 <- NA
+    if (is.null(tax_name1))
+      tax_name1 <- NA
+    if (is.null(tax_rank2))
+      tax_rank2 <- NA
+    if (is.null(tax_name2))
+      tax_name2 <- NA
+    # if(is.null(a_habit)) a_habit <- NA
+    if (is.null(author1))
+      author1 <- NA
+    if (is.null(author2))
+      author2 <- NA
+    if (is.null(author3))
+      author3 <- NA
+
+    tax_rank <- NA
+    if(!is.na(tax_esp) & is.na(tax_name1) & is.na(tax_name1))
+      tax_rank <- "ESP"
+    if(is.na(tax_esp) & is.na(tax_name1) & is.na(tax_name2))
+      tax_rank <- NA
+    if(!is.na(tax_esp) & !is.na(tax_rank1)) {
+      if(tax_rank1=="subsp.") tax_rank <- "SUBSP"
+      if(tax_rank1=="var.") tax_rank <- "VAR"
+      if(tax_rank1=="f.") tax_rank <- "F"
+    }
+
+    if(!is.na(tax_rank)) {
+      if(tax_rank=="VAR") tax_rankinf <- "VAR"
+      if(tax_rank=="SUBSP") tax_rankinf <- "SUBSP"
+    }
+
+    if (!is.na(tax_fam) &
+        is.na(tax_gen) & is.na(tax_esp))
+      tax_rankinf <- "FAM"
+
+    if (!is.na(tax_fam) &
+        !is.na(tax_gen) & is.na(tax_esp))
+      tax_rankinf <- "GEN"
+
+    if (!is.na(tax_fam) &
+        !is.na(tax_gen) & !is.na(tax_esp) & is.na(tax_rank))
+      tax_rankinf <- "ESP"
+
+    if (!is.na(tax_fam) &
+        !is.na(tax_gen) & !is.na(tax_esp) & tax_rank == "ESP")
+      tax_rankinf <- "ESP"
+
+    if (!is.na(tax_order) &
+        is.na(tax_fam) &
+        is.na(tax_gen) & is.na(tax_esp) & is.na(tax_rank))
+      tax_rankinf <- "ORDER"
+
+    if (!is.null(tax_famclass) &
+        is.na(tax_order) &
+        is.na(tax_fam) &
+        is.na(tax_gen) & is.na(tax_esp) & is.na(tax_rank))
+      tax_rankinf <- "CLASS"
+
+    if(!is.na(tax_order) & is.na(tax_fam) & is.na(tax_gen) & is.na(tax_esp)) tax_rankesp <- "ORDER"
+    if(!is.null(tax_famclass) & is.na(tax_order) & is.na(tax_fam) & is.na(tax_gen) & is.na(tax_esp)) tax_rankesp <- "CLASS"
+    if(!is.na(tax_fam) & is.na(tax_gen) & is.na(tax_esp)) tax_rankesp <- "FAM"
+    if(!is.na(tax_fam) & !is.na(tax_gen) & is.na(tax_esp)) tax_rankesp <- "GEN"
+    if(!is.na(tax_fam) & !is.na(tax_gen) & !is.na(tax_esp))
+      tax_rankesp <- "ESP"
+
+
+    ## get id of class
+    id_tax_fam_class <-
+      try_open_postgres_table(table = "table_tax_famclass", con = mydb_taxa)
+      # tbl(mydb_taxa, "table_tax_famclass") %>%
+      filter(tax_famclass == !!tax_famclass) %>%
+      collect()
+
+
+    new_rec <-
+      dplyr::tibble(
+        tax_order = tax_order,
+        tax_famclass = tax_famclass,
+        tax_fam = tax_fam,
+        tax_gen = tax_gen,
+        tax_esp = tax_esp,
+        tax_rank01 = tax_rank1,
+        tax_nam01 = tax_name1,
+        tax_rank02 = tax_rank2,
+        tax_nam02 = tax_name2,
+        tax_source = "NEW",
+        tax_rank = tax_rank,
+        tax_rankinf = tax_rankinf,
+        tax_rankesp = tax_rankesp,
+        fktax = NA,
+        author1 = author1,
+        author2 = author2,
+        author3 = author3,
+        citation = NA,
+        year_description = ifelse(!is.null(year_description), year_description, NA),
+        idtax_good_n = NA,
+        id_tax_famclass = id_tax_fam_class$id_tax_famclass,
+        morpho_species = morpho_species
+      )
+
+
+    seek_dup <-
+      try_open_postgres_table(table = "table_taxa", con = mydb_taxa)
+
+
+    if(!is.na(new_rec$tax_famclass))
+      seek_dup <- seek_dup %>%
+      filter(tax_famclass == !!new_rec$tax_famclass)
+    if(!is.na(new_rec$tax_order)) {
+      seek_dup <- seek_dup %>%
+        filter(tax_order == !!new_rec$tax_order)
+    }else{
+      seek_dup <- seek_dup %>%
+        filter(is.na(tax_order))
+    }
+
+    if(!is.na(new_rec$tax_fam)) {
+      seek_dup <- seek_dup %>%
+        filter(tax_fam == !!new_rec$tax_fam)
+    }else{
+      seek_dup <- seek_dup %>%
+        filter(is.na(tax_fam))
+    }
+
+    if(!is.na(new_rec$tax_gen)) {
+      seek_dup <- seek_dup %>%
+        filter(tax_gen == !!new_rec$tax_gen)
+    }else{
+      seek_dup <- seek_dup %>%
+        filter(is.na(tax_gen))
+    }
+
+    if(!is.na(new_rec$tax_esp)) {
+      seek_dup <- seek_dup %>%
+        filter(tax_esp == !!new_rec$tax_esp)
+    }else{
+      seek_dup <- seek_dup %>%
+        filter(is.na(tax_esp))
+    }
+
+    if(!is.na(new_rec$tax_rank01)) {
+      seek_dup <- seek_dup %>%
+        filter(tax_rank01 == !!new_rec$tax_rank01)
+    }else{
+      seek_dup <- seek_dup %>%
+        filter(is.na(tax_rank01))
+    }
+
+    if(!is.na(new_rec$tax_nam01)) {
+      seek_dup <- seek_dup %>%
+        filter(tax_nam01 == !!new_rec$tax_nam01)
+    }else{
+      seek_dup <- seek_dup %>%
+        filter(is.na(tax_nam01))
+    }
+
+    if(!is.na(new_rec$tax_nam02)) {
+      seek_dup <- seek_dup %>%
+        filter(tax_nam02 == !!new_rec$tax_nam02)
+    }else{
+      seek_dup <- seek_dup %>%
+        filter(is.na(tax_nam02))
+    }
+
+    seek_dup <-
+      seek_dup %>%
+      collect()
+
+    launch_adding_data <- TRUE
+
+    if (nrow(seek_dup) > 0) {
+      cli::cli_h3(cli::bg_red("new entry fit to one entry already in table_taxa"))
+      print(as.data.frame(seek_dup))
+      launch_adding_data <- FALSE
+    }
+
+    if(launch_adding_data) {
+      new_rec <-
+        .add_modif_field(new_rec)
+
+      rm(mydb_taxa)
+
+      cli::cli_alert_info("For adding of modifying data in taxa table, you must have the admin rights")
+      call.mydb.taxa()
+
+      cli::cli_alert_success(cli::col_yellow("Adding new entry"))
+      DBI::dbWriteTable(mydb_taxa, "table_taxa", new_rec, append = TRUE, row.names = FALSE)
+
+      rs <- DBI::dbSendQuery(mydb_taxa, statement = "SELECT MAX(idtax_n) FROM table_taxa")
+      lastval <- DBI::dbFetch(rs)
+      DBI::dbClearResult(rs)
+
+      new_entry <-
+        dplyr::tbl(mydb_taxa, "table_taxa") %>%
+        dplyr::filter(idtax_n == !!lastval$max) %>%
+        dplyr::collect()
+
+      ### add growth form data
+      if(nrow(all_growth_form) > 0) {
+        cli::cli_alert_info("add growth form data")
+
+        all_growth_form <- all_growth_form %>%
+          dplyr::mutate(idtax = new_entry$idtax_n)
+
+        all_growth_form_pivot <-
+          all_growth_form %>%
+          tidyr::pivot_wider(names_from = trait,
+                             values_from = value)
+
+        add_sp_traits_measures(new_data = all_growth_form_pivot,
+                            traits_field = names(all_growth_form_pivot)[2:ncol(all_growth_form_pivot)],
+                            idtax = "idtax",
+                            add_data = T)
+
+      }
+
+      if(!is.null(synonym_of)) {
+
+        if(!is.list(synonym_of)) {
+          stop("synonym_of should be a list with the first element \nbeing the genus and the second element the species epiteth of the taxa of the correct name \nOR the idtax_n")
+        }
+
+        if(!any(names(synonym_of)=="genus") & !any(names(synonym_of)=="species") & !any(names(synonym_of)=="id"))
+          stop("synonym_of should have at least of the thre following element : genus, species or idtax_n")
+
+        if(!any(names(synonym_of)=="genus")) synonym_of$genus <- NULL
+        if(!any(names(synonym_of)=="species")) synonym_of$species <- NULL
+        if(!any(names(synonym_of)=="id")) synonym_of$id <- NULL
+
+        syn_searched <-
+          query_taxa(genus = synonym_of$genus,
+                                    species =synonym_of$species,
+                                    ids = synonym_of$id, extract_traits = F)
+
+        print(syn_searched)
+        if(nrow(syn_searched)>1) stop("More than 1 taxa as synonym. Select only one.")
+        if(nrow(syn_searched)==0) stop("No taxa found in the dictionnary. Select one.")
+
+        update_dico_name(new_id_diconame_good = syn_searched$idtax_good_n, id_search = new_entry$idtax_n,
+                         ask_before_update = FALSE, add_backup = FALSE, show_results = FALSE)
+
+      } else {
+        # update_dico_name(new_id_diconame_good = new_entry$id_n, id_search = new_entry$id_n,
+        #                  ask_before_update = FALSE, add_backup = FALSE, show_results = FALSE)
+      }
+
+      # print(dplyr::tbl(mydb, "table_taxa") %>%
+      #         dplyr::collect() %>%
+      #         dplyr::filter(idtax_n == max(idtax_n)))
+
+      print(dplyr::tbl(mydb_taxa, "table_taxa") %>%
+              dplyr::filter(idtax_n == !!new_entry$idtax_n) %>%
+              collect() %>%
+              as.data.frame())
+    }
+
+  } else {
+
+    cli::cli_alert_warning("NO ADDED ENTRY")
+  }
+}
+
+
+#' Choose growth forms
+#'
+#' Return a tibble of growth form chosen by hierarchy
+#'
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#'
+#'
+#' @return A tibble
+#' @export
+choose_growth_form <- function() {
+
+  growth_form_cat <- query_trait(pattern = "growth")
+
+  condition_hierarchical <- sapply(strsplit(growth_form_cat$traitdescription, 'if '), `[`, 2)
+  condition_hierarchical <- sapply(strsplit(unlist(condition_hierarchical), '[.]'), `[`, 1)
+
+  growth_form_cat <-
+    growth_form_cat %>%
+    mutate(condition_hierarchical = condition_hierarchical)
+
+  all_growth_form <- vector('list', 10)
+
+  first_level <- choice_trait_cat(id_trait =  growth_form_cat %>%
+                                    filter(trait == "growth_form_level_1") %>%
+                                    pull(id_trait))
+
+  if (!any(is.na(first_level))) {
+
+    all_growth_form[[1]] <- first_level
+
+    second_level <- choice_trait_cat(id_trait = growth_form_cat %>%
+                                       filter(condition_hierarchical == first_level$value) %>%
+                                       pull(id_trait))
+
+    if(!is.na(second_level$value)) all_growth_form[[2]] <- second_level
+
+    if (!any(is.na(second_level))) {
+
+      id_t <- growth_form_cat %>%
+        filter(condition_hierarchical == second_level$value) %>%
+        pull(id_trait)
+
+      if (length(id_t) > 0) {
+
+        third_level <- choice_trait_cat(id_trait = id_t)
+
+      } else {
+
+        third_level <- NA
+
+      }
+
+
+      if (!any(is.na(third_level))) {
+
+        all_growth_form[[3]] <- third_level
+
+        filtered_growth_form <-
+          growth_form_cat %>%
+          filter(condition_hierarchical == third_level$value)
+
+        if (nrow(filtered_growth_form)  > 0) {
+
+          fourth_level <- choice_trait_cat(id_trait =  filtered_growth_form %>%
+                                             pull(id_trait))
+
+          all_growth_form[[4]] <- fourth_level
+
+        } else {
+
+          fourth_level <- NA
+
+        }
+
+        if (!any(is.na(fourth_level))) {
+
+          filtered_growth_form <-
+            growth_form_cat %>%
+            filter(condition_hierarchical == fourth_level$value)
+
+          if (nrow(filtered_growth_form)  > 0) {
+
+            fith_level <- choice_trait_cat(id_trait =  filtered_growth_form %>%
+                                             pull(id_trait))
+
+            all_growth_form[[5]] <- fith_level
+
+          } else {
+
+            fith_level <- NA
+
+          }
+        }
+      }
+    }
+  }
+
+  all_growth_form <-
+    bind_rows(all_growth_form[unlist(lapply(all_growth_form, function(x) !is.null(x)))])
+
+  return(all_growth_form)
+
+}
+
+
+
+choice_trait_cat <- function(id_trait) {
+
+  trait_selected <-
+    query_trait(id_trait = id_trait)
+
+  print(tibble(description = unlist(stringr::str_split(trait_selected$traitdescription, pattern = "[.]"))) %>%
+          kableExtra::kable(format = "html", escape = F) %>%
+          kableExtra::kable_styling("striped", full_width = F) %>%
+          print())
+
+  print(trait_selected$list_factors[[1]])
+
+  cli::cli_alert_info("Choose any {trait_selected$trait}")
+  first_level_choice <-
+    readline(prompt = "")
+
+  if (first_level_choice != "") {
+
+    suppressWarnings(if(is.na(as.numeric(first_level_choice)))
+      stop(paste("Choose a number for selecting", trait_selected$trait)))
+
+    selected_value <-
+      trait_selected$list_factors[[1]] %>%
+      slice(as.numeric(first_level_choice)) %>%
+      mutate(trait = trait_selected$trait)
+
+  } else {
+
+    selected_value <- NA
+
+  }
+
+  return(selected_value)
+
+}
+
+
+
+
+query_trait <- function(id_trait = NULL, pattern = NULL) {
+
+  if (!is.null(id_trait)) {
+    cli::cli_alert_info("query trait by id")
+
+    table_traits <- try_open_postgres_table(table = "table_traits", con = mydb_taxa)
+
+    valuetype <-
+      table_traits %>%
+      dplyr::filter(id_trait == !!id_trait) %>%
+      dplyr::collect()
+  }
+
+  if (is.null(id_trait) & !is.null(pattern)) {
+
+    cli::cli_alert_info("query trait by string pattern")
+
+    sql <- glue::glue_sql(paste0("SELECT * FROM table_traits WHERE trait ILIKE '%", pattern, "%'"))
+
+    valuetype <- func_try_fetch(con = mydb_taxa, sql = sql)
+
+    # rs <- DBI::dbSendQuery(mydb_taxa, )
+    # res <- DBI::dbFetch(rs)
+    # DBI::dbClearResult(rs)
+    # valuetype <- dplyr::as_tibble(res)
+
+  }
+
+  valuetype <-
+    valuetype %>%
+    dplyr::mutate(list_factors = purrr::pmap(
+      .l = .,
+      .f = function(factorlevels,
+                    ...) {
+
+        as_tibble(unlist(stringr::str_split(factorlevels, ", ")))
+
+      }
+    ))
+
+  return(valuetype)
+
+}
+
+
+
+
+
+#' Add an observation in trait measurement table
+#'
+#' Add a trait measure in trait measurement table
+#'
+#' @return list of tibbles that should be/have been added
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @param new_data tibble
+#' @param col_names_select string vector
+#' @param col_names_corresp string vector
+#' @param collector_field string column name which contain the collector name
+#' @param plot_name_field string column name which contain the plot_name for linking
+#' @param individual_plot_field string column name which contain the individual tag for linking
+#' @param id_plot_name string column name which contain the ID of plot_name
+#' @param id_tag_plot string column name which contain the ID of individuals table
+#' @param id_specimen string column name which contain the ID of specimen
+#' @param traits_field string vector listing trait columns names in new_data
+#' @param add_data logical whether or not data should be added - by default FALSE
+#'
+#' @export
+add_sp_traits_measures <- function(new_data,
+                                col_names_select = NULL,
+                                col_names_corresp = NULL,
+                                traits_field,
+                                collector = NULL,
+                                idtax = NULL,
+                                add_data = FALSE) {
+
+
+  if (exists("mydb_taxa")) rm(mydb_taxa)
+  if (!exists("mydb_taxa")) call.mydb.taxa()
+
+  for (i in 1:length(traits_field))
+    if (!any(colnames(new_data) == traits_field[i]))
+      stop(paste("traits_field provide not found in new_data", traits_field[i]))
+
+  if(is.null(idtax))
+    stop("provide a column containing link to taxa")
+
+  new_data_renamed <-
+    .rename_data(dataset = new_data,
+                 col_old = idtax,
+                 col_new = "idtax")
+
+  if (!is.null(col_names_select) & !is.null(col_names_corresp)) {
+    new_data_renamed <-
+      .rename_data(dataset = new_data_renamed,
+                   col_old = col_names_select,
+                   col_new = col_names_corresp)
+  } else{
+
+    new_data_renamed <- new_data
+
+  }
+
+  ## removing entries with NA values for traits
+  new_data_renamed <-
+    new_data_renamed %>%
+    dplyr::filter_at(dplyr::vars(!!traits_field), dplyr::any_vars(!is.na(.)))
+
+  if (nrow(new_data_renamed) == 0)
+    stop("no values for selected trait(s)")
+
+  # if (!any(col_names_corresp == "day")) {
+  #   cli::cli_alert_info("no information collection day provided")
+  #   new_data_renamed <-
+  #     new_data_renamed %>%
+  #     mutate(day = NA) %>%
+  #     mutate(day = as.numeric(day))
+  # }
+  #
+  # if (!any(col_names_corresp == "year")) {
+  #   cli::cli_alert_info("no information collection year provided")
+  #   new_data_renamed <-
+  #     new_data_renamed %>%
+  #     mutate(year = NA) %>%
+  #     mutate(year = as.numeric(year))
+  # }
+  #
+  # if (!any(col_names_corresp == "month")) {
+  #   cli::cli_alert_info("no information collection month provided")
+  #   new_data_renamed <-
+  #     new_data_renamed %>%
+  #     mutate(month = NA) %>%
+  #     mutate(month = as.numeric(month))
+  # }
+  #
+  # if(!any(col_names_corresp == "country")) {
+  #   cli::cli_alert_info("no country provided")
+  #
+  #   new_data_renamed <-
+  #     new_data_renamed %>%
+  #     mutate(idcountry = NA) %>%
+  #     mutate(idcountry = as.numeric(idcountry))
+  #
+  # } else {
+  #
+  #   new_data_renamed <-
+  #     .link_country(data_stand = new_data_renamed,
+  #                   country_field = "country")
+  # }
+  #
+  # if (!any(col_names_corresp == "decimallatitude")) {
+  #   cli::cli_alert_info("no decimallatitude provided")
+  #   new_data_renamed <-
+  #     new_data_renamed %>%
+  #     tibble::add_column(decimallatitude = NA) %>%
+  #     dplyr::mutate(decimallatitude = as.double(decimallatitude))
+  # }
+  #
+  # if (!any(col_names_corresp == "decimallongitude")) {
+  #   cli::cli_alert_info("no decimallongitude provided")
+  #   new_data_renamed <-
+  #     new_data_renamed %>%
+  #     tibble::add_column(decimallongitude = NA) %>%
+  #     dplyr::mutate(decimallongitude = as.double(decimallongitude))
+  # }
+  #
+  # new_data_renamed <-
+  #   new_data_renamed %>%
+  #   tibble::add_column(id_new_data = 1:nrow(.))
+
+  ### Linking collectors names
+  if(!is.null(collector)) {
+
+    new_data_renamed <-
+      .rename_data(dataset = new_data,
+                   col_old = collector,
+                   col_new = "colnam")
+
+    new_data_renamed <-
+      .link_colnam(
+        data_stand = new_data_renamed,
+        collector_field = "colnam"
+      )
+
+  } else {
+
+    new_data_renamed <-
+      new_data_renamed %>%
+      mutate(idcolnam = NA) %>%
+      mutate(idcolnam = as.numeric(idcolnam))
+
+  }
+
+  ### preparing dataset to add for each trait
+  list_add_data <- vector('list', length(traits_field))
+  for (i in 1:length(traits_field)) {
+
+    trait <- traits_field[i]
+    if(!any(colnames(new_data_renamed) == trait))
+      stop(paste("trait field not found", trait))
+
+    data_trait <-
+      new_data_renamed
+
+    trait_name <-
+      "trait"
+    data_trait <-
+      data_trait %>%
+      dplyr::rename_at(dplyr::vars(all_of(trait)), ~ trait_name)
+
+    data_trait <-
+      data_trait %>%
+      dplyr::filter(!is.na(trait))
+
+    if(any(data_trait$trait == 0)) {
+
+      add_0 <- utils::askYesNo("Some value are equal to 0. Do you want to add these values anyway ??")
+
+      if(!add_0)
+        data_trait <-
+          data_trait %>%
+          dplyr::filter(trait != 0)
+
+    }
+
+    if(nrow(data_trait) > 0) {
+      ### adding trait id and adding potential issues based on trait
+      data_trait <-
+        .link_sp_trait(data_stand = data_trait, trait = trait)
+
+      queried_trait <-
+        query_trait(id_trait = data_trait %>%
+                      dplyr::distinct(id_trait) %>%
+                      pull())
+
+      ## see what type of value numeric of character
+      valuetype <-
+        queried_trait %>%
+        dplyr::select(valuetype, id_trait, factorlevels, relatedterm, list_factors)
+
+      if(!any(is.na(unlist(queried_trait$list_factors)))) {
+
+        TypeValue <- "character"
+
+        cli::cli_alert_info("categorical trait: check if values are in factorlevels")
+
+        all_factor_levels <-
+          queried_trait$list_factors[[1]] %>%
+          mutate(true_value = NA) %>%
+          mutate(true_value = as.character(true_value))
+
+        for (j in 1:nrow(all_factor_levels)) {
+
+          selected_id <- .find_cat(value_to_search = all_factor_levels$value[j],
+                                   compared_table = all_factor_levels,
+                                   column_name = "value")
+
+          level_selected <-
+            selected_id$sorted_matches %>%
+            slice(as.numeric(selected_id$selected_name))
+
+          all_factor_levels <-
+            all_factor_levels %>%
+            mutate(true_value = replace(true_value,
+                                        value == all_factor_levels$value[j],
+                                        level_selected$comp_value))
+
+        }
+
+        data_trait <-
+          data_trait %>%
+          left_join(all_factor_levels, by = c("trait" = "value")) %>%
+          dplyr::select(-trait) %>%
+          dplyr::rename(trait = true_value)
+      }
+
+      if (valuetype$valuetype == "numeric")
+        TypeValue <- "numeric"
+
+      ### choosing kind of measures
+      cli::cli_h3("basis")
+      if (!any(colnames(data_trait) == "basisofrecord")) {
+        choices <-
+          dplyr::tibble(
+            basis =
+              c(
+                'LivingSpecimen',
+                'PreservedSpecimen',
+                'FossilSpecimen',
+                'literatureData',
+                'traitDatabase',
+                'expertKnowledge'
+              )
+          )
+
+        print(choices)
+        selected_basisofrecord <-
+          readline(prompt = "Choose basisofrecord : ")
+
+        data_trait <-
+          data_trait %>%
+          mutate(basisofrecord = rep(choices$basis[as.numeric(selected_basisofrecord)], nrow(.)))
+      }
+
+      ### choosing measurementremarks if none
+      cli::cli_h3("basis")
+      if (!any(colnames(data_trait) == "measurementremarks")) {
+
+        selected_measurementremarks <-
+          readline(prompt = "Add measurementremarks ? 'enter if none : ")
+
+        if (selected_measurementremarks != "") {
+
+          data_trait <-
+            data_trait %>%
+            mutate(measurementremarks = rep(selected_measurementremarks, nrow(.)))
+
+        }
+      }
+
+      ### checking if any duplicates in data to add
+      if (data_trait %>% dplyr::distinct() %>% nrow() != nrow(data_trait)) {
+
+        duplicates_lg <- duplicated(data_trait)
+
+        cli::cli_alert_warning("Duplicates in new data for {trait} concerning {length(duplicates_lg[duplicates_lg])} id(s)")
+
+        cf_merge <-
+          askYesNo(msg = "confirm merging duplicates?")
+
+        if (cf_merge) {
+
+          data_trait <- data_trait %>% dplyr::distinct()
+        } else{
+          stop()
+        }
+
+      }
+
+
+      #
+      # duplicated_rows_with_issue_no_double <-
+      #   dplyr::bind_rows(selected_data_traits,
+      #                    all_vals) %>%
+      #   dplyr::filter(!is.na(issue),!grepl("more than one observation", issue)) %>%
+      #   dplyr::select(-issue) %>%
+      #   dplyr::group_by(id_data_individuals, id_trait, id_liste_plots, id_sub_plots) %>%
+      #   dplyr::count() %>%
+      #   dplyr::filter(n > 1)
+      #
+      # duplicated_rows_with_issue_double <-
+      #   dplyr::bind_rows(selected_data_traits,
+      #                    all_vals) %>%
+      #   dplyr::filter(!is.na(issue), grepl("more than one observation", issue)) %>%
+      #   dplyr::select(-issue) %>%
+      #   dplyr::group_by(id_data_individuals, id_trait, id_liste_plots, id_sub_plots) %>%
+      #   dplyr::count() %>%
+      #   dplyr::filter(n > 2)
+      #
+      # # %>% #
+      # #   dplyr::filter(!grepl("more than one observation", issue))
+      # duplicated_rows <-
+      #   dplyr::bind_rows(duplicated_rows, duplicated_rows_with_issue_no_double,
+      #                    duplicated_rows_with_issue_double)
+      #
+      # # duplicated_rows %>%
+      # #   filter(!id_data_individuals %in% selected_data_traits$id_data_individuals)
+      #
+
+
+
+      # data_trait <-
+      #   data_trait %>%
+      #   dplyr::rename_at("trait", ~ "trait_value")
+      #
+      # data_trait <-
+      #   data_trait %>%
+      #   dplyr::rename_at("id_n", ~ "id_data_individuals")
+
+      cli::cli_h3(".add_modif_field")
+      data_trait <-
+        .add_modif_field(dataset = data_trait)
+
+      cli::cli_h3("data_to_add")
+      data_to_add <-
+        dplyr::tibble(
+          idtax = data_trait$idtax,
+          decimallatitude =
+            ifelse(rep(
+              any(colnames(data_trait) == "decimallatitude"), nrow(data_trait)
+            ), data_trait$decimallatitude, NA),
+          decimallongitude =
+            ifelse(rep(
+              any(colnames(data_trait) == "decimallongitude"), nrow(data_trait)
+            ), data_trait$decimallongitude, NA),
+          elevation = ifelse(rep(
+            any(colnames(data_trait) == "elevation"), nrow(data_trait)
+          ), data_trait$elevation, NA),
+          verbatimlocality = ifelse(rep(
+            any(colnames(data_trait) == "verbatimlocality"), nrow(data_trait)
+          ), data_trait$verbatimlocality, NA),
+          basisofrecord = data_trait$basisofrecord,
+          reference = ifelse(rep(
+            any(colnames(data_trait) == "reference"), nrow(data_trait)
+          ), data_trait$reference, NA),
+          year = ifelse(rep(
+            any(colnames(data_trait) == "year"), nrow(data_trait)
+          ), data_trait$year, NA),
+          month = ifelse(rep(
+            any(colnames(data_trait) == "month"), nrow(data_trait)
+          ), data_trait$month, NA),
+          day = ifelse(rep(any(
+            colnames(data_trait) == "day"
+          ), nrow(data_trait)), data_trait$day, NA),
+          measurementremarks = ifelse(rep(
+            any(colnames(data_trait) == "measurementremarks"),
+            nrow(data_trait)
+          ), data_trait$measurementremarks, NA),
+          measurementmethod = ifelse(rep(
+            any(colnames(data_trait) == "measurementmethod"), nrow(data_trait)
+          ), data_trait$measurementmethod, NA),
+          id_trait = data_trait$id_trait,
+          traitvalue =
+            ifelse(
+              rep(any(TypeValue == "numeric"), nrow(data_trait))
+              ,
+              data_trait$trait,
+              NA
+            ),
+          traitvalue_char = ifelse(
+            rep(any(TypeValue == "character"), nrow(data_trait))
+            ,
+            data_trait$trait,
+            NA
+          ),
+          original_tax_name = ifelse(rep(
+            any(colnames(data_trait) == "original_tax_name"), nrow(data_trait)
+          ), data_trait$original_tax_name, NA),
+          issue = data_trait$issue,
+          date_modif_d = data_trait$data_modif_d,
+          date_modif_m = data_trait$data_modif_m,
+          date_modif_y = data_trait$data_modif_y
+        )
+
+      list_add_data[[i]] <-
+        data_to_add
+
+      print(data_to_add)
+
+      ### identify if measures are already within DB
+      cli::cli_alert_info("Identifying if imported values are already in DB")
+
+      trait_id <- unique(data_to_add$id_trait)
+      selected_data_traits <-
+        data_to_add %>%
+        dplyr::select(idtax,
+                      traitvalue_char,
+                      traitvalue,
+                      issue,
+                      basisofrecord,
+                      id_trait,
+                      measurementremarks)
+
+      all_vals <-
+        dplyr::tbl(mydb_taxa, "table_traits_measures") %>%
+        dplyr::select(idtax,
+                      traitvalue_char,
+                      traitvalue,
+                      issue,
+                      basisofrecord,
+                      id_trait,
+                      measurementremarks) %>%
+        dplyr::filter(id_trait == !!trait_id) %>% #, !is.na(id_sub_plots)
+        dplyr::collect()
+
+      if (TypeValue == "numeric") {
+        all_vals <-
+          all_vals %>%
+          dplyr::select(-traitvalue_char) %>%
+          rename(trait = traitvalue)
+
+        selected_data_traits <-
+          selected_data_traits %>%
+          dplyr::select(-traitvalue_char) %>%
+          rename(trait = traitvalue)
+
+      }
+
+
+      if (TypeValue == "character") {
+        all_vals <-
+          all_vals %>%
+          dplyr::select(-traitvalue) %>%
+          rename(trait = traitvalue_char)
+
+        selected_data_traits <-
+          selected_data_traits %>%
+          dplyr::select(-traitvalue) %>%
+          rename(trait = traitvalue_char)
+      }
+
+
+      duplicated_rows <-
+        dplyr::bind_rows(selected_data_traits,
+                         all_vals) %>%
+        dplyr::filter(is.na(issue)) %>%
+        dplyr::group_by(idtax,
+                        id_trait,
+                        trait,
+                        basisofrecord,
+                        measurementremarks) %>%
+        dplyr::count() %>%
+        dplyr::filter(n > 1)
+
+
+      if (nrow(duplicated_rows) > 1) {
+        cli::cli_alert_danger("Some values are already in DB")
+        print(duplicated_rows %>%
+                dplyr::ungroup() %>%
+                dplyr::select(idtax, id_trait, basisofrecord))
+
+        cli::cli_alert_danger("Excluding {nrow(duplicated_rows)} values because already in DB")
+        data_to_add <-
+          data_to_add %>%
+          dplyr::filter(!idtax %in% duplicated_rows$idtax)
+
+        if(nrow(data_trait) < 1) stop("no new values anymore to import after excluding duplicates")
+      }
+
+      # print(data_to_add %>%
+      #         dplyr::left_join(tbl(mydb, "data_liste_sub_plots") %>%
+      #                            select(typevalue, id_type_sub_plot, id_sub_plots) %>%
+      #                            collect(), by=c("id_sub_plots"="id_sub_plots"))) %>%
+      #   dplyr::left_join(tbl(mydb, "subplotype_list") %>%
+      #                      select(id_subplotype, type ) %>%
+      #                      collect(), by=c("id_type_sub_plot"="id_subplotype")) %>%
+      #   View()
+
+
+
+      response <-
+        utils::askYesNo("Confirm add these data to data_traits_measures table?")
+
+      if(add_data & response) {
+        cli::cli_alert_success("Adding data : {nrow(data_to_add)} values added")
+        DBI::dbWriteTable(mydb_taxa, "table_traits_measures",
+                          data_to_add, append = TRUE, row.names = FALSE)
+      }
+
+    } else {
+
+      cli::cli_alert_info("no added data for {trait} - no values different of 0")
+
+    }
+  }
+
+  if(exists('unlinked_individuals'))
+    return(list(list_traits_add = list_add_data, unlinked_individuals = unlinked_individuals))
+
+  if(!exists('unlinked_individuals'))
+    return(list(list_traits_add = list_add_data))
+
+}
+
+
+
+
+#' Add a trait in trait list
+#'
+#' Add trait and associated descriptors in trait list table
+#'
+#' @return nothing
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @param new_trait string value with new trait descritors - try to avoid space
+#' @param new_relatedterm string related trait to new trait
+#' @param new_valuetype string one of following 'numeric', 'integer', 'categorical', 'ordinal', 'logical', 'character'
+#' @param new_maxallowedvalue numeric if valuetype is numeric, indicate the maximum allowed value
+#' @param new_minallowedvalue numeric if valuetype is numeric, indicate the minimum allowed value
+#' @param new_traitdescription string full description of trait
+#' @param new_factorlevels string a vector of all possible value if valuetype is categorical or ordinal
+#' @param new_expectedunit string expected unit (unitless if none)
+#' @param new_comments string any comments
+#'
+#' @description
+#' See https://terminologies.gfbio.org/terms/ets/pages/index.html for description of each field
+#'
+#' @export
+add_trait <- function(new_trait = NULL,
+                      new_relatedterm = NULL,
+                      new_valuetype = NULL,
+                      new_maxallowedvalue = NULL,
+                      new_minallowedvalue = NULL,
+                      new_traitdescription = NULL,
+                      new_factorlevels = NULL,
+                      new_expectedunit = NULL,
+                      new_comments = NULL) {
+
+  if(is.null(new_trait)) stop("define new trait")
+  if(is.null(new_valuetype)) stop("define new_valuetype")
+
+  if(!any(new_valuetype==c('numeric', 'integer', 'categorical', 'ordinal', 'logical', 'character'))) stop("valuetype should one of following 'numeric', 'integer', 'categorical', 'ordinal', 'logical', or 'character'")
+
+  if(new_valuetype=="numeric" | new_valuetype=="integer")
+    if(!is.numeric(new_maxallowedvalue) & !is.integer(new_maxallowedvalue)) stop("valuetype numeric of integer and max value not of this type")
+  if(new_valuetype=="numeric" | new_valuetype=="integer")
+    if(!is.numeric(new_minallowedvalue) & !is.integer(new_minallowedvalue)) stop("valuetype numeric of integer and min value not of this type")
+
+  if (exists("mydb_taxa")) rm(mydb_taxa)
+  if (!exists("mydb_taxa")) call.mydb.taxa()
+
+  new_data_renamed <- tibble(trait = new_trait,
+                             relatedterm = ifelse(is.null(new_relatedterm), NA, new_relatedterm),
+                             valuetype = new_valuetype,
+                             maxallowedvalue = ifelse(is.null(new_maxallowedvalue), NA, new_maxallowedvalue),
+                             minallowedvalue = ifelse(is.null(new_minallowedvalue), NA, new_minallowedvalue),
+                             traitdescription = ifelse(is.null(new_traitdescription), NA, new_traitdescription),
+                             factorlevels = ifelse(is.null(new_factorlevels), NA, new_factorlevels),
+                             expectedunit = ifelse(is.null(new_expectedunit), NA, new_expectedunit),
+                             comments = ifelse(is.null(new_comments), NA, new_comments))
+
+  print(new_data_renamed)
+
+  Q <- utils::askYesNo("confirm adding this trait?")
+
+  if(Q) DBI::dbWriteTable(mydb_taxa, "table_traits", new_data_renamed, append = TRUE, row.names = FALSE)
+
+}
+
+
+
+#' Add growth forms to a single taxa
+#'
+#' Add growth form information to a single taxa
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#'
+#'
+#' @return A tibble
+#' @export
+add_growth_form_taxa <- function(idtax) {
+
+  if (exists("mydb_taxa")) rm(mydb_taxa)
+  if (!exists("mydb_taxa")) call.mydb.taxa()
+
+  if (length(idtax) > 1)
+    stop("Only one taxa at the same time")
+
+  queried_tax <- query_taxa(ids = idtax, class = NULL)
+
+  all_growth_form <- choose_growth_form()
+
+  all_growth_form <- all_growth_form %>%
+    dplyr::mutate(idtax = idtax)
+
+  all_growth_form_pivot <-
+    all_growth_form %>%
+    tidyr::pivot_wider(names_from = trait,
+                       values_from = value)
+
+  add_sp_traits_measures(new_data = all_growth_form_pivot,
+                      traits_field = names(all_growth_form_pivot)[2:ncol(all_growth_form_pivot)],
+                      idtax = "idtax",
+                      add_data = T)
+
+}
+
+
+
+
+
+update_trait_measures <- function(new_data,
+                                  col_names_select = NULL,
+                                  col_names_corresp = NULL,
+                                  id_col,
+                                  launch_update = FALSE,
+                                  add_backup = TRUE,
+                                  ask_before_update = FALSE,
+                                  only_new_ident = FALSE) {
+
+  if (exists("mydb_taxa")) rm(mydb_taxa)
+  if (!exists("mydb_taxa")) call.mydb.taxa()
+
+  all_colnames_rec <-
+    try_open_postgres_table(table = "table_traits_measures", con = mydb_taxa) %>%
+    # dplyr::tbl(mydb, "table_traits_measures") %>%
+    colnames()
+
+  if (is.null(col_names_select))
+    col_names_select <- names(new_data)
+
+  if (is.null(col_names_corresp))
+    col_names_corresp <- col_names_select
+
+  if (length(col_names_select) != length(col_names_corresp))
+    stop("col_names_select and col_names_corresp should have same length")
+
+  for (i in 1:length(col_names_select))
+    if(!any(col_names_select[i] == names(new_data)))
+      stop(paste(col_names_select[i], "not found in new_data"))
+
+  for (i in 1:length(col_names_corresp))
+    if(!any(col_names_corresp[i] == all_colnames_rec))
+      stop(paste(col_names_corresp[i], "not found in table_records"))
+
+  id_db <- col_names_corresp[id_col]
+
+  if(!any(id_db == c("id_trait_measures")))
+    stop("id for matching should be id_trait_measures")
+
+  new_data_renamed <-
+    .rename_data(dataset = new_data %>%
+                   dplyr::select(all_of(col_names_select)),
+                 col_old = col_names_select,
+                 col_new = col_names_corresp)
+
+  output_matches <-
+    .find_ids(
+      dataset = new_data_renamed,
+      col_new = col_names_corresp,
+      id_col_nbr = id_col,
+      type_data = "sp_trait_measures"
+    )
+
+  matches_all <-
+    output_matches[[2]]
+
+
+  if (any(names(matches_all) == "idtax")) {
+
+    if (nrow(matches_all$idtax_n) > 0) {
+
+      tax_new <-
+        query_taxa(
+          ids = matches_all$idtax$idtax_new,
+          verbose = T,
+          check_synonymy = T,
+          class = NULL,
+          extract_traits = FALSE
+        )
+
+      if (!any(is.na(matches_all$idtax$idtax_old))) {
+        tax_old <-
+          query_taxa(
+            ids = matches_all$idtax$idtax_old,
+            verbose = TRUE,
+            check_synonymy = TRUE,
+            class = NULL
+          )
+      } else{
+        tax_old <-
+          query_taxa(
+            ids = 1,
+            verbose = TRUE,
+            check_synonymy = TRUE,
+            extract_traits = FALSE
+          ) %>%
+          slice(0)
+      }
+
+      matches_all$idtax <-
+        matches_all$idtax %>%
+        left_join(
+          tax_new %>%
+            dplyr::select(idtax_n, tax_fam, tax_gen, tax_sp_level),
+          by = c("idtax_new" = "idtax_n")
+        ) %>%
+        rename(
+          tax_gen_new = tax_gen,
+          tax_sp_level_new = tax_sp_level,
+          tax_fam_new = tax_fam
+        )
+
+      matches_all$idtax <-
+        matches_all$idtax %>%
+        left_join(
+          tax_old %>%
+            dplyr::select(idtax_n, tax_fam, tax_gen, tax_sp_level),
+          by = c("idtax_old" = "idtax_n")
+        ) %>%
+        rename(
+          tax_gen_old = tax_gen,
+          tax_sp_level_old = tax_sp_level,
+          tax_fam_old = tax_fam
+        )
+
+    }
+
+  }
+
+
+  print(lapply(matches_all, function(x) as.data.frame(x)))
+
+  # if(only_new_ident) {
+  #
+  #   if (nrow(matches_all$idtax_n) > 0) {
+  #
+  #     confirm_new_ident <- TRUE
+  #
+  #   } else{
+  #
+  #     confirm_new_ident <- FALSE
+  #
+  #   }
+  #
+  # }else{
+  #
+  #   if (any(unlist(lapply(matches_all, nrow)) > 0)) {
+  #
+  #     confirm_new_ident <- TRUE
+  #
+  #   } else{
+  #
+  #     confirm_new_ident <- FALSE
+  #
+  #   }
+  # }
+
+
+  if(ask_before_update & confirm_new_ident) {
+
+    confirm <-
+      askYesNo(msg = 'Confirm update ?')
+
+    print(confirm)
+
+  }else{
+
+    confirm <- TRUE
+
+  }
+
+
+  if(confirm & confirm_new_ident) {
+
+
+    for (i in 1:length(matches_all)) {
+
+      field <- names(matches_all)[i]
+      var_new <- paste0(field, "_new")
+      matches <- matches_all[[i]]
+
+      if(launch_update & nrow(matches) > 0) {
+
+        matches <-
+          matches %>%
+          dplyr::select(id, dplyr::contains("_new"))
+        matches <-
+          .add_modif_field(matches)
+
+        all_id_match <- dplyr::pull(dplyr::select(matches, id))
+
+        if(add_backup) {
+
+          # quo_var_id <- rlang::parse_expr(quo_name(rlang::enquo(id_db)))
+          #
+          # all_rows_to_be_updated <-
+          #   dplyr::tbl(mydb, "table_records") %>%
+          #   dplyr::filter(!!quo_var_id %in% all_id_match) %>%
+          #   dplyr::collect()
+          #
+          # colnames_plots <-
+          #   dplyr::tbl(mydb, "followup_updates_table_records")  %>%
+          #   dplyr::select(-date_modified, -modif_type) %>%
+          #   dplyr::collect() %>%
+          #   dplyr::top_n(1) %>%
+          #   colnames()
+          #
+          # all_rows_to_be_updated <-
+          #   all_rows_to_be_updated %>%
+          #   dplyr::select(dplyr::one_of(colnames_plots))
+          #
+          # all_rows_to_be_updated <-
+          #   all_rows_to_be_updated %>%
+          #   tibble::add_column(date_modified = Sys.Date()) %>%
+          #   tibble::add_column(modif_type = field)
+          #
+          # print(all_rows_to_be_updated %>%
+          #         dplyr::select(modif_type, date_modified))
+          #
+          # DBI::dbWriteTable(mydb, "followup_updates_table_records",
+          #                   all_rows_to_be_updated, append = TRUE, row.names = FALSE)
+        }
+
+        ## create a temporary table with new data
+        DBI::dbWriteTable(mydb_taxa, "temp_table", matches,
+                          overwrite=T, fileEncoding = "UTF-8", row.names=F)
+
+        query_up <-
+          paste0("UPDATE table_traits_measures t1 SET (", field,", date_modif_d, date_modif_m, date_modif_y) = (t2.", var_new, ", t2.data_modif_d, t2.data_modif_m, t2.data_modif_y) FROM temp_table t2 WHERE t1.",
+                 id_db," = t2.id")
+
+        rs <-
+          DBI::dbSendStatement(mydb_taxa, query_up)
+
+        cat("\nRows updated", RPostgres::dbGetRowsAffected(rs))
+        rs@sql
+        DBI::dbClearResult(rs)
+
+
+      } else{
+
+        if (launch_update & nrow(matches) == 0)
+          cat("\n No new values found")
+
+      }
+    }
+  }
+
+  if(ask_before_update & !confirm)
+    message("\n NO Update Done")
+
+  return(matches_all)
+
+}
+
+
+
+
+
+update_trait_table <- function(new_data,
+                               col_names_select = NULL,
+                               col_names_corresp = NULL,
+                               id_col,
+                               launch_update = FALSE,
+                               add_backup = TRUE) {
+
+  if (exists("mydb_taxa")) rm(mydb_taxa)
+  if (!exists("mydb_taxa")) call.mydb.taxa()
+
+
+  all_colnames_traits <-
+    dplyr::tbl(mydb_taxa, "table_traits") %>%
+    colnames()
+
+  if (is.null(col_names_select) & is.null(col_names_corresp))
+    col_names_corresp <- col_names_select <- names(new_data)
+
+  if (length(col_names_select) != length(col_names_corresp))
+    stop("col_names_select and col_names_corresp should have same length")
+
+  for (i in 1:length(col_names_select))
+    if(!any(col_names_select[i] == colnames(new_data)))
+      stop(paste(col_names_select[i], "not found in new_data"))
+
+  for (i in 1:length(col_names_corresp))
+    if(!any(col_names_corresp[i] == all_colnames_traits))
+      stop(paste(col_names_corresp[i], "not found in table_records"))
+
+  id_db <- col_names_corresp[id_col]
+
+  if(!any(id_db == c("id_trait")))
+    stop("id for matching should be id_trait")
+
+  new_data_renamed <-
+    .rename_data(dataset = new_data,
+                 col_old = col_names_select,
+                 col_new = col_names_corresp)
+
+  output_matches <- .find_ids(dataset = new_data_renamed,
+                              col_new = col_names_corresp,
+                              id_col_nbr = id_col,
+                              type_data = "trait")
+
+  matches_all <-
+    output_matches[[2]]
+
+  for (i in 1:length(matches_all)) {
+
+    field <- names(matches_all)[i]
+    var_new <- paste0(field, "_new")
+    matches <- matches_all[[i]]
+
+    if(launch_update & nrow(matches)>0) {
+
+      matches <-
+        matches %>%
+        dplyr::select(id, dplyr::contains("_new"))
+      # matches <-
+      #   .add_modif_field(matches)
+
+      all_id_match <- dplyr::pull(dplyr::select(matches, id))
+
+      if(add_backup) {
+
+        # quo_var_id <- rlang::parse_expr(quo_name(rlang::enquo(id_db)))
+        #
+        # all_rows_to_be_updated <-
+        #   dplyr::tbl(mydb, "table_records") %>%
+        #   dplyr::filter(!!quo_var_id %in% all_id_match) %>%
+        #   dplyr::collect()
+        #
+        # colnames_plots <-
+        #   dplyr::tbl(mydb, "followup_updates_table_records")  %>%
+        #   dplyr::select(-date_modified, -modif_type) %>%
+        #   dplyr::collect() %>%
+        #   dplyr::top_n(1) %>%
+        #   colnames()
+        #
+        # all_rows_to_be_updated <-
+        #   all_rows_to_be_updated %>%
+        #   dplyr::select(dplyr::one_of(colnames_plots))
+        #
+        # all_rows_to_be_updated <-
+        #   all_rows_to_be_updated %>%
+        #   tibble::add_column(date_modified = Sys.Date()) %>%
+        #   tibble::add_column(modif_type = field)
+        #
+        # print(all_rows_to_be_updated %>%
+        #         dplyr::select(modif_type, date_modified))
+        #
+        # DBI::dbWriteTable(mydb, "followup_updates_table_records",
+        #                   all_rows_to_be_updated, append = TRUE, row.names = FALSE)
+      }
+
+      ## create a temporary table with new data
+      DBI::dbWriteTable(mydb, "temp_table", matches,
+                        overwrite=T, fileEncoding = "UTF-8", row.names=F)
+
+      query_up <-
+        paste0("UPDATE table_traits t1 SET ", field," = t2.", var_new, " FROM temp_table t2 WHERE t1.",
+               id_db," = t2.id")
+
+      rs <-
+        DBI::dbSendStatement(mydb, query_up)
+
+      cat("Rows updated", RPostgres::dbGetRowsAffected(rs))
+      rs@sql
+      DBI::dbClearResult(rs)
+
+    }else{
+      if(launch_update & nrow(matches)==0) cat("\n No new values found")
+    }
+  }
+
+  return(matches_all)
+}
+
+
+
+
+
+#' Internal function
+#'
+#' Compute
+#'
+#' @return vector
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @param data_stand tibble
+#' @param trait string vector
+#'
+#' @export
+.link_sp_trait <- function(data_stand, trait) {
+
+  all_traits <-
+    dplyr::tbl(mydb, "table_traits") %>%
+    dplyr::collect()
+
+  selected_name <- .find_cat(value_to_search = trait,
+                             compared_table = all_traits,
+                             column_name = "trait")
+
+  sorted_matches <- selected_name$sorted_matches
+  selected_name <- as.integer(selected_name$selected_name)
+
+  if(is.na(selected_name))
+    stop("Provide integer value for standardizing trait name")
+
+  selected_trait_id <-
+    sorted_matches %>%
+    dplyr::slice(selected_name) %>%
+    dplyr::select(id_trait) %>%
+    dplyr::pull()
+
+  select_trait_features <-
+    sorted_matches %>%
+    dplyr::slice(selected_name)
+
+  issues <- vector(mode = "character", length = nrow(data_stand))
+  if(select_trait_features$valuetype == "numeric") {
+    if(any(data_stand$trait<select_trait_features$minallowedvalue)) {
+      warning(paste(trait, "values lower than minallowedvalue for", trait, "for",
+                    sum(data_stand$trait<select_trait_features$minallowedvalue), "entries"))
+      issues[data_stand$trait<select_trait_features$minallowedvalue] <-
+        paste(select_trait_features$trait, "lower than minallowedvalue")
+    }
+
+    if(any(data_stand$trait>select_trait_features$maxallowedvalue)) {
+      warning(paste(trait, "values higher than maxallowedvalue for", trait, "for",
+                    sum(data_stand$trait>select_trait_features$maxallowedvalue), "entries"))
+      issues[data_stand$trait>select_trait_features$maxallowedvalue] <-
+        paste(select_trait_features$trait, "higher than maxallowedvalue")
+    }
+  }
+
+  issues[issues == ""] <- NA
+
+  data_stand <-
+    data_stand %>%
+    tibble::add_column(id_trait = rep(selected_trait_id, nrow(.)))
+
+  data_stand <-
+    data_stand %>%
+    tibble::add_column(issue = issues)
+
+  return(data_stand)
+}
+
+
+
+
+
+.delete_taxa <- function(id) {
+
+  if (exists("mydb_taxa")) rm(mydb_taxa)
+  if (!exists("mydb_taxa")) call.mydb.taxa()
+
+  # DBI::dbExecute(mydb,
+  #                "DELETE FROM table_taxa WHERE idtax_n=$1", params=list(id)
+  # )
+
+  query <- "DELETE FROM table_taxa WHERE MMM"
+  query <-
+    gsub(
+      pattern = "MMM",
+      replacement = paste0("idtax_n IN ('",
+                           paste(unique(id), collapse = "', '"), "')"),
+      x = query
+    )
+
+  rs <- DBI::dbSendQuery(mydb_taxa, query)
+  DBI::dbClearResult(rs)
+}
+
+
+
+
+
+#' Delete an entry in traits measurements table
+#'
+#' Delete an entry in traits measurements table using id for selection
+#'
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#'
+#' @param id integer
+#'
+#' @return No values
+#' @export
+delete_entry_trait_measure <- function(id) {
+
+  if (exists("mydb_taxa")) rm(mydb_taxa)
+  if (!exists("mydb_taxa")) call.mydb.taxa()
+
+  DBI::dbExecute(mydb_taxa,
+                 "DELETE FROM table_traits_measures WHERE id_trait_measures=$1", params=list(id)
+  )
+}
+
+
+
+
+
+#' Update taxonomic data
+#'
+#' Update taxonomic data
+#'
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#'
+#' @param genus_searched string genus name searched
+#' @param tax_esp_searched string species name searched
+#' @param tax_fam_searched string family name searched
+#' @param new_tax_gen string new genus name
+#' @param new_tax_esp string new species name
+#' @param new_full_name_auth string new full name with authors
+#' @param new_tax_fam string new family name
+#' @param new_tax_rank1 string new rank
+#' @param new_tax_name1 string new name of rank1
+#' @param new_taxook integer new tax code
+#' @param new_morphocat integer new morphocat code
+#' @param new_detvalue integer new detvalue code
+#' @param new_full_name_no_auth string new full name without authors - if not provided concatenate of new_esp and new_genus
+#' @param new_full_name_used string new full_name_used
+#' @param new_full_name_used2 string new full_name_used2
+#' @param new_id_diconame_good integer if the selected name should be put in synonymy, id of the taxa
+#' @param id_search integer id of the taxa searched
+#' @param ask_before_update logical TRUE by default, ask for confirmation before updating
+#' @param add_backup logical TRUE by default, add backup of modified data
+#' @param show_results logical TRUE by default, show the data that has been modified
+#' @param no_synonym_modif logical FALSE by default, if TRUE and if the selected taxa is considered as synonym, then this will be modified and the selected taxa will not longer be a synonym
+#' @param synonym_of list if the selected taxa should be put in synonymy with an existing taxa, add in a list at least one values to identify to which taxa it will be put in synonymy: genus, species or id
+#'
+#'
+#' @return No return value individuals updated
+#' @export
+update_dico_name <- function(genus_searched = NULL,
+                             tax_esp_searched = NULL,
+                             tax_fam_searched = NULL,
+                             tax_order_searched = NULL,
+                             id_searched = NULL,
+                             new_tax_gen = NULL,
+                             new_tax_esp = NULL,
+                             new_tax_fam = NULL,
+                             new_tax_order = NULL,
+                             new_tax_rank1 = NULL,
+                             new_tax_rank = NULL,
+                             new_tax_name1 = NULL,
+                             new_tax_famclass = NULL,
+                             new_introduced_status = NULL,
+                             new_tax_rankesp = NULL,
+                             ask_before_update = TRUE,
+                             add_backup = TRUE,
+                             show_results = TRUE,
+                             cancel_synonymy= FALSE,
+                             synonym_of = NULL,
+                             exact_match = FALSE) {
+
+  if (exists("mydb_taxa")) rm(mydb_taxa)
+  if (!exists("mydb_taxa")) call.mydb.taxa()
+
+  if(all(is.null(c(genus_searched, tax_esp_searched,
+                   tax_fam_searched, synonym_of,
+                   id_searched, new_tax_rankesp)) & !cancel_synonymy))
+    stop("\n Provide the species to be updated or precise new synonymy")
+
+  if(!is.null(new_tax_famclass)) {
+    new_id_tax_famclass <-
+      try_open_postgres_table(table = "table_tax_famclass", con = mydb_taxa) %>%
+      dplyr::filter(tax_famclass == new_tax_famclass) %>%
+      dplyr::collect() %>%
+      pull(id_tax_famclass)
+
+    if(length(new_id_tax_famclass) == 0)
+      stop("new tax_famclass not recorded in table_tax_famclass")
+
+  } else {
+    new_id_tax_famclass = NULL
+  }
+
+  ### checking if at least one modification is asked
+  new_vals <- c(new_tax_gen = new_tax_gen,
+                new_tax_esp = new_tax_esp,
+                new_tax_order = new_tax_order,
+                new_tax_fam = new_tax_fam,
+                new_introduced_status = new_introduced_status,
+                new_id_tax_famclass = new_id_tax_famclass,
+                new_tax_rank = new_tax_rank,
+                new_tax_rank1 = new_tax_rank1,
+                # new_a_habit = new_habit,
+                new_tax_rankesp = new_tax_rankesp)
+
+  if (!any(!is.null(new_vals)) &
+      is.null(synonym_of) &
+      !cancel_synonymy)
+    stop("\n No new values to be updated.")
+
+  ## if the modif is a change in synonymy, show synonyms
+  # if(cancel_synonymy | !is.null(synonym_of)) {
+  #   show_synonymies <- TRUE
+  # }else{
+  #   show_synonymies <- FALSE
+  # }
+
+  ### querying for entries to be modified
+  if(is.null(id_searched)) {
+
+    cat(paste("\n", genus_searched, " - ", tax_esp_searched, "-", tax_fam_searched))
+    query_tax <-
+      query_taxa(
+        genus = genus_searched,
+        species = tax_esp_searched,
+        family = tax_fam_searched,
+        order = tax_order_searched,
+        check_synonymy = FALSE,
+        exact_match = exact_match,
+        extract_traits = FALSE
+      )
+
+  } else {
+
+    query_tax <-
+      query_taxa(
+        ids = id_searched,
+        check_synonymy = FALSE,
+        class = NULL,
+        extract_traits = FALSE
+      )
+
+  }
+
+  if(is.null(query_tax)) query_tax <- dplyr::tibble()
+
+  if (nrow(query_tax) > 0) {
+
+    cli::cli_alert_info(cli::col_blue("{nrow(query_tax)} taxa selected"))
+    print(query_tax %>% as.data.frame())
+    nrow_query = TRUE
+
+  } else{
+
+    nrow_query = FALSE
+
+  }
+
+  if(nrow_query)
+    modif_types <-
+    vector(mode = "character", length = nrow(query_tax))
+
+  ## if the modification does not concern synonymies, check if provided values are different for those existing
+  if(nrow_query & !cancel_synonymy & is.null(synonym_of)) {
+
+    query_tax_n <- query_tax
+    col_new <- c()
+    for (i in c(
+      "tax_order",
+      "tax_esp",
+      "tax_fam",
+      "tax_gen",
+      "tax_rank01",
+      "tax_rank",
+      "tax_nam01",
+      "introduced_status",
+      "tax_rankesp",
+      "id_tax_famclass"
+    )) {
+      if (any(i == gsub("new_", "", names(new_vals)))) {
+        col_new <- c(col_new, i)
+        var <- enquo(i)
+        query_tax_n <-
+          query_tax_n %>%
+          dplyr::mutate(!!var := new_vals[grep(i, names(new_vals))])
+      }
+    }
+
+    query_tax_n <-
+      query_tax_n %>%
+      dplyr::select(all_of(col_new))
+
+    # new_vals <-
+    #   dplyr::tibble(
+    #     tax_order = ifelse(!is.null(new_tax_order), new_tax_order, query_tax$tax_order),
+    #     tax_fam = ifelse(!is.null(new_tax_fam), as.character(new_tax_fam), query_tax$tax_fam),
+    #     tax_gen = ifelse(!is.null(new_tax_gen), as.character(new_tax_gen), query_tax$tax_gen),
+    #     tax_esp = ifelse(!is.null(new_tax_esp), as.character(new_tax_esp), query_tax$tax_esp),
+    #     tax_rank1 = ifelse(!is.null(new_tax_rank1), new_tax_rank1, query_tax$tax_rank01),
+    #     tax_name1 = ifelse(!is.null(new_tax_name1), new_tax_name1, query_tax$tax_nam01),
+    #     introduced_status = ifelse(!is.null(new_introduced_status), new_introduced_status, query_tax$introduced_status)
+    #                 )
+
+    # query_tax_n <-
+    #   query_tax_n %>%
+    #   replace(., is.na(.), -9999)
+
+    query_tax_n <-
+      query_tax_n %>%
+      mutate_if(is.numeric,
+                ~ tidyr::replace_na(. , -9999)) %>%
+      mutate_if(is.character,
+                ~ tidyr::replace_na(. , "-9999"))
+
+    sel_query_tax <-
+      dplyr::bind_rows(query_tax_n, query_tax %>%
+                         dplyr::select(all_of(col_new)))
+
+    # sel_query_tax <-
+    #   sel_query_tax %>%
+    #   replace(., is.na(.), -9999)
+
+    sel_query_tax <-
+      sel_query_tax %>%
+      mutate_if(is.numeric,
+                ~ tidyr::replace_na(. , -9999)) %>%
+      mutate_if(is.character,
+                ~ tidyr::replace_na(. , "-9999"))
+
+    print(sel_query_tax)
+
+    comp_vals <-
+      apply(
+        sel_query_tax,
+        MARGIN = 2,
+        FUN = function(x)
+          unique(x[nrow(query_tax_n)]) != x[(nrow(query_tax_n) + 1):length(x)]
+      )
+
+    # comp_vals <-
+    #   apply(sel_query_tax, MARGIN = 2, FUN = function(x) x[1]!=x[2:length(x)])
+
+    if(!is.null(nrow(comp_vals))) {
+
+      query_tax <-
+        query_tax[apply(comp_vals, MARGIN = 1, FUN = function(x) any(x)),]
+      modif_types <- modif_types[apply(comp_vals, MARGIN = 1, FUN = function(x) any(x))]
+      comp_vals <-
+        apply(comp_vals, MARGIN = 2, FUN = function(x) any(x))
+
+    } else {
+
+      query_tax <- query_tax
+
+    }
+
+    if(any(is.na(comp_vals)))
+      comp_vals <-
+      comp_vals[!is.na(comp_vals)]
+
+    modif_types[1:length(modif_types)] <-
+      paste0(modif_types, rep(paste(names(comp_vals)[comp_vals], sep=", "), length(modif_types)), collapse ="__")
+
+  } else {
+
+    comp_vals <- TRUE
+
+  }
+
+  new_id_diconame_good <- NULL
+  if (nrow_query & cancel_synonymy) {
+    if (query_tax$idtax_good_n == query_tax$idtax_n) {
+
+      cli::cli_alert_info("This taxa is not considered as synonym. No modification is thus done on its synonymy")
+      comp_vals <- FALSE
+
+    }else{
+
+      new_id_diconame_good <- NA
+
+      modif_types[1:length(modif_types)] <-
+        paste(modif_types, "cancel_synonymy", sep="__")
+
+    }
+
+  }
+
+  Q.syn2 <- FALSE
+  if(nrow_query & !is.null(synonym_of)) {
+    Q.syn <- TRUE
+
+    ## checking if taxa selected is already a synonym of another taxa
+    if(!is.na(query_tax$idtax_good_n)) {
+
+      if(query_tax$idtax_good_n != query_tax$idtax_n) {
+
+        query_taxa(ids = query_tax$idtax_good_n)
+        Q.syn <-
+          utils::askYesNo("Taxa selected is already a synonym of this taxa. Are you sure you want to modify this?", default = FALSE)
+      }
+    }
+
+    if (Q.syn) {
+
+      ## checking if others names are pointing to the selected taxa as synonyms
+      syn_of_new_syn <-
+        tbl(mydb_taxa, "table_taxa") %>%
+        filter(idtax_good_n == !!query_tax$idtax_n) %>%
+        collect()
+
+      if(nrow(syn_of_new_syn) > 0) {
+
+        cli::cli_alert_info("Some names are considered synonyms of the selected taxa:")
+
+        print(syn_of_new_syn %>%
+                dplyr::select(tax_fam, tax_gen, tax_esp, tax_rank01, tax_nam01, idtax_n, idtax_good_n))
+
+        Q.syn2 <-
+          utils::askYesNo("Do you confirm to also modify the synonymies of these selected names?", default = FALSE)
+
+        if(Q.syn2)
+          ids_others_names_synonyms <-
+          syn_of_new_syn$idtax_n
+
+      }
+
+      # if(Q.syn2) {
+
+      if (!any(names(synonym_of) == "genus"))
+        synonym_of$genus <- NULL
+      if (!any(names(synonym_of) == "species"))
+        synonym_of$species <- NULL
+      if (!any(names(synonym_of) == "id"))
+        synonym_of$id <- NULL
+
+      new_syn <-
+        query_taxa(genus = synonym_of$genus, species = synonym_of$species,
+                   ids =  synonym_of$id, check_synonymy = F)
+
+      if (nrow(new_syn) == 0) {
+
+        cli::cli_alert_warning("No taxa found for new synonymy. Select one.")
+        Q.syn <- FALSE
+
+      }
+
+      if(nrow(new_syn) > 1) {
+
+        cli::cli_alert_warning("More than one taxa found for new synonymy. Select only one.")
+        Q.syn <- FALSE
+
+      }
+
+      if(nrow(new_syn) == 1) {
+
+        cli::cli_h1("Synonym of:")
+        print(new_syn %>% as.data.frame())
+
+        new_id_diconame_good <- new_syn$idtax_n
+
+        modif_types[1:length(modif_types)] <-
+          paste(modif_types, "new_synonymy", sep="__")
+
+
+        # if (is.na(new_syn$a_habit) & !is.na(query_tax$a_habit)) {
+        #   cli::cli_alert_info(
+        #     cli::bg_magenta(
+        #       "habit empty for new good name and not empty for synonym : {query_tax$a_habit}"
+        #     )
+        #   )
+        #
+        #   up_habit <-
+        #     utils::askYesNo(msg = "Update the new correct name with this habit?")
+        #
+        #   if (up_habit) {
+        #     update_dico_name(
+        #       id_searched = new_syn$idtax_n,
+        #       new_habit = query_tax$a_habit,
+        #       ask_before_update = F
+        #     )
+        #
+        #   }
+        #
+        # }
+
+
+
+      }
+
+      # }
+    }
+
+  } else {
+
+    Q.syn <- TRUE
+
+  }
+
+  # if(!any(comp_vals)) stop("No update performed because no values are different.")
+
+  if(any(comp_vals) & Q.syn & nrow_query) {
+
+    cat(paste("\n Number of rows selected to be updated :", nrow(query_tax), "\n"))
+
+    if(ask_before_update) {
+
+      Q <-
+        utils::askYesNo(msg = "Do you confirm you want to update these rows for selected fields?", default = FALSE)
+
+    } else{
+
+      Q <- TRUE
+
+    }
+
+    if(Q) {
+
+      if(add_backup) {
+
+        query_tax <-
+          query_tax %>%
+          mutate(date_modified = Sys.Date()) %>%
+          mutate(modif_type = modif_types) %>%
+          dplyr::select(-tax_sp_level, -tax_infra_level, -tax_infra_level_auth)
+
+        DBI::dbWriteTable(mydb_taxa, "followup_updates_table_taxa",
+                          query_tax, append = TRUE, row.names = FALSE)
+
+        if(Q.syn2) {
+          syn_of_new_syn <-
+            syn_of_new_syn %>%
+            mutate(date_modified = Sys.Date()) %>%
+            mutate(modif_type = modif_types)
+
+          DBI::dbWriteTable(mydb_taxa, "followup_updates_table_taxa",
+                            syn_of_new_syn, append = TRUE, row.names = FALSE)
+
+
+        }
+      }
+
+      rs <-
+        DBI::dbSendQuery(mydb_taxa, statement="UPDATE table_taxa SET tax_fam=$2, tax_gen=$3, tax_esp=$4, tax_order=$5, idtax_good_n=$6, tax_rank01=$7, tax_nam01=$8, introduced_status=$9, id_tax_famclass=$10, tax_rank=$11, tax_rankesp=$12 WHERE idtax_n = $1",
+                         params= list(query_tax$idtax_n, # $1
+                                      rep(ifelse(!is.null(new_tax_fam), new_tax_fam, query_tax$tax_fam), nrow(query_tax)), # $2
+                                      rep(ifelse(!is.null(new_tax_gen), new_tax_gen, query_tax$tax_gen), nrow(query_tax)), # $3
+                                      rep(ifelse(!is.null(new_tax_esp), new_tax_esp, query_tax$tax_esp), nrow(query_tax)), # $4
+                                      rep(ifelse(!is.null(new_tax_order), new_tax_order, query_tax$tax_order), nrow(query_tax)), # $5
+                                      rep(ifelse(!is.null(new_id_diconame_good), new_id_diconame_good, query_tax$idtax_good_n), nrow(query_tax)), # $6
+                                      rep(ifelse(!is.null(new_tax_rank1), new_tax_rank1, query_tax$tax_rank01), nrow(query_tax)), # $7
+                                      rep(ifelse(!is.null(new_tax_name1), new_tax_name1, query_tax$tax_nam01), nrow(query_tax)), # $8
+                                      rep(ifelse(!is.null(new_introduced_status), as.character(new_introduced_status), query_tax$introduced_status), nrow(query_tax)), # $9
+                                      rep(ifelse(!is.null(new_id_tax_famclass), new_id_tax_famclass, query_tax$id_tax_famclass), nrow(query_tax)), # $10
+                                      rep(ifelse(!is.null(new_tax_rank), new_tax_rank, query_tax$tax_rank), nrow(query_tax)), # $11
+                                      # rep(ifelse(!is.null(new_habit), new_habit, query_tax$a_habit), nrow(query_tax)),  # $12
+                                      rep(ifelse(!is.null(new_tax_rankesp), new_tax_rankesp, query_tax$tax_rankesp), nrow(query_tax))))  # $12
+
+      DBI::dbClearResult(rs)
+
+      rs <-
+        DBI::dbSendQuery(mydb_taxa, statement="SELECT *FROM table_taxa WHERE idtax_n = $1",
+                         params=list(query_tax$idtax_n))
+      if(show_results) print(DBI::dbFetch(rs))
+      DBI::dbClearResult(rs)
+
+
+      if(Q.syn2) {
+        message("\n updating synonymies for others taxa")
+        rs <-
+          DBI::dbSendQuery(mydb_taxa, statement="UPDATE table_taxa SET idtax_good_n=$2 WHERE idtax_n = $1",
+                           params= list(ids_others_names_synonyms, # $1
+                                        rep(ifelse(!is.null(new_id_diconame_good),
+                                                   new_id_diconame_good, syn_of_new_syn$idtax_good_n),
+                                            nrow(syn_of_new_syn)) # $2
+                           ))
+
+        DBI::dbClearResult(rs)
+
+        rs <-
+          DBI::dbSendQuery(mydb_taxa, statement="SELECT *FROM table_taxa WHERE idtax_n = $1",
+                           params=list(ids_others_names_synonyms))
+        if(show_results) print(DBI::dbFetch(rs))
+        DBI::dbClearResult(rs)
+
+
+      }
+
+
+    }
+
+  }else{
+
+    cli::cli_h2("No update")
+
+    if(nrow(query_tax)==0) cli::cli_alert_warning("No update because no taxa found.")
+
+    if(!any(comp_vals)) cli::cli_alert_warning("No update performed because no values are different.")
+
+    if(!Q.syn) cli::cli_alert_warning("No update because new synonymy not correctly defined.")
+
+    if(!nrow_query) cli::cli_alert_warning("No updates because none taxa were found based on query parameters (genus/species/family/id)")
+
+  }
+
+}
+
+
+
+
+
+
+#' Update diconame data based on id of taxa
+#'
+#' Update diconame _ one or more entry at a time
+#'
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @param new_data tibble
+#' @param col_names_select vector string of new_data to be used for update
+#' @param col_names_corresp vector string of corresponding fields to update
+#' @param id_col integer indicate which name of col_names_select is the id for matching data
+#' @param launch_update logical if TRUE updates are performed
+#' @param add_backup logical whether backup of modified data should be recorded
+#'
+#'
+#' @return No return value individuals updated
+#' @export
+update_dico_name_batch <- function(new_data,
+                                   col_names_select,
+                                   col_names_corresp,
+                                   id_col,
+                                   launch_update = FALSE,
+                                   add_backup = TRUE,
+                                   ask_before_update = FALSE,
+                                   only_new_ident = FALSE) {
+
+  if (exists("mydb_taxa")) rm(mydb_taxa)
+  if (!exists("mydb_taxa")) call.mydb.taxa()
+
+  all_colnames_tx <-
+    try_open_postgres_table(table = "table_taxa", con = mydb_taxa) %>%
+    colnames()
+
+  if (length(col_names_select) != length(col_names_corresp))
+    stop("col_names_select and col_names_corresp should have same length")
+
+  for (i in 1:length(col_names_select))
+    if(!any(col_names_select[i] == colnames(new_data)))
+      stop(paste(col_names_select[i], "not found in new_data"))
+
+  for (i in 1:length(col_names_corresp))
+    if(!any(col_names_corresp[i] == all_colnames_tx))
+      stop(paste(col_names_corresp[i], "not found in table_taxa"))
+
+  id_db <- col_names_corresp[id_col]
+
+  if(!any(id_db == c("idtax_n")))
+    stop("id for matching should be idtax_n")
+
+  new_data_renamed <-
+    .rename_data(dataset = new_data,
+                 col_old = col_names_select,
+                 col_new = col_names_corresp)
+
+  output_matches <-
+    .find_ids(
+      dataset = new_data_renamed,
+      col_new = col_names_corresp,
+      id_col_nbr = id_col,
+      type_data = "taxa"
+    )
+
+  matches_all <-
+    output_matches[[2]]
+
+  if(ask_before_update) {
+
+    confirm <-
+      askYesNo(msg = 'Confirm update ?')
+
+    print(confirm)
+
+  }else{
+
+    confirm <- TRUE
+
+  }
+
+
+  if(confirm) {
+
+    for (i in 1:length(matches_all)) {
+
+      field <- names(matches_all)[i]
+      var_new <- paste0(field, "_new")
+      matches <- matches_all[[i]]
+
+      if(launch_update & nrow(matches) > 0) {
+
+        matches <-
+          matches %>%
+          dplyr::select(id, dplyr::contains("_new"))
+        matches <-
+          .add_modif_field(matches)
+
+        all_id_match <- dplyr::pull(dplyr::select(matches, id))
+
+        if(add_backup) {
+
+          quo_var_id <- rlang::parse_expr(quo_name(rlang::enquo(id_db)))
+
+          all_rows_to_be_updated <-
+            dplyr::tbl(mydb_taxa, "table_taxa") %>%
+            dplyr::filter(!!quo_var_id %in% all_id_match) %>%
+            dplyr::collect()
+
+          colnames_plots <-
+            dplyr::tbl(mydb_taxa, "followup_updates_table_taxa")  %>%
+            dplyr::select(-date_modified, -modif_type) %>%
+            dplyr::collect() %>%
+            dplyr::top_n(1) %>%
+            colnames()
+
+          all_rows_to_be_updated <-
+            all_rows_to_be_updated %>%
+            dplyr::select(dplyr::one_of(colnames_plots))
+
+          all_rows_to_be_updated <-
+            all_rows_to_be_updated %>%
+            mutate(date_modified = Sys.Date()) %>%
+            mutate::add_column(modif_type = field)
+
+          print(all_rows_to_be_updated %>%
+                  dplyr::select(modif_type, date_modified))
+
+          DBI::dbWriteTable(mydb_taxa, "followup_updates_table_taxa",
+                            all_rows_to_be_updated, append = TRUE, row.names = FALSE)
+        }
+
+        ## create a temporary table with new data
+        DBI::dbWriteTable(mydb_taxa, "temp_table", matches,
+                          overwrite=T, fileEncoding = "UTF-8", row.names=F)
+
+        query_up <-
+          paste0("UPDATE table_taxa t1 SET (", field,", data_modif_d, data_modif_m, data_modif_y) = (t2.", var_new, ", t2.data_modif_d, t2.data_modif_m, t2.data_modif_y) FROM temp_table t2 WHERE t1.",
+                 id_db," = t2.id")
+
+        rs <-
+          DBI::dbSendStatement(mydb_taxa, query_up)
+
+        cat("\nRows updated", RPostgres::dbGetRowsAffected(rs))
+        rs@sql
+        DBI::dbClearResult(rs)
+
+
+      } else {
+
+        if (launch_update & nrow(matches) == 0)
+          cat("\n No new values found")
+
+      }
+    }
+  }
+
+  if(ask_before_update & !confirm)
+    cli::cli_alert_warning('No Update Done')
+
+  return(matches_all)
+
 }
