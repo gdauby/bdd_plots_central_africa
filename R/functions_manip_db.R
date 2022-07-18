@@ -13488,13 +13488,13 @@ query_taxa <-
         traitsqueried <-
           query_traits_measures(idtax = res$idtax_n, idtax_good = res$idtax_good_n)
 
-        if (!any(is.na(traitsqueried$traits_idtax_num)))
+        if (length(traitsqueried$traits_idtax_num) > 1)
           res <-
             res %>%
             left_join(traitsqueried$traits_idtax_num,
                       by = c("idtax_n" = "idtax"))
 
-        if (!any(is.na(traitsqueried$traits_idtax_char)))
+        if (length(traitsqueried$traits_idtax_char) > 1)
           res <-
             res %>%
             left_join(traitsqueried$traits_idtax_char,
