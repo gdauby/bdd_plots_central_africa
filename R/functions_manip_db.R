@@ -13081,7 +13081,7 @@ query_taxa <-
     extract_traits = TRUE
   ) {
 
-    if(!exists("mydb")) call.mydb()
+    # if(!exists("mydb")) call.mydb()
 
     if(!exists("mydb_taxa")) call.mydb.taxa(pass = "Anyuser2022", user = "common")
 
