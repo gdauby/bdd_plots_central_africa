@@ -1401,6 +1401,7 @@ call.mydb <- function(pass=NULL, user=NULL, offline = FALSE) {
 #' @return The database is loaded
 #'
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @export
 call.mydb.taxa <- function(pass=NULL, user=NULL) {
 
   if(!exists("mydb_taxa")) {
