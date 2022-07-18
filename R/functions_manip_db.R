@@ -7373,420 +7373,22 @@ get_updates_diconame <- function(id = NULL,
 }
 
 
-#' Add new entry to taxonomic table
-#'
-#' Add new entry to taxonomic table
-#'
-#'
-#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
-#'
-#' @param tax_gen string genus name
-#' @param tax_esp string species name
-#' @param tax_fam string family name
-#' @param tax_rank1 string tax_rank1 name
-#' @param tax_name1 string tax_name1 name
-#' @param detvalue integer detvalue code
-#' @param morphocat integer morphocat code
-#' @param full_name string full name : genus + species + authors
-#' @param synonym_of list if the new entry should be put in synonymy with an existing taxa, add in a list at least one values to identify to which taxa it will be put in synonymy: genus, species or id
-#'
-#'
-#' @return A tibble
-#' @export
-add_entry_dico_name <- function(tax_gen = NULL,
-                                tax_esp = NULL,
-                                tax_fam = NULL,
-                                full_name = NULL,
-                                tax_rank1 = NULL,
-                                tax_name1 = NULL,
-                                synonym_of = NULL,
-                                detvalue = NULL,
-                                morphocat = NULL) {
 
-  if(!exists("mydb")) call.mydb()
-
-  if(is.null(full_name) & !is.null(tax_esp)) stop("Provide full name with authors")
-
-  if(is.null(tax_gen) & is.null(tax_esp) & is.null(tax_fam)) stop("Provide at least one genus/family/ new name to enter")
-
-  if(!is.null(tax_fam) & is.null(full_name) & is.null(tax_gen)) {
-    full_name <- tax_fam
-  }
-
-  if(is.null(detvalue)) {
-    if(is.null(tax_esp) & !is.null(tax_gen)) detvalue <- 6
-    if(is.null(tax_esp) & is.null(tax_gen)) detvalue <- 7
-
-    if(!is.null(tax_esp) & !is.null(tax_gen)) detvalue <- 1
-
-    cat(paste("\n No detvalue provided, by default, the following value is given:", detvalue))
-  }
-
-  if(is.null(morphocat)) {
-    if(is.null(tax_esp) & !is.null(tax_gen)) morphocat <- 3
-    if(is.null(tax_esp) & is.null(tax_gen)) morphocat <- 3
-
-    if(!is.null(tax_esp) & !is.null(tax_gen)) morphocat <- 1
-
-    cat(paste("\n No morphocat provided, by default, the following value is given:", morphocat))
-  }
-
-  check_taxo <- TRUE
-
-  if(is.null(tax_fam) & !is.null(tax_gen)) {
-    tax_fam <-
-      query_tax_all(genus_searched = tax_gen)  %>%
-      dplyr::distinct(tax_fam) %>%
-      dplyr::pull()
-    tax_fam <- tax_fam[which(!is.na(tax_fam))]
-    if(length(tax_fam)>1) cat(paste("\n No tax_fam provided, and two different family names for this genus", paste0(tax_fam, sep=", ")))
-    if(length(tax_fam)>1) check_taxo <- FALSE
-    if(length(tax_fam)==1) cat(paste("\n No tax_fam provided, based on genus, the following family is chosen:", tax_fam))
-  }
-
-  # if(is.null(tax_order) & !is.null(tax_fam)) {
-  #   tax_order <-
-  #     query_tax_all(tax_fam_searched = tax_fam) %>%
-  #   # , verbose = F, exact_match = T,
-  #   #              class = NULL, check_synonymy = FALSE)
-  #     dplyr::distinct(tax_order) %>%
-  #     dplyr::pull()
-  #   tax_order <- tax_order[which(!is.na(tax_order))]
-  #   if(length(tax_order)>1)
-  #     cat(paste("\n No tax_order provided, and two different order names for this family", paste0(tax_order, sep=", ")))
-  #   if(length(tax_order)>1) check_taxo <- FALSE
-  #   if(length(tax_order)==1)
-  #     cat(paste("\n No tax_order provided, based on family, the following order is chosen:", tax_order))
-  # }
-
-  # if(is.null(tax_famclass) & !is.null(tax_order)) {
-  #   tax_famclass <-
-  #     query_taxa(order = tax_order, verbose = F, exact_match = T,
-  #                class = NULL, check_synonymy = FALSE) %>%
-  #     dplyr::distinct(tax_famclass) %>%
-  #     dplyr::pull()
-  #   tax_famclass <- tax_famclass[which(!is.na(tax_famclass))]
-  #   if(length(tax_famclass)>1)
-  #     cat(paste("\n No tax_famclass provided, and two different class names for this order",
-  #               paste0(tax_famclass, sep=", ")))
-  #   if(length(tax_famclass)>1) check_taxo <- FALSE
-  #   if(length(tax_famclass)==1)
-  #     cat(paste("\n No tax_famclass provided, based on order, the following class is chosen:", tax_famclass))
-  # }
-
-  tax_fam_new <- TRUE
-  if(!is.null(tax_fam) & check_taxo) {
-    searched_tax_fam <-
-      dplyr::tbl(mydb, "diconame") %>%
-      dplyr::distinct(tax_fam) %>%
-      dplyr::filter(tax_fam == !!tax_fam) %>%
-      dplyr::collect()
-    if(nrow(searched_tax_fam)==0) {
-      tax_fam_new <-
-        utils::askYesNo(msg = "The provided family name is currently not present in the dictionnary. Are you sure it is correctly spelled?", default = FALSE)
-    }
-  }
-
-
-  if(!is.null(full_name) & !is.null(tax_gen)) {
-    if(!grepl(tax_gen, full_name)) stop("\n Genus and full_name are provided, but genus is not found within full name, there must be an ERROR")
-  }
-
-  if(!is.null(full_name) & !is.null(tax_esp)) {
-    if(!grepl(tax_esp, full_name)) stop("\n Species and full_name are provided, but tax_esp is not found within full_name, there must be an ERROR")
-  }
-
-  if(is.null(tax_gen) & !is.null(tax_esp)) {
-    stop("\n species epithet provided but no genus (provide tax_gen)")
-  }
-
-  if(!is.null(tax_gen)) {
-
-    family_check <-
-      query_tax_all(tax_fam_searched = tax_fam)
-    # exact_match = T, verbose = F, class = NULL, check_synonymy = FALSE)
-
-    genus_check <-
-      query_tax_all(genus_searched = tax_gen)
-    # exact_match = T,
-    # verbose = F,
-    # class = NULL,
-    # check_synonymy = FALSE)
-
-    if(!is.null(genus_check)) {
-      if(nrow(genus_check) > 0 & !any(family_check$tax_gen %in% tax_gen)) {
-        cat(paste("\n The provided genus is present in the taxonomic backbone, but with different family name:", genus_check$tax_fam[1]))
-        check_taxo <- FALSE
-      }
-    }
-  }
-
-  # tbl(mydb, "diconame") %>% collect() %>% slice(n())
-
-  if(check_taxo & tax_fam_new) {
-
-    if(!is.null(tax_gen) & !is.null(tax_esp)) paste_taxa <- paste(tax_gen, tax_esp)
-    if(!is.null(tax_gen) & is.null(tax_esp)) paste_taxa <- tax_gen
-    if(!is.null(tax_fam) & is.null(tax_gen)) paste_taxa <- tax_fam
-    if(is.null(full_name) & !is.null(tax_gen) & is.null(tax_esp)) full_name <- tax_gen
-
-    if(is.null(tax_esp)) tax_esp <- NA
-    if(is.null(tax_gen)) tax_gen <- NA
-    if(is.null(tax_fam)) tax_fam <- NA
-    if(is.null(tax_rank1)) tax_rank1 <- NA
-    if(is.null(tax_name1)) tax_name1 <- NA
-    # if(is.null(tax_rank2)) tax_rank2 <- NA
-    # if(is.null(tax_name2)) tax_name2 <- NA
-
-    # tax_rank <- NA
-    # if(!is.na(tax_esp) & is.na(tax_name1) & is.na(tax_name1))
-    #   tax_rank <- "ESP"
-    # if(is.na(tax_esp) & is.na(tax_name1) & is.na(tax_name2))
-    #   tax_rank <- NA
-    # if(!is.na(tax_esp) & !is.na(tax_rank1)) {
-    #   if(tax_rank1=="subsp.") tax_rank <- "SUBSP"
-    #   if(tax_rank1=="var.") tax_rank <- "VAR"
-    #   if(tax_rank1=="f.") tax_rank <- "F"
-    # }
-    #
-    # if(!is.na(tax_rank)) {
-    #   if(tax_rank=="VAR") tax_rankinf <- "VAR"
-    #   if(tax_rank=="SUBSP") tax_rankinf <- "SUBSP"
-    # }
-    # if(!is.na(tax_fam) & is.na(tax_gen) & is.na(tax_esp)) tax_rankinf <- "FAM"
-    # if(!is.na(tax_fam) & !is.na(tax_gen) & is.na(tax_esp)) tax_rankinf <- "GEN"
-    # if(!is.na(tax_fam) & !is.na(tax_gen) & !is.na(tax_esp) & is.na(tax_rank))
-    #   tax_rankinf <- "ESP"
-    # if(!is.na(tax_fam) & !is.na(tax_gen) & !is.na(tax_esp) & tax_rank=="ESP")
-    #   tax_rankinf <- "ESP"
-    #
-    # if(!is.na(tax_order) & is.na(tax_fam) & is.na(tax_gen) & is.na(tax_esp)) tax_rankesp <- "ORDER"
-    # if(!is.null(tax_famclass) & is.na(tax_order) & is.na(tax_fam) & is.na(tax_gen) & is.na(tax_esp)) tax_rankesp <- "CLASS"
-    # if(!is.na(tax_fam) & is.na(tax_gen) & is.na(tax_esp)) tax_rankesp <- "FAM"
-    # if(!is.na(tax_fam) & !is.na(tax_gen) & is.na(tax_esp)) tax_rankesp <- "GEN"
-    # if(!is.na(tax_fam) & !is.na(tax_gen) & !is.na(tax_esp))
-    #   tax_rankesp <- "ESP"
-
-    if (!is.na(tax_gen) &
-        !is.na(tax_esp))
-      paste_taxa <- paste(tax_gen, tax_esp)
-    if (!is.na(tax_gen) &
-        is.na(tax_esp))
-      paste_taxa <- tax_gen
-    if (!is.na(tax_fam) &
-        is.na(tax_gen))
-      paste_taxa <- tax_fam
-
-    new_rec <-
-      dplyr::tibble(
-        tax_fam = tax_fam,
-        tax_gen = tax_gen,
-        tax_esp = tax_esp,
-        tax_rank1 = tax_rank1,
-        tax_name1 = tax_name1,
-        detvalue = detvalue,
-        morphocat = morphocat,
-        full_name_no_auth = paste_taxa,
-        full_name_used = paste_taxa,
-        full_name_used2 = paste_taxa,
-        # tax_rank02 = tax_rank2,
-        # tax_nam02 = tax_name2,
-        full_name = full_name,
-        id_good = NA,
-        id = NA
-      ) %>%
-      dplyr::mutate(id_good = as.numeric(id_good))
-
-    seek_dup <-
-      tbl(mydb, "diconame")
-
-
-    # if(!is.na(new_rec$tax_order)) {
-    #   seek_dup <- seek_dup %>%
-    #     filter(tax_order == !!new_rec$tax_order)
-    # }else{
-    #   seek_dup <- seek_dup %>%
-    #     filter(is.na(tax_order))
-    # }
-
-    if(!is.na(new_rec$tax_fam)) {
-      seek_dup <- seek_dup %>%
-        filter(tax_fam == !!new_rec$tax_fam)
-    }else{
-      seek_dup <- seek_dup %>%
-        filter(is.na(tax_fam))
-    }
-
-    if(!is.na(new_rec$tax_gen)) {
-      seek_dup <- seek_dup %>%
-        filter(tax_gen == !!new_rec$tax_gen)
-    }else{
-      seek_dup <- seek_dup %>%
-        filter(is.na(tax_gen))
-    }
-
-    if(!is.na(new_rec$tax_esp)) {
-      seek_dup <- seek_dup %>%
-        filter(tax_esp == !!new_rec$tax_esp)
-    }else{
-      seek_dup <- seek_dup %>%
-        filter(is.na(tax_esp))
-    }
-
-    if(!is.na(new_rec$tax_rank1)) {
-      seek_dup <- seek_dup %>%
-        filter(tax_rank1 == !!new_rec$tax_rank1)
-    }else{
-      seek_dup <- seek_dup %>%
-        filter(is.na(tax_rank1))
-    }
-
-    if(!is.na(new_rec$tax_name1)) {
-      seek_dup <- seek_dup %>%
-        filter(tax_name1 == !!new_rec$tax_name1)
-    }else{
-      seek_dup <- seek_dup %>%
-        filter(is.na(tax_name1))
-    }
-
-    # if(!is.na(new_rec$tax_nam02)) {
-    #   seek_dup <- seek_dup %>%
-    #     filter(tax_nam02 == !!new_rec$tax_nam02)
-    # }else{
-    #   seek_dup <- seek_dup %>%
-    #     filter(is.na(tax_nam02))
-    # }
-
-    seek_dup <-
-      seek_dup %>%
-      collect()
-
-    launch_adding_data <- TRUE
-
-    if (nrow(seek_dup) > 0) {
-
-      cli::cli_alert_info("New entry fit to one entry already in table_taxa")
-      print(as.data.frame(seek_dup))
-      launch_adding_data <- FALSE
-
-    }
-
-    if(launch_adding_data) {
-
-      new_rec <-
-        new_rec %>%
-        tibble::add_column(data_modif_d = lubridate::day(Sys.Date()),
-                           data_modif_m = lubridate::month(Sys.Date()),
-                           data_modif_y = lubridate::year(Sys.Date()))
-
-      cli::cli_alert_info("Adding new entry")
-      DBI::dbWriteTable(mydb, "diconame", new_rec, append = TRUE, row.names = FALSE)
-
-      new_entry <-
-        dplyr::tbl(mydb, "diconame") %>%
-        dplyr::filter(full_name == !!new_rec$full_name,
-                      data_modif_d == !!lubridate::day(Sys.Date()),
-                      data_modif_m == !!lubridate::month(Sys.Date()),
-                      data_modif_y == !!lubridate::year(Sys.Date())) %>%
-        dplyr::collect()
-
-      if(!is.null(synonym_of)) {
-
-        if (!is.list(synonym_of)) {
-          stop(
-            "synonym_of should be a list with the first element \nbeing the genus and the second element the species epiteth of the taxa of the correct name \nOR the idtax_n"
-          )
-        }
-
-        if (!any(names(synonym_of) == "genus") &
-            !any(names(synonym_of) == "species") &
-            !any(names(synonym_of) == "id"))
-          stop("synonym_of should have at least of the thre following element : genus, species or idtax_n")
-
-        if (!any(names(synonym_of) == "genus"))
-          synonym_of$genus <- NULL
-        if (!any(names(synonym_of) == "species"))
-          synonym_of$species <- NULL
-        if (!any(names(synonym_of) == "id"))
-          synonym_of$id <- NULL
-
-        syn_searched <-
-          query_tax_all(genus_searched = synonym_of$genus,
-                        tax_esp_searched = synonym_of$species,
-                        id_search = synonym_of$id)
-
-        print(syn_searched)
-        if (nrow(syn_searched) > 1)
-          stop("More than 1 taxa as synonym. Select only one.")
-        if (nrow(syn_searched) == 0)
-          stop("No taxa found in the dictionnary. Select one.")
-
-
-        update_dico_name(new_id_diconame_good = syn_searched$id_good_n,
-                         id_search = new_entry$id_n,
-                         ask_before_update = FALSE,
-                         add_backup = FALSE)
-        # update_dico_name(
-        #   new_id_diconame_good = syn_searched$idtax_good_n,
-        #   id_search = new_entry$idtax_n,
-        #   ask_before_update = FALSE,
-        #   add_backup = FALSE,
-        #   show_results = FALSE
-        # )
-
-      }else{
-
-        rs <-
-          DBI::dbSendQuery(mydb, statement="UPDATE diconame SET id_good_n=$2 WHERE id_n = $1",
-                           params=list(new_entry$id_n, new_entry$id_n)) # $10
-
-        DBI::dbClearResult(rs)
-
-      }
-
-      # print(dplyr::tbl(mydb, "table_taxa") %>%
-      #         dplyr::collect() %>%
-      #         dplyr::filter(idtax_n == max(idtax_n)))
-
-      res_selected <- dplyr::tbl(mydb, "diconame") %>%
-        dplyr::filter(id_n == !!new_entry$id_n) %>%
-        collect()
-
-      res_selected <- as_tibble(cbind(
-        columns = names(res_selected),
-        record = t(res_selected)
-      )) %>%
-        kableExtra::kable(format = "html", escape = F) %>%
-        kableExtra::kable_styling("striped", full_width = F)
-
-      print(res_selected)
-
-    }
-
-  }else{
-
-    cat("\n NO ADDED ENTRY")
-
-  }
-}
-
-
-
-# add_entry_dico_name <- function(tax_gen=NULL,
+# add_entry_dico_name <- function(tax_gen = NULL,
 #                                 tax_esp = NULL,
 #                                 tax_fam = NULL,
+#                                 full_name = NULL,
 #                                 tax_rank1 = NULL,
 #                                 tax_name1 = NULL,
+#                                 synonym_of = NULL,
 #                                 detvalue = NULL,
-#                                 morphocat = NULL,
-#                                 full_name = NULL,
-#                                 synonym_of = NULL) {
+#                                 morphocat = NULL) {
 #
 #   if(!exists("mydb")) call.mydb()
 #
 #   if(is.null(full_name) & !is.null(tax_esp)) stop("Provide full name with authors")
 #
-#   if(is.null(tax_gen) & is.null(tax_esp) & is.null(tax_fam)) stop("Provide at least one genus/family new name to enter")
+#   if(is.null(tax_gen) & is.null(tax_esp) & is.null(tax_fam)) stop("Provide at least one genus/family/ new name to enter")
 #
 #   if(!is.null(tax_fam) & is.null(full_name) & is.null(tax_gen)) {
 #     full_name <- tax_fam
@@ -7812,55 +7414,98 @@ add_entry_dico_name <- function(tax_gen = NULL,
 #
 #   check_taxo <- TRUE
 #
-#   if(is.null(tax_fam)) {
-#     tax_fam <- query_tax_all(genus_searched = tax_gen) %>% dplyr::distinct(tax_fam) %>% dplyr::pull()
+#   if(is.null(tax_fam) & !is.null(tax_gen)) {
+#     tax_fam <-
+#       query_tax_all(genus_searched = tax_gen)  %>%
+#       dplyr::distinct(tax_fam) %>%
+#       dplyr::pull()
 #     tax_fam <- tax_fam[which(!is.na(tax_fam))]
 #     if(length(tax_fam)>1) cat(paste("\n No tax_fam provided, and two different family names for this genus", paste0(tax_fam, sep=", ")))
 #     if(length(tax_fam)>1) check_taxo <- FALSE
 #     if(length(tax_fam)==1) cat(paste("\n No tax_fam provided, based on genus, the following family is chosen:", tax_fam))
 #   }
 #
+#   # if(is.null(tax_order) & !is.null(tax_fam)) {
+#   #   tax_order <-
+#   #     query_tax_all(tax_fam_searched = tax_fam) %>%
+#   #   # , verbose = F, exact_match = T,
+#   #   #              class = NULL, check_synonymy = FALSE)
+#   #     dplyr::distinct(tax_order) %>%
+#   #     dplyr::pull()
+#   #   tax_order <- tax_order[which(!is.na(tax_order))]
+#   #   if(length(tax_order)>1)
+#   #     cat(paste("\n No tax_order provided, and two different order names for this family", paste0(tax_order, sep=", ")))
+#   #   if(length(tax_order)>1) check_taxo <- FALSE
+#   #   if(length(tax_order)==1)
+#   #     cat(paste("\n No tax_order provided, based on family, the following order is chosen:", tax_order))
+#   # }
+#
+#   # if(is.null(tax_famclass) & !is.null(tax_order)) {
+#   #   tax_famclass <-
+#   #     query_taxa(order = tax_order, verbose = F, exact_match = T,
+#   #                class = NULL, check_synonymy = FALSE) %>%
+#   #     dplyr::distinct(tax_famclass) %>%
+#   #     dplyr::pull()
+#   #   tax_famclass <- tax_famclass[which(!is.na(tax_famclass))]
+#   #   if(length(tax_famclass)>1)
+#   #     cat(paste("\n No tax_famclass provided, and two different class names for this order",
+#   #               paste0(tax_famclass, sep=", ")))
+#   #   if(length(tax_famclass)>1) check_taxo <- FALSE
+#   #   if(length(tax_famclass)==1)
+#   #     cat(paste("\n No tax_famclass provided, based on order, the following class is chosen:", tax_famclass))
+#   # }
+#
 #   tax_fam_new <- TRUE
-#   if(!is.null(tax_fam)) {
+#   if(!is.null(tax_fam) & check_taxo) {
 #     searched_tax_fam <-
-#       dplyr::tbl(mydb, "diconame") %>% dplyr::distinct(tax_fam) %>% dplyr::filter(tax_fam==!!tax_fam) %>% dplyr::collect()
+#       dplyr::tbl(mydb, "diconame") %>%
+#       dplyr::distinct(tax_fam) %>%
+#       dplyr::filter(tax_fam == !!tax_fam) %>%
+#       dplyr::collect()
 #     if(nrow(searched_tax_fam)==0) {
 #       tax_fam_new <-
 #         utils::askYesNo(msg = "The provided family name is currently not present in the dictionnary. Are you sure it is correctly spelled?", default = FALSE)
 #     }
 #   }
 #
+#
 #   if(!is.null(full_name) & !is.null(tax_gen)) {
-#     if(!grepl(tax_gen, full_name)) stop("\n Genus and full name are provided, but genus is not found within full name, there must be an ERROR")
+#     if(!grepl(tax_gen, full_name)) stop("\n Genus and full_name are provided, but genus is not found within full name, there must be an ERROR")
 #   }
 #
 #   if(!is.null(full_name) & !is.null(tax_esp)) {
-#     if(!grepl(tax_esp, full_name)) stop("\n Species and full name are provided, but Species is not found within full name, there must be an ERROR")
+#     if(!grepl(tax_esp, full_name)) stop("\n Species and full_name are provided, but tax_esp is not found within full_name, there must be an ERROR")
 #   }
 #
 #   if(is.null(tax_gen) & !is.null(tax_esp)) {
-#     stop("\n Genus provided but no species epithet (provide tax_gen)")
+#     stop("\n species epithet provided but no genus (provide tax_gen)")
 #   }
 #
 #   if(!is.null(tax_gen)) {
 #
 #     family_check <-
 #       query_tax_all(tax_fam_searched = tax_fam)
+#     # exact_match = T, verbose = F, class = NULL, check_synonymy = FALSE)
 #
 #     genus_check <-
-#       query_tax_all(genus_searched =  tax_gen)
+#       query_tax_all(genus_searched = tax_gen)
+#     # exact_match = T,
+#     # verbose = F,
+#     # class = NULL,
+#     # check_synonymy = FALSE)
 #
-#     if (nrow(genus_check) > 0 & !any(family_check$tax_gen %in% tax_gen)) {
-#
-#       cat(paste("\n The provided genus is present in the dictionnary, but with different family name:", genus_check$tax_fam[1]))
-#       check_taxo <- FALSE
-#
+#     if(!is.null(genus_check)) {
+#       if(nrow(genus_check) > 0 & !any(family_check$tax_gen %in% tax_gen)) {
+#         cat(paste("\n The provided genus is present in the taxonomic backbone, but with different family name:", genus_check$tax_fam[1]))
+#         check_taxo <- FALSE
+#       }
 #     }
 #   }
 #
 #   # tbl(mydb, "diconame") %>% collect() %>% slice(n())
 #
 #   if(check_taxo & tax_fam_new) {
+#
 #     if(!is.null(tax_gen) & !is.null(tax_esp)) paste_taxa <- paste(tax_gen, tax_esp)
 #     if(!is.null(tax_gen) & is.null(tax_esp)) paste_taxa <- tax_gen
 #     if(!is.null(tax_fam) & is.null(tax_gen)) paste_taxa <- tax_fam
@@ -7868,63 +7513,243 @@ add_entry_dico_name <- function(tax_gen = NULL,
 #
 #     if(is.null(tax_esp)) tax_esp <- NA
 #     if(is.null(tax_gen)) tax_gen <- NA
+#     if(is.null(tax_fam)) tax_fam <- NA
 #     if(is.null(tax_rank1)) tax_rank1 <- NA
 #     if(is.null(tax_name1)) tax_name1 <- NA
+#     # if(is.null(tax_rank2)) tax_rank2 <- NA
+#     # if(is.null(tax_name2)) tax_name2 <- NA
 #
-#     new_rec <- dplyr::tibble(id=0, id_good=0, full_name=full_name, full_name_no_auth=paste_taxa, full_name_used=paste_taxa,
-#                       full_name_used2=paste_taxa, tax_fam=tax_fam, tax_gen=tax_gen, tax_esp=tax_esp, taxook=1, detvalue=detvalue,
-#                       morphocat=morphocat, id_good_n=0, data_modif_d=lubridate::day(Sys.Date()), data_modif_m=lubridate::month(Sys.Date()),
-#                       data_modif_y=lubridate::year(Sys.Date()),
-#                       tax_rank1=tax_rank1, tax_name1=tax_name1)
+#     # tax_rank <- NA
+#     # if(!is.na(tax_esp) & is.na(tax_name1) & is.na(tax_name1))
+#     #   tax_rank <- "ESP"
+#     # if(is.na(tax_esp) & is.na(tax_name1) & is.na(tax_name2))
+#     #   tax_rank <- NA
+#     # if(!is.na(tax_esp) & !is.na(tax_rank1)) {
+#     #   if(tax_rank1=="subsp.") tax_rank <- "SUBSP"
+#     #   if(tax_rank1=="var.") tax_rank <- "VAR"
+#     #   if(tax_rank1=="f.") tax_rank <- "F"
+#     # }
+#     #
+#     # if(!is.na(tax_rank)) {
+#     #   if(tax_rank=="VAR") tax_rankinf <- "VAR"
+#     #   if(tax_rank=="SUBSP") tax_rankinf <- "SUBSP"
+#     # }
+#     # if(!is.na(tax_fam) & is.na(tax_gen) & is.na(tax_esp)) tax_rankinf <- "FAM"
+#     # if(!is.na(tax_fam) & !is.na(tax_gen) & is.na(tax_esp)) tax_rankinf <- "GEN"
+#     # if(!is.na(tax_fam) & !is.na(tax_gen) & !is.na(tax_esp) & is.na(tax_rank))
+#     #   tax_rankinf <- "ESP"
+#     # if(!is.na(tax_fam) & !is.na(tax_gen) & !is.na(tax_esp) & tax_rank=="ESP")
+#     #   tax_rankinf <- "ESP"
+#     #
+#     # if(!is.na(tax_order) & is.na(tax_fam) & is.na(tax_gen) & is.na(tax_esp)) tax_rankesp <- "ORDER"
+#     # if(!is.null(tax_famclass) & is.na(tax_order) & is.na(tax_fam) & is.na(tax_gen) & is.na(tax_esp)) tax_rankesp <- "CLASS"
+#     # if(!is.na(tax_fam) & is.na(tax_gen) & is.na(tax_esp)) tax_rankesp <- "FAM"
+#     # if(!is.na(tax_fam) & !is.na(tax_gen) & is.na(tax_esp)) tax_rankesp <- "GEN"
+#     # if(!is.na(tax_fam) & !is.na(tax_gen) & !is.na(tax_esp))
+#     #   tax_rankesp <- "ESP"
 #
-#     DBI::dbWriteTable(mydb, "diconame", new_rec, append = TRUE, row.names = FALSE)
+#     if (!is.na(tax_gen) &
+#         !is.na(tax_esp))
+#       paste_taxa <- paste(tax_gen, tax_esp)
+#     if (!is.na(tax_gen) &
+#         is.na(tax_esp))
+#       paste_taxa <- tax_gen
+#     if (!is.na(tax_fam) &
+#         is.na(tax_gen))
+#       paste_taxa <- tax_fam
 #
-#     new_entry <-
-#       dplyr::tbl(mydb, "diconame") %>%
-#       dplyr::filter(id_good_n==0, data_modif_d==lubridate::day(Sys.Date()), data_modif_m==lubridate::month(Sys.Date()), data_modif_y==lubridate::year(Sys.Date())) %>%
-#       dplyr::collect()
+#     new_rec <-
+#       dplyr::tibble(
+#         tax_fam = tax_fam,
+#         tax_gen = tax_gen,
+#         tax_esp = tax_esp,
+#         tax_rank1 = tax_rank1,
+#         tax_name1 = tax_name1,
+#         detvalue = detvalue,
+#         morphocat = morphocat,
+#         full_name_no_auth = paste_taxa,
+#         full_name_used = paste_taxa,
+#         full_name_used2 = paste_taxa,
+#         # tax_rank02 = tax_rank2,
+#         # tax_nam02 = tax_name2,
+#         full_name = full_name,
+#         id_good = NA,
+#         id = NA
+#       ) %>%
+#       dplyr::mutate(id_good = as.numeric(id_good))
 #
-#     if(!is.null(synonym_of)) {
+#     seek_dup <-
+#       tbl(mydb, "diconame")
 #
-#       if(!is.list(synonym_of)) {
-#         stop("synonym_of should be a list with the first element \nbeing the genus and the second element the species epiteth of the taxa of the correct name")
-#       }
 #
-#       if(!any(names(synonym_of)=="genus") & !any(names(synonym_of)=="species") & !any(names(synonym_of)=="id"))
-#       stop("synonym_of should have at least of the thre following element : genus, species or id")
+#     # if(!is.na(new_rec$tax_order)) {
+#     #   seek_dup <- seek_dup %>%
+#     #     filter(tax_order == !!new_rec$tax_order)
+#     # }else{
+#     #   seek_dup <- seek_dup %>%
+#     #     filter(is.na(tax_order))
+#     # }
 #
-#       if(!any(names(synonym_of)=="genus")) synonym_of$genus <- NULL
-#       if(!any(names(synonym_of)=="species")) synonym_of$species <- NULL
-#       if(!any(names(synonym_of)=="id")) synonym_of$id <- NULL
-#
-#       syn_searched <-
-#         query_tax_all(genus_searched = synonym_of$genus,
-#                       tax_esp_searched = synonym_of$species,
-#                       id_search = synonym_of$id)
-#
-#       print(syn_searched)
-#       if(nrow(syn_searched)>1) stop("More than 1 taxa as synonym. Select only one.")
-#       if(nrow(syn_searched)==0) stop("No taxa found in the dictionnary. Select one.")
-#
-#       update_dico_name(new_id_diconame_good = syn_searched$id_good_n, id_search = new_entry$id_n,
-#                        ask_before_update = FALSE, add_backup = FALSE, show_results = FALSE)
-#
+#     if(!is.na(new_rec$tax_fam)) {
+#       seek_dup <- seek_dup %>%
+#         filter(tax_fam == !!new_rec$tax_fam)
 #     }else{
-#       update_dico_name(new_id_diconame_good = new_entry$id_n, id_search = new_entry$id_n,
-#                        ask_before_update = FALSE, add_backup = FALSE, show_results = FALSE)
+#       seek_dup <- seek_dup %>%
+#         filter(is.na(tax_fam))
 #     }
 #
-#     print(dplyr::tbl(mydb, "diconame") %>% dplyr::collect() %>% dplyr::filter(id_n == max(id_n)) %>%
-#             as.data.frame())
+#     if(!is.na(new_rec$tax_gen)) {
+#       seek_dup <- seek_dup %>%
+#         filter(tax_gen == !!new_rec$tax_gen)
+#     }else{
+#       seek_dup <- seek_dup %>%
+#         filter(is.na(tax_gen))
+#     }
+#
+#     if(!is.na(new_rec$tax_esp)) {
+#       seek_dup <- seek_dup %>%
+#         filter(tax_esp == !!new_rec$tax_esp)
+#     }else{
+#       seek_dup <- seek_dup %>%
+#         filter(is.na(tax_esp))
+#     }
+#
+#     if(!is.na(new_rec$tax_rank1)) {
+#       seek_dup <- seek_dup %>%
+#         filter(tax_rank1 == !!new_rec$tax_rank1)
+#     }else{
+#       seek_dup <- seek_dup %>%
+#         filter(is.na(tax_rank1))
+#     }
+#
+#     if(!is.na(new_rec$tax_name1)) {
+#       seek_dup <- seek_dup %>%
+#         filter(tax_name1 == !!new_rec$tax_name1)
+#     }else{
+#       seek_dup <- seek_dup %>%
+#         filter(is.na(tax_name1))
+#     }
+#
+#     # if(!is.na(new_rec$tax_nam02)) {
+#     #   seek_dup <- seek_dup %>%
+#     #     filter(tax_nam02 == !!new_rec$tax_nam02)
+#     # }else{
+#     #   seek_dup <- seek_dup %>%
+#     #     filter(is.na(tax_nam02))
+#     # }
+#
+#     seek_dup <-
+#       seek_dup %>%
+#       collect()
+#
+#     launch_adding_data <- TRUE
+#
+#     if (nrow(seek_dup) > 0) {
+#
+#       cli::cli_alert_info("New entry fit to one entry already in table_taxa")
+#       print(as.data.frame(seek_dup))
+#       launch_adding_data <- FALSE
+#
+#     }
+#
+#     if(launch_adding_data) {
+#
+#       new_rec <-
+#         new_rec %>%
+#         tibble::add_column(data_modif_d = lubridate::day(Sys.Date()),
+#                            data_modif_m = lubridate::month(Sys.Date()),
+#                            data_modif_y = lubridate::year(Sys.Date()))
+#
+#       cli::cli_alert_info("Adding new entry")
+#       DBI::dbWriteTable(mydb, "diconame", new_rec, append = TRUE, row.names = FALSE)
+#
+#       new_entry <-
+#         dplyr::tbl(mydb, "diconame") %>%
+#         dplyr::filter(full_name == !!new_rec$full_name,
+#                       data_modif_d == !!lubridate::day(Sys.Date()),
+#                       data_modif_m == !!lubridate::month(Sys.Date()),
+#                       data_modif_y == !!lubridate::year(Sys.Date())) %>%
+#         dplyr::collect()
+#
+#       if(!is.null(synonym_of)) {
+#
+#         if (!is.list(synonym_of)) {
+#           stop(
+#             "synonym_of should be a list with the first element \nbeing the genus and the second element the species epiteth of the taxa of the correct name \nOR the idtax_n"
+#           )
+#         }
+#
+#         if (!any(names(synonym_of) == "genus") &
+#             !any(names(synonym_of) == "species") &
+#             !any(names(synonym_of) == "id"))
+#           stop("synonym_of should have at least of the thre following element : genus, species or idtax_n")
+#
+#         if (!any(names(synonym_of) == "genus"))
+#           synonym_of$genus <- NULL
+#         if (!any(names(synonym_of) == "species"))
+#           synonym_of$species <- NULL
+#         if (!any(names(synonym_of) == "id"))
+#           synonym_of$id <- NULL
+#
+#         syn_searched <-
+#           query_tax_all(genus_searched = synonym_of$genus,
+#                         tax_esp_searched = synonym_of$species,
+#                         id_search = synonym_of$id)
+#
+#         print(syn_searched)
+#         if (nrow(syn_searched) > 1)
+#           stop("More than 1 taxa as synonym. Select only one.")
+#         if (nrow(syn_searched) == 0)
+#           stop("No taxa found in the dictionnary. Select one.")
+#
+#
+#         update_dico_name(new_id_diconame_good = syn_searched$id_good_n,
+#                          id_search = new_entry$id_n,
+#                          ask_before_update = FALSE,
+#                          add_backup = FALSE)
+#         # update_dico_name(
+#         #   new_id_diconame_good = syn_searched$idtax_good_n,
+#         #   id_search = new_entry$idtax_n,
+#         #   ask_before_update = FALSE,
+#         #   add_backup = FALSE,
+#         #   show_results = FALSE
+#         # )
+#
+#       }else{
+#
+#         rs <-
+#           DBI::dbSendQuery(mydb, statement="UPDATE diconame SET id_good_n=$2 WHERE id_n = $1",
+#                            params=list(new_entry$id_n, new_entry$id_n)) # $10
+#
+#         DBI::dbClearResult(rs)
+#
+#       }
+#
+#       # print(dplyr::tbl(mydb, "table_taxa") %>%
+#       #         dplyr::collect() %>%
+#       #         dplyr::filter(idtax_n == max(idtax_n)))
+#
+#       res_selected <- dplyr::tbl(mydb, "diconame") %>%
+#         dplyr::filter(id_n == !!new_entry$id_n) %>%
+#         collect()
+#
+#       res_selected <- as_tibble(cbind(
+#         columns = names(res_selected),
+#         record = t(res_selected)
+#       )) %>%
+#         kableExtra::kable(format = "html", escape = F) %>%
+#         kableExtra::kable_styling("striped", full_width = F)
+#
+#       print(res_selected)
+#
+#     }
+#
 #   }else{
 #
 #     cat("\n NO ADDED ENTRY")
+#
 #   }
 # }
-
-
-
-
 
 
 
@@ -7943,7 +7768,7 @@ add_entry_dico_name <- function(tax_gen = NULL,
 #' @export
 .delete_taxa <- function(id) {
 
-  if(!exists("mydb")) call.mydb()
+  if(!exists("mydb_taxa")) call.mydb()
 
   # DBI::dbExecute(mydb,
   #                "DELETE FROM table_taxa WHERE idtax_n=$1", params=list(id)
@@ -7958,7 +7783,7 @@ add_entry_dico_name <- function(tax_gen = NULL,
       x = query
     )
 
-  rs <- DBI::dbSendQuery(mydb, query)
+  rs <- DBI::dbSendQuery(mydb_taxa, query)
   DBI::dbClearResult(rs)
 }
 
@@ -8046,17 +7871,6 @@ add_entry_dico_name <- function(tax_gen = NULL,
   DBI::dbClearResult(rs)
 }
 
-
-#' Delete an entry in trait measurement table
-#'
-#' Delete an entry in diconame table using id for selection
-#'
-#'
-#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
-#'
-#' @param id integer
-#'
-#' @return No values
 # .delete_entry_diconame <- function(id) {
 #
 #   if(!exists("mydb")) call.mydb()
@@ -15664,7 +15478,7 @@ get_ref_specimen_ind <- function(collector = NULL, ids = NULL) {
 #' @export
 update_taxa_link_table <- function() {
 
-  rm(mydb_taxa)
+  if (exists("mydb_taxa")) rm(mydb_taxa)
   call.mydb.taxa()
 
   call.mydb()
@@ -15783,11 +15597,12 @@ add_entry_taxa <- function(search_name_tps = NULL,
                            year_description = NULL,
                            synonym_of = NULL,
                            morpho_species = FALSE,
-                           TPS_KEY = "15ad0b4c-f0d3-46ab-b649-178f2c75724f")
+                           TPS_KEY = "15ad0b4c-f0d3-46ab-b649-178f2c75724f",
+                           tax_tax = NULL)
 {
 
   # if (!exists("mydb")) call.mydb()
-  if (exists("mydb_taxa")) rm(mydb_taxa)
+  # if (exists("mydb_taxa")) rm(mydb_taxa)
   if (!exists("mydb_taxa")) call.mydb.taxa()
 
   if (is.null(search_name_tps) &
@@ -15824,6 +15639,20 @@ add_entry_taxa <- function(search_name_tps = NULL,
         author1 <- stringr::str_squish(author1)
         if (author1 == '')
           author1 <- NULL
+
+        tax_rank1 <- readline(prompt = "Enter tax_rank1 (one of 'var.' or 'subsp.')  : ")
+        tax_rank1 <- stringr::str_squish(tax_rank1)
+        if (tax_rank1 == '')
+          tax_rank1 <- NULL
+
+        if (!is.null(tax_rank1)) {
+          if (!tax_rank1 %in% c('var.', 'subsp.')) stop("tax_rank1 must be 'var.' or 'subsp.'")
+        }
+
+        tax_name1 <- readline(prompt = "Enter tax_name1 (var. or subsp. name)  : ")
+        tax_name1 <- stringr::str_squish(tax_name1)
+        if (tax_name1 == '')
+          tax_name1 <- NULL
 
         tax_order <- readline(prompt = "Enter tax_order  : ")
         if (tax_order == '')
@@ -15910,13 +15739,13 @@ add_entry_taxa <- function(search_name_tps = NULL,
 
   all_growth_form <- choose_growth_form()
 
-  if(is.null(tax_tax) & !is.null(tax_esp) & is.null(author1))
+  if (is.null(tax_tax) & !is.null(tax_esp) & is.null(author1))
     stop("Provide full name with authors")
 
-  if(is.null(tax_gen) & is.null(tax_esp) & is.null(tax_fam) & is.null(tax_order) & is.null(tax_famclass))
+  if (is.null(tax_gen) & is.null(tax_esp) & is.null(tax_fam) & is.null(tax_order) & is.null(tax_famclass))
     stop("Provide at least one genus/family/order/class new name to enter")
 
-  if(!is.null(tax_fam) & is.null(tax_tax) & is.null(tax_gen)) {
+  if (!is.null(tax_fam) & is.null(tax_tax) & is.null(tax_gen)) {
     tax_tax <- tax_fam
   }
 
@@ -15931,6 +15760,7 @@ add_entry_taxa <- function(search_name_tps = NULL,
   check_taxo <- TRUE
 
   if (is.null(tax_fam) & !is.null(tax_gen)) {
+
     tax_fam <-
       query_taxa(
         genus = tax_gen,
@@ -15940,7 +15770,8 @@ add_entry_taxa <- function(search_name_tps = NULL,
         check_synonymy = FALSE,
         extract_traits = FALSE
       )
-    if(is.null(nrow(tax_fam)))
+
+    if (is.null(nrow(tax_fam)))
       stop("genus not in database")
 
     tax_fam <- tax_fam %>%
@@ -16054,6 +15885,7 @@ add_entry_taxa <- function(search_name_tps = NULL,
   # tbl(mydb, "diconame") %>% collect() %>% slice(n())
 
   if (check_taxo & tax_fam_new) {
+
     if (!is.null(tax_gen) &
         !is.null(tax_esp))
       paste_taxa <- paste(tax_gen, tax_esp)
@@ -16142,7 +15974,7 @@ add_entry_taxa <- function(search_name_tps = NULL,
 
     ## get id of class
     id_tax_fam_class <-
-      try_open_postgres_table(table = "table_tax_famclass", con = mydb_taxa)
+      try_open_postgres_table(table = "table_tax_famclass", con = mydb_taxa) %>%
       # tbl(mydb_taxa, "table_tax_famclass") %>%
       filter(tax_famclass == !!tax_famclass) %>%
       collect()
@@ -16251,13 +16083,15 @@ add_entry_taxa <- function(search_name_tps = NULL,
     }
 
     if(launch_adding_data) {
+
       new_rec <-
         .add_modif_field(new_rec)
 
-      rm(mydb_taxa)
-
-      cli::cli_alert_info("For adding of modifying data in taxa table, you must have the admin rights")
-      call.mydb.taxa()
+      new_rec <-
+        new_rec %>%
+        rename(data_modif_m = date_modif_m,
+               data_modif_y = date_modif_y,
+               data_modif_d = date_modif_d)
 
       cli::cli_alert_success(cli::col_yellow("Adding new entry"))
       DBI::dbWriteTable(mydb_taxa, "table_taxa", new_rec, append = TRUE, row.names = FALSE)
@@ -16286,7 +16120,8 @@ add_entry_taxa <- function(search_name_tps = NULL,
         add_sp_traits_measures(new_data = all_growth_form_pivot,
                             traits_field = names(all_growth_form_pivot)[2:ncol(all_growth_form_pivot)],
                             idtax = "idtax",
-                            add_data = T)
+                            add_data = T,
+                            ask_before_update = FALSE)
 
       }
 
@@ -16372,7 +16207,7 @@ choose_growth_form <- function() {
                                        filter(condition_hierarchical == first_level$value) %>%
                                        pull(id_trait))
 
-    if(!is.na(second_level$value)) all_growth_form[[2]] <- second_level
+    if (!all(is.na(second_level))) if(!is.na(second_level$value)) all_growth_form[[2]] <- second_level
 
     if (!any(is.na(second_level))) {
 
@@ -16557,10 +16392,11 @@ add_sp_traits_measures <- function(new_data,
                                 traits_field,
                                 collector = NULL,
                                 idtax = NULL,
-                                add_data = FALSE) {
+                                add_data = FALSE,
+                                ask_before_update = TRUE) {
 
 
-  if (exists("mydb_taxa")) rm(mydb_taxa)
+  # if (exists("mydb_taxa")) rm(mydb_taxa)
   if (!exists("mydb_taxa")) call.mydb.taxa()
 
   for (i in 1:length(traits_field))
@@ -17021,13 +16857,17 @@ add_sp_traits_measures <- function(new_data,
       #                      collect(), by=c("id_type_sub_plot"="id_subplotype")) %>%
       #   View()
 
-
-
-      response <-
-        utils::askYesNo("Confirm add these data to data_traits_measures table?")
+      if (ask_before_update) {
+        response <-
+          utils::askYesNo("Confirm add these data to data_traits_measures table?")
+      } else {
+        response <- TRUE
+      }
 
       if(add_data & response) {
         cli::cli_alert_success("Adding data : {nrow(data_to_add)} values added")
+
+
         DBI::dbWriteTable(mydb_taxa, "table_traits_measures",
                           data_to_add, append = TRUE, row.names = FALSE)
       }
@@ -17539,8 +17379,8 @@ update_trait_table <- function(new_data,
 .link_sp_trait <- function(data_stand, trait) {
 
   all_traits <-
-    dplyr::tbl(mydb, "table_traits") %>%
-    dplyr::collect()
+    try_open_postgres_table(table = "table_traits", con = mydb_taxa) %>%
+    collect()
 
   selected_name <- .find_cat(value_to_search = trait,
                              compared_table = all_traits,
@@ -17702,13 +17542,12 @@ update_dico_name <- function(genus_searched = NULL,
                              synonym_of = NULL,
                              exact_match = FALSE) {
 
-  if (exists("mydb_taxa")) rm(mydb_taxa)
   if (!exists("mydb_taxa")) call.mydb.taxa()
 
   if(all(is.null(c(genus_searched, tax_esp_searched,
                    tax_fam_searched, synonym_of,
                    id_searched, new_tax_rankesp)) & !cancel_synonymy))
-    stop("\n Provide the species to be updated or precise new synonymy")
+    stop("Provide the species to be updated or precise new synonymy")
 
   if(!is.null(new_tax_famclass)) {
     new_id_tax_famclass <-

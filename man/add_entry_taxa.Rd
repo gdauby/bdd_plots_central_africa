@@ -21,7 +21,8 @@ add_entry_taxa(
   year_description = NULL,
   synonym_of = NULL,
   morpho_species = FALSE,
-  TPS_KEY = "15ad0b4c-f0d3-46ab-b649-178f2c75724f"
+  TPS_KEY = "15ad0b4c-f0d3-46ab-b649-178f2c75724f",
+  tax_tax = NULL
 )
 }
 \arguments{
