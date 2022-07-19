@@ -8505,6 +8505,8 @@ add_trait <- function(new_trait = NULL,
                       new_expectedunit = NULL,
                       new_comments = NULL) {
 
+  call.mydb.taxa()
+
   if(is.null(new_trait)) stop("define new trait")
   if(is.null(new_valuetype)) stop("define new_valuetype")
 
@@ -15479,23 +15481,25 @@ get_ref_specimen_ind <- function(collector = NULL, ids = NULL) {
 #' @export
 update_taxa_link_table <- function() {
 
-  if (exists("mydb_taxa")) rm(mydb_taxa)
+  # if (exists("mydb_taxa")) rm(mydb_taxa)
   call.mydb.taxa()
 
   call.mydb()
 
-  id_taxa_table <- dplyr::tbl(mydb_taxa, "table_taxa") %>%
+  id_taxa_table <- try_open_postgres_table(table = "table_taxa", con = mydb_taxa) %>%
+    # dplyr::tbl(mydb_taxa, "table_taxa") %>%
     dplyr::select(idtax_n, idtax_good_n) %>%
     dplyr::collect()
 
   dbWriteTable(mydb,
                name = "table_idtax",
                value = id_taxa_table,
-               append = TRUE)
+               append = FALSE,
+               overwrite = TRUE)
 
   cli::cli_alert_success("table_idtax updated")
 
-  dplyr::tbl(mydb, "table_idtax")
+  # dplyr::tbl(mydb, "table_idtax")
 
 
 }
@@ -16594,6 +16598,16 @@ add_sp_traits_measures <- function(new_data,
           left_join(all_factor_levels, by = c("trait" = "value")) %>%
           dplyr::select(-trait) %>%
           dplyr::rename(trait = true_value)
+
+        if(data_trait %>% dplyr::pull(trait) %>% is.na() %>% any()) {
+
+          cli::cli_alert_danger("Some value are not found in accepted factor for this trait : {unlist(queried_trait$list_factors[[1]])}")
+
+          data_trait %>%
+            filter(is.na(trait))
+
+        }
+
       }
 
       if (valuetype$valuetype == "numeric")
@@ -17474,14 +17488,16 @@ update_trait_table <- function(new_data,
 #'
 #' @return No values
 #' @export
-delete_entry_trait_measure <- function(id) {
+.delete_entry_sp_trait_measure <- function(id) {
 
-  if (exists("mydb_taxa")) rm(mydb_taxa)
   if (!exists("mydb_taxa")) call.mydb.taxa()
 
-  DBI::dbExecute(mydb_taxa,
-                 "DELETE FROM table_traits_measures WHERE id_trait_measures=$1", params=list(id)
-  )
+  tbl <- "table_traits_measures"
+  sql <- glue::glue_sql("SELECT * FROM {`tbl`} WHERE id_trait_measures IN ({vals*})",
+                       vals = id, .con = mydb_taxa)
+
+  valuetype <- func_try_fetch(con = mydb_taxa, sql = sql)
+
 }
 
 
@@ -17742,7 +17758,7 @@ update_dico_name <- function(genus_searched = NULL,
 
   new_id_diconame_good <- NULL
   if (nrow_query & cancel_synonymy) {
-    if (query_tax$idtax_good_n == query_tax$idtax_n) {
+    if (is.na(query_tax$idtax_good_n)) {
 
       cli::cli_alert_info("This taxa is not considered as synonym. No modification is thus done on its synonymy")
       comp_vals <- FALSE
