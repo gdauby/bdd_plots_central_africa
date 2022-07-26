@@ -8,7 +8,8 @@ query_traits_measures(
   idtax,
   idtax_good = NULL,
   add_taxa_info = FALSE,
-  trait_cat_mode = "most_frequent"
+  trait_cat_mode = "most_frequent",
+  verbose = TRUE
 )
 }
 \arguments{
@@ -19,6 +20,8 @@ query_traits_measures(
 \item{add_taxa_info}{logical}
 
 \item{trait_cat_mode}{vector string if "most_frequent" then the most frequent value for categorical trait is given, if "all_unique" then all unique value separated by comma}
+
+\item{verbose}{logical}
 }
 \value{
 vector

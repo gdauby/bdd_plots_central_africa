@@ -2568,7 +2568,7 @@ query_plots <- function(team_lead = NULL,
             dplyr::ungroup() %>%
             dplyr::distinct()
 
-          cli::cli_alert_info("Extracting most frequent value for categorical traits at genus level")
+          if (verbose) cli::cli_alert_info("Extracting most frequent value for categorical traits at genus level")
 
           traits_idtax_char <-
             traits_idtax_char %>%
@@ -13286,7 +13286,7 @@ query_taxa <-
 
         } else {
 
-          cli::cli_alert_danger("no match for order")
+          if (verbose) cli::cli_alert_danger("no match for order")
           no_match <- TRUE
         }
 
@@ -13296,7 +13296,7 @@ query_taxa <-
             res %>%
             filter(idtax_n %in% !!res_family$idtax_n)
         }else{
-          cli::cli_alert_danger("no match for family")
+          if (verbose) cli::cli_alert_danger("no match for family")
           no_match <- TRUE
         }
 
@@ -13306,7 +13306,7 @@ query_taxa <-
             res %>%
             filter(idtax_n %in% !!res_genus$idtax_n)
         }else{
-          cli::cli_alert_danger("no match for genus")
+          if (verbose) cli::cli_alert_danger("no match for genus")
           no_match <- TRUE
         }
 
@@ -13316,7 +13316,7 @@ query_taxa <-
             res %>%
             filter(idtax_n %in% !!res_species$idtax_n)
         } else{
-          cli::cli_alert_danger("no match for species")
+          if (verbose) cli::cli_alert_danger("no match for species")
           no_match <- TRUE
         }
 
@@ -13324,7 +13324,7 @@ query_taxa <-
         res <- res %>% collect()
       } else {
         res <- NULL
-        cli::cli_alert_danger("no matching names")
+        if (verbose) cli::cli_alert_danger("no matching names")
       }
 
     } else {
@@ -13551,11 +13551,6 @@ query_taxa <-
           dplyr::relocate(tax_infra_level_auth, .before = tax_order) %>%
           dplyr::relocate(idtax_n, .before = tax_order) %>%
           dplyr::relocate(idtax_good_n, .before = tax_order)
-
-        # res_print <-
-        #   res_print %>%
-        #   mutate_all(~ as.character(.)) %>%
-        #   mutate_all(~ tidyr::replace_na(., ""))
 
         res_print <-
           res_print %>%
@@ -14243,12 +14238,14 @@ merge_individuals_taxa <- function(id_individual = NULL,
 #' @param idtax_good vector of idtax_good; NA if no synonym
 #' @param add_taxa_info logical
 #' @param trait_cat_mode vector string if "most_frequent" then the most frequent value for categorical trait is given, if "all_unique" then all unique value separated by comma
+#' @param verbose logical
 #'
 #' @export
 query_traits_measures <- function(idtax,
                                   idtax_good = NULL,
                                   add_taxa_info = FALSE,
-                                  trait_cat_mode = "most_frequent") {
+                                  trait_cat_mode = "most_frequent",
+                                  verbose = TRUE) {
 
   if (!is.null(idtax_good)) {
 
@@ -14395,7 +14392,7 @@ query_traits_measures <- function(idtax,
 
       if (trait_cat_mode == "all_unique") {
 
-        cli::cli_alert_info("Extracting all unique values for categorical traits")
+        if (verbose) cli::cli_alert_info("Extracting all unique values for categorical traits")
 
         ### concatenate all distinct values
         traits_idtax_char <-
@@ -14412,7 +14409,7 @@ query_traits_measures <- function(idtax,
 
       if (trait_cat_mode == "most_frequent") {
 
-        cli::cli_alert_info("Extracting most frequent value for categorical traits")
+        if (verbose) cli::cli_alert_info("Extracting most frequent value for categorical traits")
 
         traits_idtax_char <-
           traits_idtax_char %>%
@@ -15114,7 +15111,7 @@ match_tax <- function(idtax, queried_tax = NULL, verbose = TRUE) {
       dplyr::ungroup() %>%
       dplyr::distinct()
 
-    cli::cli_alert_info("Extracting most frequent value for categorical traits at genus level")
+    if (verbose) cli::cli_alert_info("Extracting most frequent value for categorical traits at genus level")
 
     traits_idtax_char <-
       traits_idtax_char %>%
@@ -15519,7 +15516,7 @@ func_try_fetch <- function(con, sql) {
 
     if (any(grepl("Failed to prepare query", res_q[1]))) {
       rep <- TRUE
-      cat(rep_try, "failed to query, trying again")
+      cli::cli_alert_warning("failed to query, trying again")
       rep_try <- rep_try + 1
     } else {
       rep <- FALSE
@@ -15548,7 +15545,7 @@ try_open_postgres_table <- function(table, con) {
 
     if (any(grepl("Failed to prepare query", res_q[1]))) {
       rep <- TRUE
-      cat(rep_try, "failed to query, trying again")
+      cli::cli_alert_warning("failed to query, trying again")
       rep_try <- rep_try + 1
     } else {
       rep <- FALSE
@@ -15794,7 +15791,7 @@ add_entry_taxa <- function(search_name_tps = NULL,
 
   if(is.null(tax_order) & !is.null(tax_fam)) {
     tax_order <-
-      plotsdatabase::query_taxa(
+      query_taxa(
         family = tax_fam,
         verbose = F,
         exact_match = T,
@@ -15815,7 +15812,7 @@ add_entry_taxa <- function(search_name_tps = NULL,
 
   if(is.null(tax_famclass) & !is.null(tax_order)) {
     tax_famclass <-
-      plotsdatabase::query_taxa(
+      query_taxa(
         order = tax_order,
         verbose = F,
         exact_match = T,
