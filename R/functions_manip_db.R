@@ -9771,7 +9771,7 @@ add_traits_measures <- function(new_data,
         cli::cli_alert_success("Adding data : {nrow(data_to_add)} values added")
       }
 
-    }else{
+    } else{
 
       cli::cli_alert_info("no added data for {trait} - no values different of 0")
 
@@ -15442,31 +15442,33 @@ get_ref_specimen_ind <- function(collector = NULL, ids = NULL) {
                 collect(),
               by=c("id_table_liste_plots_n"="id_liste_plots"))
 
-  # all_linked_individuals <-
-  #   tbl(mydb, "data_link_specimens") %>%
-  #   distinct(id_n) %>%
-  #   collect()
+  all_linked_individuals <-
+    tbl(mydb, "data_link_specimens") %>%
+    distinct(id_n) %>%
+    collect()
 
   ### selection of all individuals with specimens linked but not included in link table
   # all_herb_missing_link <-
   #   all_herb_not_linked %>%
   #   filter(!id_n %in% all_linked_individuals$id_n)
-
-  all_herb_missing_link_unique <-
-    all_herb_missing_link %>%
-    group_by(id_colnam, nbrs) %>%
-    count() %>%
-    ungroup()
-
-  cli::cli_alert_info("Missing link for {nrow(all_herb_missing_link_unique)} specimens")
-  print(all_herb_missing_link_unique %>%
-          dplyr::select(-n) %>%
-          group_by(id_colnam) %>%
-          count())
+  #
+  # all_herb_missing_link_unique <-
+  #   all_herb_missing_link %>%
+  #   group_by(id_colnam, nbrs) %>%
+  #   count() %>%
+  #   ungroup()
+  #
+  # cli::cli_alert_info("Missing link for {nrow(all_herb_missing_link_unique)} specimens")
+  # print(all_herb_missing_link_unique %>%
+  #         dplyr::select(-n) %>%
+  #         group_by(id_colnam) %>%
+  #         count())
 
   return(list(all_herb_not_linked = all_herb_not_linked,
-              all_herb_missing_link = all_herb_missing_link,
               all_linked_individuals = all_linked_individuals))
+
+
+  # all_herb_missing_link = all_herb_missing_link,
 
 }
 
