@@ -8873,7 +8873,6 @@ add_traits_measures <- function(new_data,
     }
   }
 
-
   ### check for different census for concerned plots
   multiple_census <- FALSE
   census_check <- utils::askYesNo(msg = "Link trait measures to census (only for permanent plots) ?")
@@ -9014,7 +9013,7 @@ add_traits_measures <- function(new_data,
       data_trait %>%
       dplyr::filter(!is.na(trait))
 
-    if(any(data_trait$trait == 0)) {
+    if (any(data_trait$trait == 0)) {
 
       add_0 <- utils::askYesNo("Some value are equal to 0. Do you want to add these values anyway ??")
 
@@ -9662,7 +9661,7 @@ add_traits_measures <- function(new_data,
             any(colnames(data_trait) == "verbatimlocality"), nrow(data_trait)
           ), data_trait$verbatimlocality, NA),
           basisofrecord = data_trait$basisofrecord,
-          reference = ifelse(rep(
+          references = ifelse(rep(
             any(colnames(data_trait) == "reference"), nrow(data_trait)
           ), data_trait$reference, NA),
           year = ifelse(rep(
@@ -9763,9 +9762,13 @@ add_traits_measures <- function(new_data,
         utils::askYesNo("Confirm add these data to data_traits_measures table?")
 
       if(add_data & response) {
-        cli::cli_alert_success("Adding data : {nrow(data_to_add)} values added")
+
         DBI::dbWriteTable(mydb, "data_traits_measures",
-                          data_to_add, append = TRUE, row.names = FALSE)
+                          data_to_add,
+                          append = TRUE,
+                          row.names = FALSE)
+
+        cli::cli_alert_success("Adding data : {nrow(data_to_add)} values added")
       }
 
     }else{
