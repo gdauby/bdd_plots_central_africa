@@ -1517,13 +1517,9 @@ method_list <- function() {
   if(!exists("mydb")) call.mydb()
 
   nn <-
-    dplyr::tbl(mydb, "data_liste_plots") %>%
-    dplyr::select(id_method) %>%
-    dplyr::left_join(dplyr::tbl(mydb, "methodslist")) %>%
-    dplyr::group_by(method) %>%
-    dplyr::summarise(n = n()) %>%
-    dplyr::mutate(n = as.integer(n)) %>%
-    dplyr::collect()
+    dplyr::tbl(mydb, "methodslist") %>%
+    collect() %>%
+    mutate(description_method = stringr::str_squish(description_method))
 
   # dbDisconnect(mydb)
   return(nn)
@@ -2568,7 +2564,7 @@ query_plots <- function(team_lead = NULL,
             dplyr::ungroup() %>%
             dplyr::distinct()
 
-          if (verbose) cli::cli_alert_info("Extracting most frequent value for categorical traits at genus level")
+          cli::cli_alert_info("Extracting most frequent value for categorical traits at genus level")
 
           traits_idtax_char <-
             traits_idtax_char %>%
@@ -8671,7 +8667,7 @@ add_traits_measures <- function(new_data,
     stop("no values for selected trait(s)")
 
   if (!any(col_names_corresp == "day")) {
-    warning("no information collection day provided")
+    cli::cli_alert_info("no information collection day provided")
     new_data_renamed <-
       new_data_renamed %>%
       mutate(day = NA) %>%
@@ -8684,7 +8680,7 @@ add_traits_measures <- function(new_data,
   }
 
   if (!any(col_names_corresp == "year")) {
-    warning("no information collection year provided")
+    cli::cli_alert_info("no information collection year provided")
     new_data_renamed <-
       new_data_renamed %>%
       mutate(year = NA) %>%
@@ -8697,7 +8693,7 @@ add_traits_measures <- function(new_data,
   }
 
   if (!any(col_names_corresp == "month")) {
-    warning("no information collection month provided")
+    cli::cli_alert_info("no information collection month provided")
     new_data_renamed <-
       new_data_renamed %>%
       mutate(month = NA) %>%
@@ -8710,7 +8706,7 @@ add_traits_measures <- function(new_data,
   }
 
   if(!any(col_names_corresp == "country")) {
-    warning("no country provided")
+    cli::cli_alert_info("no country provided")
     new_data_renamed <-
       new_data_renamed %>%
       mutate(country = NA) %>%
@@ -8723,7 +8719,7 @@ add_traits_measures <- function(new_data,
   }
 
   if (!any(col_names_corresp == "decimallatitude")) {
-    warning("no decimallatitude provided")
+    cli::cli_alert_info("no decimallatitude provided")
     new_data_renamed <-
       new_data_renamed %>%
       tibble::add_column(decimallatitude = NA) %>%
@@ -8736,7 +8732,7 @@ add_traits_measures <- function(new_data,
   }
 
   if (!any(col_names_corresp == "decimallongitude")) {
-    warning("no decimallongitude provided")
+    cli::cli_alert_info("no decimallongitude provided")
     new_data_renamed <-
       new_data_renamed %>%
       tibble::add_column(decimallongitude = NA) %>%
@@ -8880,7 +8876,7 @@ add_traits_measures <- function(new_data,
   if(census_check) {
     unique_ids_plots <- unique(new_data_renamed$id_liste_plots)
     censuses <-
-      dplyr::tbl(mydb, "data_liste_sub_plots") %>%
+      try_open_postgres_table(table = "data_liste_sub_plots", con = mydb) %>%
       dplyr::filter(id_table_liste_plots %in% unique_ids_plots, id_type_sub_plot==27) %>%
       dplyr::left_join(dplyr::tbl(mydb, "data_liste_plots") %>%
                          dplyr::select(plot_name, id_liste_plots), by=c("id_table_liste_plots"="id_liste_plots")) %>%
@@ -9005,29 +9001,31 @@ add_traits_measures <- function(new_data,
     # trait_name <-
     #   trait
 
-    # data_trait <-
-    #   data_trait %>%
-    #   dplyr::rename_at(dplyr::vars(all_of(trait)), ~ trait_name)
+    hhhh <- enquo(trait)
 
     data_trait <-
       data_trait %>%
-      dplyr::filter(!is.na(trait))
+      dplyr::filter(!is.na(!!sym(trait)))
 
-    if (any(data_trait$trait == 0)) {
-
-      add_0 <- utils::askYesNo("Some value are equal to 0. Do you want to add these values anyway ??")
-
-      if(!add_0)
-        data_trait <-
-          data_trait %>%
-          dplyr::filter(trait != 0)
-
-    }
+    # data_trait <-
+    #   data_trait %>%
+    #   dplyr::rename_at(dplyr::vars(all_of(trait)), ~ trait_name)
 
     if(nrow(data_trait) > 0) {
       ### adding trait id and adding potential issues based on trait
       data_trait <-
         .link_trait(data_stand = data_trait, trait = trait)
+
+      if (any(data_trait$trait == 0)) {
+
+        add_0 <- utils::askYesNo("Some value are equal to 0. Do you want to add these values anyway ??")
+
+        if(!add_0)
+          data_trait <-
+            data_trait %>%
+            dplyr::filter(trait != 0)
+
+      }
 
       ## see what type of value numeric of character
       valuetype <-
@@ -9039,8 +9037,6 @@ add_traits_measures <- function(new_data,
             dplyr::collect(),
           by = c("id_trait" = "id_trait")
         )
-
-
 
       ### Linking individuals
       if (!is.null(individual_plot_field)) {
@@ -10983,7 +10979,7 @@ replace_NA <- function(vec, inv = FALSE) {
     dplyr::rename_at(dplyr::vars(plot_name_field), ~ plot_name)
 
   all_plot_names <-
-    dplyr::tbl(mydb, "data_liste_plots") %>%
+    try_open_postgres_table(table = "data_liste_plots", con = mydb) %>%
     dplyr::select(id_liste_plots, plot_name) %>%
     dplyr::collect()
 
@@ -11000,7 +10996,8 @@ replace_NA <- function(vec, inv = FALSE) {
 
   data_stand <-
     data_stand %>%
-    dplyr::left_join(all_plot_name_new_dataset, by=c("plot_name"="plot_name"))
+    dplyr::left_join(all_plot_name_new_dataset,
+                     by=c("plot_name"="plot_name"))
 
   id_plotname <-
     data_stand$id_liste_plots
@@ -11145,19 +11142,36 @@ replace_NA <- function(vec, inv = FALSE) {
   }
 
   issues <- vector(mode = "character", length = nrow(data_stand))
-  if(select_trait_features$valuetype != "character") {
-    if(any(data_stand$trait<select_trait_features$minallowedvalue)) {
-      warning(paste(trait, "values lower than minallowedvalue for", trait, "for",
-                    sum(data_stand$trait<select_trait_features$minallowedvalue), "entries"))
-      issues[data_stand$trait<select_trait_features$minallowedvalue] <-
+  if (select_trait_features$valuetype != "character") {
+    if (any(data_stand$trait < select_trait_features$minallowedvalue)) {
+      warning(
+        paste(
+          trait,
+          "values lower than minallowedvalue for",
+          trait,
+          "for",
+          sum(data_stand$trait < select_trait_features$minallowedvalue),
+          "entries"
+        )
+      )
+      issues[data_stand$trait < select_trait_features$minallowedvalue] <-
         paste(select_trait_features$trait, "lower than minallowedvalue")
     }
 
-    if(any(data_stand$trait>select_trait_features$maxallowedvalue)) {
-      warning(paste(trait, "values higher than maxallowedvalue for", trait, "for",
-                    sum(data_stand$trait>select_trait_features$maxallowedvalue), "entries"))
-      issues[data_stand$trait>select_trait_features$maxallowedvalue] <-
-        paste(select_trait_features$trait, "higher than maxallowedvalue")
+    if (any(data_stand$trait > select_trait_features$maxallowedvalue)) {
+      warning(
+        paste(
+          trait,
+          "values higher than maxallowedvalue for",
+          trait,
+          "for",
+          sum(data_stand$trait > select_trait_features$maxallowedvalue),
+          "entries"
+        )
+      )
+      issues[data_stand$trait > select_trait_features$maxallowedvalue] <-
+        paste(select_trait_features$trait,
+              "higher than maxallowedvalue")
     }
   }
 
@@ -13022,7 +13036,7 @@ query_fuzzy_match <- function(tbl, field, values_q, con) {
   # if (length(field) > 0) sql <-glue::glue_sql("SELECT * FROM {`tbl`} WHERE SIMILARITY (lower(concat({`field[1]`},' ',{`field[2]`})), {values_q}) > {sim_thres} ;",
   #                                              .con = con)
 
-  if (length(field) > 1)  sql <- glue::glue_sql("SELECT * FROM {`tbl`} ORDER BY SIMILARITY (lower(concat({`field[1]`},' ',{`field[2]`})), {values_q}) DESC LIMIT 1;",
+  if (length(field) > 1)  sql <- glue::glue_sql("SELECT * FROM {`tbl`} ORDER BY SIMILARITY (lower(concat({`field[1]`},' ',{`field[2]`})), {values_q}) DESC LIMIT 5;",
                                                 .con = con)
 
   res_q <- func_try_fetch(con = con, sql = sql)

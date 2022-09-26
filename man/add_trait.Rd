@@ -62,6 +62,4 @@ Add trait and associated descriptors in trait list table
 }
 \author{
 Gilles Dauby, \email{gilles.dauby@ird.fr}
-
-Gilles Dauby, \email{gilles.dauby@ird.fr}
 }

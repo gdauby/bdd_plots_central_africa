@@ -92,6 +92,4 @@ Update taxonomic data
 }
 \author{
 Gilles Dauby, \email{gilles.dauby@ird.fr}
-
-Gilles Dauby, \email{gilles.dauby@ird.fr}
 }
