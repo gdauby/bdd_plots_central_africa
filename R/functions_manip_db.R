@@ -15521,7 +15521,13 @@ update_taxa_link_table <- function() {
 }
 
 
-
+#' Send query to postgresql database
+#'
+#' Access to postgresql database with repeating if no successful
+#'
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @export
 func_try_fetch <- function(con, sql) {
   rep <- TRUE
   rep_try <- 1
@@ -15550,7 +15556,13 @@ func_try_fetch <- function(con, sql) {
   return(res_q)
 }
 
-
+#' Open postgresql database table
+#'
+#' Access to postgresql database table with repeating if no successful
+#'
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @export
 try_open_postgres_table <- function(table, con) {
 
   rep <- TRUE
