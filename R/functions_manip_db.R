@@ -7271,11 +7271,11 @@ add_individuals <- function(new_data ,
 
     confirmed <- utils::askYesNo("Confirm adding?")
 
-    cli::cli_alert_success("Added individuals : {nrow(new_data_renamed)} rows to individuals table")
+    if(confirmed) {
 
-    if(confirmed)
       DBI::dbWriteTable(mydb, "data_individuals", new_data_renamed, append = TRUE, row.names = FALSE)
-
+      cli::cli_alert_success("Added individuals : {nrow(new_data_renamed)} rows to individuals table")
+    }
   }
 
   return(list(new_data_renamed, logs))
@@ -8119,6 +8119,7 @@ query_specimens <- function(collector = NULL,
       colm,
       coly,
       detvalue,
+      description,
       id_specimen,
       idtax_f,
       id_tropicos
@@ -9001,7 +9002,6 @@ add_traits_measures <- function(new_data,
     # trait_name <-
     #   trait
 
-    hhhh <- enquo(trait)
 
     data_trait <-
       data_trait %>%
@@ -9561,7 +9561,6 @@ add_traits_measures <- function(new_data,
       #   count() %>%
       #   filter(n>1)
 
-
       duplicated_rows <-
         dplyr::bind_rows(selected_data_traits,
                          all_vals) %>%
@@ -9890,7 +9889,7 @@ add_specimens <- function(new_data ,
   unmatch_id_diconame <-
     new_data_renamed %>%
     dplyr::select(idtax_n) %>%
-    dplyr::left_join(dplyr::tbl(mydb, "table_taxa") %>%
+    dplyr::left_join(dplyr::tbl(mydb_taxa, "table_taxa") %>%
                        dplyr::select(idtax_n, idtax_good_n) %>%
                        dplyr::collect() %>%
                        dplyr::mutate(tag = 1), by=c("idtax_n" = "idtax_n")) %>%
@@ -10826,6 +10825,10 @@ replace_NA <- function(vec, inv = FALSE) {
 
   id_colname <-
     vector(mode = "integer", nrow(data_stand))
+
+  all_names_collector <-
+    all_names_collector %>%
+    filter(!is.na(col_name))
 
   for (i in 1:nrow(all_names_collector)) {
 
