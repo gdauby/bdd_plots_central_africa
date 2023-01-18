@@ -4003,8 +4003,9 @@ add_plots <- function(new_data,
   add <- utils::askYesNo(msg = "Add these data to the table of plot data?")
 
   if(add) {
-    message(paste("\nMeta data of plots added:", nrow(new_data_renamed)))
     DBI::dbWriteTable(mydb, "data_liste_plots", new_data_renamed, append = TRUE, row.names = FALSE)
+    cli::cli_alert_success("{nrow(new_data_renamed)} plot imported in data_liste_plots")
+
   }
 
   if(!add)
@@ -4161,7 +4162,7 @@ add_subplot_features <- function(new_data,
 
     subplottype <- subplottype_field[i]
 
-    if(!any(colnames(new_data_renamed)==subplottype))
+    if (!any(colnames(new_data_renamed) == subplottype))
       stop(paste("subplottype field not found", subplottype))
 
     data_subplottype <-
@@ -4251,10 +4252,11 @@ add_subplot_features <- function(new_data,
           "id_table_liste_plots" = "id_table_liste_plots",
           "id_type_sub_plot" = "id_type_sub_plot"
         )
-      )
+      ) %>%
+      filter(!is.na(typevalue_old))
 
     continue <- TRUE
-    if(nrow(crossing_data)>0) {
+    if(nrow(crossing_data) > 0) {
       message("Data to be imported already exist in the database")
       print(crossing_data)
       continue <- utils::askYesNo(msg = "Continue importing?")
@@ -4424,9 +4426,6 @@ update_plot_data <- function(team_lead = NULL,
         locality_name = ifelse(!is.null(new_locality_name), new_locality_name, quer_plots$locality_name)
       )
 
-    # quer_plots_sel <-
-    #   quer_plots
-
     comp_res <- .comp_print_vec(vec_1 = quer_plots  %>%
                                   dplyr::select(!!colnames(new_values)),
                                 vec_2 = new_values)
@@ -4434,37 +4433,7 @@ update_plot_data <- function(team_lead = NULL,
     print(comp_res$comp_html)
 
     comp_values <- comp_res$comp_tb
-#
-#     if (new_values$ddlat == -1000 &
-#         quer_plots_sel$ddlat > -1000)
-#       new_values$ddlat = quer_plots_sel$ddlat
-#
-#     if (new_values$ddlon == -1000 &
-#         quer_plots_sel$ddlon > -1000)
-#       new_values$ddlon = quer_plots_sel$ddlon
-#
-#     if (new_values$elevation == -1000 &
-#         quer_plots_sel$elevation > -1000)
-#       new_values$elevation = quer_plots_sel$elevation
-#
-#     if (new_values$ddlat == -1000 &
-#         quer_plots_sel$ddlat == -1000)
-#       new_values$ddlat = quer_plots_sel$ddlat = NA
-#
-#     if (new_values$ddlon == -1000 &
-#         quer_plots_sel$ddlon == -1000)
-#       new_values$ddlon = quer_plots_sel$ddlon = NA
-#
-#     if (new_values$elevation == -1000 &
-#         quer_plots_sel$elevation == -1000)
-#       new_values$elevation = quer_plots_sel$elevation = NA
-#
-#     comp_values <- new_values != quer_plots_sel
-#     comp_values <- dplyr::as_tibble(comp_values)
-#     comp_values <- comp_values %>%
-#       dplyr::select_if( ~ sum(!is.na(.)) > 0)
-#
-#     print(comp_values)
+
 
     if (!is.vector(comp_values)) {
 
@@ -4575,6 +4544,171 @@ update_plot_data <- function(team_lead = NULL,
       cli::cli_alert_info("No plot to be update found.")
   }
 }
+
+
+#' Update plot data data
+#'
+#' Update plot data plot _ at a time
+#'
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @param new_data data frame data containing id and new values
+#' @param col_names_select string plot name of the selected plots
+#' @param col_names_corresp string of the selected plots
+#' @param id_col integer indicate which name of col_names_select is the id for matching data
+#' @param launch_update logical if TRUE updates are performed
+#' @param add_backup logical whether backup of modified data should be recorded
+#'
+#'
+#' @return No return value individuals updated
+#' @export
+update_plot_data_batch <- function(new_data,
+                               col_names_select = NULL,
+                               col_names_corresp = NULL,
+                               id_col = 1,
+                               launch_update = FALSE,
+                               add_backup = TRUE) {
+
+  if(!exists("mydb")) call.mydb()
+
+  if (is.null(col_names_select)) {
+    col_names_select <- names(new_data)
+    cli::cli_alert_info("col_names_select is set as all names of new_data")
+  }
+
+  if (is.null(col_names_corresp)) {
+    col_names_corresp <- col_names_select
+    cli::cli_alert_info("col_names_corresp is set to names of col_names_select (it should be names of columns of data_individuals")
+  }
+
+  all_colnames_ind <-
+    dplyr::tbl(mydb, "data_liste_plots") %>%
+    colnames()
+
+  if(length(col_names_select) != length(col_names_corresp))
+    stop("col_names_select and col_names_corresp should have same length")
+
+  for (i in 1:length(col_names_select))
+    if(!any(col_names_select[i] == colnames(new_data)))
+      stop(paste(col_names_select[i], "not found in new_data"))
+
+  for (i in 1:length(col_names_corresp))
+    if(!any(col_names_corresp[i] == all_colnames_ind))
+      stop(paste(col_names_corresp[i], "not found in data_liste_plots, check others tables, observation/traits should be updated in traits_measurements table"))
+
+  id_db <- col_names_corresp[id_col]
+
+  if(!any(id_db == c("id_liste_plots"))) stop("id for matching should be id_liste_plots")
+
+  new_data_renamed <-
+    .rename_data(dataset = new_data,
+                 col_old = col_names_select,
+                 col_new = col_names_corresp)
+
+  # new_data_renamed <-
+  #   new_data %>%
+  #   dplyr::rename_at(dplyr::vars(col_names_select[-id_col]), ~ col_names_corresp[-id_col])
+
+  # dataset = new_data_renamed
+  # col_new = col_names_corresp
+  # id_col_nbr = id_col
+  # type_data = "individuals"
+
+  output_matches <- .find_ids(dataset = new_data_renamed,
+                              col_new = col_names_corresp,
+                              id_col_nbr = id_col,
+                              type_data = "plot_data")
+
+  matches_all <-
+    output_matches[[2]]
+
+  for (i in 1:length(matches_all)) {
+
+    field <- names(matches_all)[i]
+    var_new <- paste0(field, "_new")
+    matches <- matches_all[[i]]
+
+    if(launch_update & nrow(matches) > 0) {
+
+      matches <-
+        matches %>%
+        dplyr::select(id, dplyr::contains("_new"))
+      matches <-
+        .add_modif_field(matches)
+
+      all_id_match <- dplyr::pull(dplyr::select(matches, id))
+
+      if(add_backup) {
+
+        quo_var_id <- rlang::parse_expr(quo_name(rlang::enquo(id_db)))
+
+        all_rows_to_be_updated <-
+          dplyr::tbl(mydb, "data_liste_plots") %>%
+          dplyr::filter(!!quo_var_id %in% all_id_match) %>%
+          dplyr::collect()
+
+        colnames_plots <-
+          dplyr::tbl(mydb, "followup_updates_liste_plots")  %>%
+          dplyr::select(-date_modified, -modif_type, -id_fol_up_plots) %>%
+          dplyr::collect() %>%
+          dplyr::top_n(1) %>%
+          colnames()
+
+        all_rows_to_be_updated <-
+          all_rows_to_be_updated %>%
+          dplyr::select(dplyr::one_of(colnames_plots))
+
+        all_rows_to_be_updated <-
+          all_rows_to_be_updated %>%
+          mutate(date_modified = Sys.Date()) %>%
+          mutate(modif_type = field)
+
+        print(all_rows_to_be_updated %>%
+                dplyr::select(modif_type, date_modified))
+
+        DBI::dbWriteTable(mydb, "followup_updates_liste_plots",
+                          all_rows_to_be_updated, append = TRUE, row.names = FALSE)
+      }
+
+      # if(any(names(matches) == "idtax_n_new"))
+      #   matches <-
+      #   matches %>%
+      #   dplyr::mutate(idtax_n_new == as.integer(idtax_n_new))
+
+      ## create a temporary table with new data
+      DBI::dbWriteTable(mydb, "temp_table", matches,
+                        overwrite=T, fileEncoding = "UTF-8", row.names=F)
+
+      query_up <-
+        paste0("UPDATE data_liste_plots t1 SET (",field,", data_modif_d, data_modif_m, data_modif_y) = (t2.",var_new, ", t2.date_modif_d, t2.date_modif_m, t2.date_modif_y) FROM temp_table t2 WHERE t1.", id_db," = t2.id")
+
+      rs <-
+        DBI::dbSendStatement(mydb, query_up)
+
+      cat("Rows updated", RPostgres::dbGetRowsAffected(rs))
+      rs@sql
+      DBI::dbClearResult(rs)
+
+      cli::cli_alert_success("Successful update")
+
+    } else{
+
+      if (launch_update & nrow(matches) == 0)
+        cat("\n No new values found")
+
+      if (!launch_update)
+        cli::cli_alert_danger("No update because launch_update is FALSE")
+
+    }
+  }
+  return(matches_all)
+}
+
+
+
+
+
+
 
 
 #' Update individuals data
@@ -8571,19 +8705,19 @@ add_subplottype <- function(new_type = NULL,
     nrow()>0)  stop("new type already in table")
 
 
-  if(is.null(new_valuetype)) stop("define new_valuetype")
+  if (is.null(new_valuetype)) stop("define new_valuetype")
 
-  if(!any(new_valuetype==c('numeric',
+  if (!any(new_valuetype==c('numeric',
                            'integer',
                            'categorical',
                            'ordinal',
                            'logical',
                            'character'))) stop("valuetype should one of following 'numeric', 'integer', 'categorical', 'ordinal', 'logical', or 'character'")
 
-  if(new_valuetype=="numeric" | new_valuetype=="integer")
-    if(!is.numeric(new_maxallowedvalue) & !is.integer(new_maxallowedvalue)) stop("valuetype numeric of integer and max value not of this type")
-  if(new_valuetype=="numeric" | new_valuetype=="integer")
-    if(!is.numeric(new_minallowedvalue) & !is.integer(new_minallowedvalue)) stop("valuetype numeric of integer and min value not of this type")
+  if (new_valuetype=="numeric" | new_valuetype=="integer")
+    if (!is.numeric(new_maxallowedvalue) & !is.integer(new_maxallowedvalue)) stop("valuetype numeric of integer and max value not of this type")
+  if (new_valuetype=="numeric" | new_valuetype=="integer")
+    if (!is.numeric(new_minallowedvalue) & !is.integer(new_minallowedvalue)) stop("valuetype numeric of integer and min value not of this type")
 
   if(!exists("mydb")) call.mydb()
 
@@ -10659,6 +10793,10 @@ replace_NA <- function(vec, inv = FALSE) {
   if(type_data == "sp_trait_measures")
     corresponding_data <-
       dplyr::tbl(mydb, "table_traits_measures")
+
+  if(type_data == "plot_data")
+    corresponding_data <-
+      dplyr::tbl(mydb, "data_liste_plots")
 
   if(type_data == "trait_measures") {
     # all_data <-
@@ -16957,7 +17095,7 @@ add_sp_traits_measures <- function(new_data,
 #' See https://terminologies.gfbio.org/terms/ets/pages/index.html for description of each field
 #'
 #' @export
-add_trait <- function(new_trait = NULL,
+add_trait_taxa <- function(new_trait = NULL,
                       new_relatedterm = NULL,
                       new_valuetype = NULL,
                       new_maxallowedvalue = NULL,
