@@ -4667,7 +4667,9 @@ update_plot_data_batch <- function(new_data,
                 dplyr::select(modif_type, date_modified))
 
         DBI::dbWriteTable(mydb, "followup_updates_liste_plots",
-                          all_rows_to_be_updated, append = TRUE, row.names = FALSE)
+                          all_rows_to_be_updated,
+                          append = TRUE,
+                          row.names = FALSE)
       }
 
       # if(any(names(matches) == "idtax_n_new"))
@@ -9683,6 +9685,14 @@ add_traits_measures <- function(new_data,
         dplyr::select(-traitvalue) %>%
         dplyr::mutate(trait = stringr::str_trim(trait))
 
+      if (valuetype$valuetype == "ordinal")
+        all_vals <- all_vals %>%
+        dplyr::rename(id_trait = traitid,
+                      id_liste_plots = id_table_liste_plots,
+                      trait = traitvalue_char) %>%
+        dplyr::select(-traitvalue) %>%
+        dplyr::mutate(trait = stringr::str_trim(trait))
+
       # all_vals %>%
       #   dplyr::group_by(id_data_individuals, id_trait, id_liste_plots, id_sub_plots, issue) %>%
       #   dplyr::count() %>%
@@ -9771,6 +9781,14 @@ add_traits_measures <- function(new_data,
       data_trait <-
         .add_modif_field(dataset = data_trait)
 
+
+      if (valuetype$valuetype == "ordinal" |
+          valuetype$valuetype == "character")
+        val_type <- "character"
+
+      if (valuetype$valuetype == "numeric")
+        val_type <- "numeric"
+
       cli::cli_h3("data_to_add")
       data_to_add <-
         dplyr::tibble(
@@ -9811,12 +9829,12 @@ add_traits_measures <- function(new_data,
           ), data_trait$measurementmethod, NA),
           traitid = data_trait$id_trait,
           traitvalue = ifelse(
-            rep(valuetype$valuetype == "numeric", nrow(data_trait)),
+            rep(val_type == "numeric", nrow(data_trait)),
             data_trait$trait,
             NA
           ),
           traitvalue_char = ifelse(
-            rep(valuetype$valuetype == "character", nrow(data_trait)),
+            rep(val_type == "character", nrow(data_trait)),
             data_trait$trait,
             NA
           ),
@@ -10434,7 +10452,7 @@ add_specimens <- function(new_data ,
                         id_sub_plots)
       }
 
-      if(valuetype == "character") {
+      if(valuetype == "character" | valuetype == "ordinal") {
         traits_linked_subset <-
           traits_linked_subset %>%
           dplyr::select(trait, traitvalue_char, issue, day, month, year, id_n, id_old, id_trait_measures,
@@ -11283,7 +11301,7 @@ replace_NA <- function(vec, inv = FALSE) {
   }
 
   issues <- vector(mode = "character", length = nrow(data_stand))
-  if (select_trait_features$valuetype != "character") {
+  if (select_trait_features$valuetype == "numeric") {
     if (any(data_stand$trait < select_trait_features$minallowedvalue)) {
       warning(
         paste(
