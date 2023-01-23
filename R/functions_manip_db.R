@@ -15576,8 +15576,11 @@ get_ref_specimen_ind <- function(collector = NULL, ids = NULL) {
     mutate(herbarium_nbe_char = stringr::str_replace(string = herbarium_nbe_char,
                                                      pattern = "-",
                                                      replacement = " ")) %>%
+    mutate(herbarium_nbe_char = stringr::str_replace_all(string = herbarium_nbe_char,
+                                                     pattern = "[.]",
+                                                     replacement = " ")) %>%
     mutate(nbrs = readr::parse_number(herbarium_nbe_char)) %>%
-    mutate(nbrs = ifelse(nbrs<1, nbrs*-1, nbrs)) %>%
+    mutate(nbrs = ifelse(nbrs < 1, nbrs*-1, nbrs)) %>%
     arrange(desc(nbrs))
 
   ## getting collector of specimen
