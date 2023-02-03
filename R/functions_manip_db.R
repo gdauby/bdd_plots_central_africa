@@ -2014,9 +2014,11 @@ query_plots <- function(team_lead = NULL,
 
   all_sub_type_to_summarise <-
     all_sub_type %>%
-    dplyr::filter(type != "census",
-                  !grepl("ddlat", type),
-                  !grepl("ddlon", type))
+    dplyr::filter(type != "census"
+                  # ,
+                  # !grepl("ddlat", type),
+                  # !grepl("ddlon", type)
+                  )
 
   ## if any plots features others than census, adding them to metadata
   if(nrow(all_sub_type_to_summarise) > 0) {
@@ -2144,7 +2146,6 @@ query_plots <- function(team_lead = NULL,
         dplyr::select(coord1, coord2, coord3, coord4, type, typevalue, plot_name, id_sub_plots, id_table_liste_plots) %>%
         arrange(coord2)
 
-
       all_plots_coord <- unique(all_coordinates_subplots_rf$plot_name)
 
       coordinates_subplots_plot <- vector('list', length(all_plots_coord))
@@ -2169,8 +2170,8 @@ query_plots <- function(team_lead = NULL,
             cor_coord <-
               BIOMASS::correctCoordGPS(
                 longlat = coordinates_subplots[, c("typevalue_ddlon", "typevalue_ddlat")],
-                rangeX = c(0, 100),
-                rangeY = c(0, 100),
+                rangeX = c(0, max(as.numeric(coordinates_subplots$coord1))),
+                rangeY = c(0, max(as.numeric(coordinates_subplots$coord2))),
                 coordRel = coordinates_subplots %>%
                   dplyr::select(Xrel, Yrel),
                 drawPlot = F,
@@ -2564,7 +2565,7 @@ query_plots <- function(team_lead = NULL,
             dplyr::ungroup() %>%
             dplyr::distinct()
 
-          cli::cli_alert_info("Extracting most frequent value for categorical traits at genus level")
+          if (verbose) cli::cli_alert_info("Extracting most frequent value for categorical traits at genus level")
 
           traits_idtax_char <-
             traits_idtax_char %>%
@@ -4035,8 +4036,8 @@ add_plots <- function(new_data,
 #'
 #' @export
 add_subplot_features <- function(new_data,
-                                 col_names_select,
-                                 col_names_corresp,
+                                 col_names_select = NULL,
+                                 col_names_corresp= NULL,
                                  collector_field = NULL,
                                  plot_name_field = NULL,
                                  id_plot_name = NULL,
@@ -4050,32 +4051,40 @@ add_subplot_features <- function(new_data,
   for (i in 1:length(subplottype_field)) if(!any(colnames(new_data)==subplottype_field[i]))
     stop(paste("subplottype_field provide not found in new_data", subplottype_field[i]))
 
-  new_data_renamed <-
-    .rename_data(dataset = new_data,
-                 col_old = col_names_select,
-                 col_new = col_names_corresp)
+
+  if (!is.null(col_names_select) &
+      !is.null(col_names_corresp)) {
+    new_data_renamed <-
+      .rename_data(dataset = new_data,
+                   col_old = col_names_select,
+                   col_new = col_names_corresp)
+  } else {
+    new_data_renamed <-
+      new_data
+  }
+
 
   if(is.null(plot_name_field) & is.null(id_plot_name)) stop("no plot links provided, provide either plot_name_field or id_plot_name")
 
-  if(!any(col_names_corresp=="day")) {
+  if (!any(col_names_corresp == "day")) {
     warning("no information collection day provided")
     new_data_renamed <-
       new_data_renamed %>%
-      tibble::add_column(day = NA)
+      mutate(day = NA)
   }
 
-  if(!any(col_names_corresp=="year")) {
+  if (!any(col_names_corresp == "year")) {
     warning("no information collection year provided")
     new_data_renamed <-
       new_data_renamed %>%
-      tibble::add_column(year = NA)
+      mutate(year = NA)
   }
 
-  if(!any(col_names_corresp=="month")) {
+  if (!any(col_names_corresp == "month")) {
     warning("no information collection month provided")
     new_data_renamed <-
       new_data_renamed %>%
-      tibble::add_column(month = NA)
+      mutate(month = NA)
   }
 
   new_data_renamed <-
