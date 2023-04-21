@@ -6,8 +6,8 @@
 \usage{
 add_subplot_features(
   new_data,
-  col_names_select,
-  col_names_corresp,
+  col_names_select = NULL,
+  col_names_corresp = NULL,
   collector_field = NULL,
   plot_name_field = NULL,
   id_plot_name = NULL,
