@@ -74,6 +74,8 @@ launch_stand_tax_app <- function() {
 
       tableOutput("list.sp.m"),
 
+      reactable::reactableOutput(outputId = "concern_rows"),
+
       tableOutput("table_chosen_sp"),
 
       uiOutput("Action1"),
@@ -127,7 +129,7 @@ launch_stand_tax_app <- function() {
 
       # DATA <- readxl::read_xlsx("D:/MonDossierR/database.transects/individuals_to_be_added/new_individuals_IDU.xlsx", sheet =  1)
 
-      DATA <- readxl::read_xlsx(input$data1$datapath, sheet =  1)
+      DATA <- suppressWarnings(readxl::read_xlsx(input$data1$datapath, sheet =  1))
 
 
       # DATA <- readxl::read_excel(paste(input$data1$datapath, ".xlsx", sep=""), 1)
@@ -367,7 +369,27 @@ launch_stand_tax_app <- function() {
                     dplyr::select(idtax_n, idtax_good_n, tax_gen, tax_infra_level, tax_infra_level_auth),
                   by = c("idtax_n" = "idtax_n"))
 
+      # print(join.table)
 
+      # Check how many exact match
+      count_table <-
+        join.table %>%
+        dplyr::group_by(id_data) %>%
+        dplyr::count() %>%
+        dplyr::ungroup()
+
+      # print(count_table)
+
+      join.table <-
+        join.table %>%
+        left_join(count_table) %>%
+        mutate(idtax_n = case_when(
+          n > 1 ~ NA,
+          n == 1 ~ idtax_n
+          ))
+
+
+      # print(join.table)
       # if more than one matching by name, take the first
       join.table <-
         join.table %>%
@@ -607,10 +629,7 @@ launch_stand_tax_app <- function() {
         }else{
 
           req(input$data1)
-          # if(input$dico.choix!="oui")
-            # req(input$data2)
 
-          # Name1 <- original.list.name$df[as.numeric(input$sector)]
           Name1 <-
             stand.list.name$df %>%
             dplyr::filter(id_tax_search == as.numeric(input$sector)) %>%
@@ -659,9 +678,6 @@ launch_stand_tax_app <- function() {
 
 
           }
-
-          # dist. <-
-          # RecordLinkage::levenshteinSim(tolower(Name1), tolower(DicoNames1$tax_infra_level_auth))
 
           if(input$choice.kind2 == "les genres") {
 
@@ -723,9 +739,6 @@ launch_stand_tax_app <- function() {
 
             if (input$choice.kind2 == "les familles") {
 
-              # if(nrow(dico_family) < nbe.match)
-              #   nbe.match_class <- nrow(dico_family)
-
               matches. <-
                 dico_family[order(dist., decreasing = T)[1:nbe.match],]
 
@@ -778,7 +791,6 @@ launch_stand_tax_app <- function() {
             list.match <-
               matches. %>%
               dplyr::select(!!rlang::sym(selected.field), idtax_n)
-            # list.match <- c(matches.[,c(selected.field)])
 
           }
 
@@ -826,7 +838,6 @@ launch_stand_tax_app <- function() {
           id.names <- as.list(seq(1, nrow(list.match.reac$df), 1))
           names(id.names) <- enc2utf8(dplyr::pull(list.match.reac$df, 1))
 
-          # Encoding(names(id.names)) <-  "UTF-8"
 
           selectInput("stock",
                       "Choisir le nom correct si present",
@@ -948,7 +959,29 @@ launch_stand_tax_app <- function() {
 
           }
 
+
+
         }
+      })
+
+      output$concern_rows <- reactable::renderReactable({
+
+        Name1 <-
+          stand.list.name$df %>%
+          dplyr::filter(id_tax_search == as.numeric(input$sector)) %>%
+          dplyr::pull(id_tax_search)
+
+
+        reactable::reactable(
+          data = data.to.standardize.reac$df %>%
+            filter(id_tax_search == Name1),
+          filterable = TRUE,
+          highlight = TRUE,
+          searchable = TRUE,
+          pagination = FALSE,
+          height = 300
+        )
+
       })
 
 
@@ -1029,18 +1062,6 @@ launch_stand_tax_app <- function() {
 
             DicoNames$df %>%
               dplyr::filter(idtax_n == id_Name2) %>%
-              # mutate(tax_infra_level_auth = ifelse(!is.na(tax_esp),
-              #                                      paste0(tax_gen,
-              #                                             " ",
-              #                                             tax_esp,
-              #                                             ifelse(!is.na(author1), paste0(" ", author1), ""),
-              #                                             ifelse(!is.na(tax_rank01), paste0(" ", tax_rank01), ""),
-              #                                             ifelse(!is.na(tax_nam01), paste0(" ", tax_nam01), ""),
-              #                                             ifelse(!is.na(author2), paste0(" ", author2), ""),
-              #                                             ifelse(!is.na(tax_rank02), paste0(" ", tax_rank02), ""),
-              #                                             ifelse(!is.na(tax_nam02), paste0(" ", tax_nam02), ""),
-              #                                             ifelse(!is.na(author3), paste0(" ", author3), "")),
-              #                                      NA)) %>%
               dplyr::select(tax_fam,
                             tax_gen,
                             tax_esp,
@@ -9660,6 +9681,22 @@ add_traits_measures <- function(new_data,
         }
       }
 
+
+      #### identify if duplicate values in the dataset to upload
+
+      duplicated_rows <- selected_data_traits %>%
+        group_by(id_data_individuals,
+                 id_trait,
+                 id_liste_plots,
+                 id_sub_plots) %>%
+        count() %>%
+        filter(n > 1)
+
+      if (nrow(duplicated_rows) > 0) {
+        print(duplicated_rows)
+        stop("Duplicated values for dataset to upload - ony one value attached to individual, plot and subplot can be uploaded at once")
+      }
+
       ### identify if measures are already within DB
       cli::cli_alert_info("Identifying if imported values are already in DB")
       trait_id <- unique(data_trait$id_trait)
@@ -9714,6 +9751,8 @@ add_traits_measures <- function(new_data,
       #   group_by(id_data_individuals, id_trait, id_liste_plots, id_sub_plots, issue, trait) %>%
       #   count() %>%
       #   filter(n>1)
+
+
 
       duplicated_rows <-
         dplyr::bind_rows(selected_data_traits,
@@ -15914,6 +15953,32 @@ add_entry_taxa <- function(search_name_tps = NULL,
               tax_esp <- NULL
           }
 
+          tax_rank1 <- res_tps_selected$rankabbreviation
+          if (tax_rank1 != "sp.") {
+            cat(cli::bg_red(paste(tax_rank1)))
+            cf_ <- readline(prompt = paste("Confirm tax_rank1 ? press enter"))
+            if (cf_ != '') {
+              tax_rank1 <- readline(prompt = "Enter tax_rank1  : ")
+              if (tax_rank1 == '')
+                tax_rank1 <- NULL
+            }
+          } else {
+            tax_rank1 <- NULL
+          }
+
+          tax_name1 <- unlist(strsplit(res_tps_selected$scientificname, " "))[4]
+          if (!is.na(tax_name1)) {
+            cat(cli::bg_red(paste(tax_name1)))
+            cf_ <- readline(prompt = paste("Confirm tax_name1 ? press enter"))
+            if (cf_ != '') {
+              tax_name1 <- readline(prompt = "Enter tax_name1  : ")
+              if (tax_name1 == '')
+                tax_name1 <- NULL
+            }
+          } else {
+            tax_name1 <- NULL
+          }
+
           tax_fam <- res_tps_selected$family
           cat(cli::bg_red(paste(tax_fam)))
           cf_ <- readline(prompt = paste("Confirm tax_fam ? press enter"))
@@ -15930,6 +15995,14 @@ add_entry_taxa <- function(search_name_tps = NULL,
             author1 <- readline(prompt = "Enter author1  : ")
             if (author1 == '')
               author1 <- NULL
+          }
+
+          if (!is.null(tax_name1)) {
+            author2 <- readline(prompt = "Enter author2  : ")
+            if (author2 == '')
+              author2 <- NULL
+          } else {
+            author2 <- NULL
           }
 
           year_description <- as.numeric(res_tps_selected$displaydate)
@@ -16001,9 +16074,16 @@ add_entry_taxa <- function(search_name_tps = NULL,
         class = NULL,
         check_synonymy = FALSE,
         extract_traits = FALSE
-      ) %>%
+      )
+
+    if (is.null(tax_order))
+      stop("Family not existing, define order")
+
+    tax_order <-
+      tax_order %>%
       dplyr::distinct(tax_order) %>%
       dplyr::pull()
+
     tax_order <- tax_order[which(!is.na(tax_order))]
     if (length(tax_order) > 1)
       cli::cli_alert_warning("No tax_order provided, and two different order names for this family: {tax_order}")
@@ -18452,9 +18532,7 @@ divid_plot <- function (coordinates_sf, plot_name = 'plot_name') {
 
     plot <- coordinates_sf[i,]
 
-    #####################################################################
-    ##### STEP 1 : EXTRACT THE 4 CORNERS OF THE PLOT i
-    #####################################################################
+       ##### STEP 1 : EXTRACT THE 4 CORNERS OF THE PLOT i
 
     coord <- plot %>%
       st_coordinates() %>%
@@ -18470,9 +18548,7 @@ divid_plot <- function (coordinates_sf, plot_name = 'plot_name') {
       as.matrix()
 
 
-    #####################################################################
     ##### STEP 2 : CREATE THE 25 SUBPLOT SQUARES
-    #####################################################################
 
     y_length <- (coord[2,2]-coord[1,2]) / n
     x_length <- (coord[4,1]-coord[1,1]) / n
@@ -18499,9 +18575,7 @@ divid_plot <- function (coordinates_sf, plot_name = 'plot_name') {
 
     }
 
-    #####################################################################
     #### STEP 3 : ASSIGN plot_name AND subplot_name TO SUBPLOTS
-    #####################################################################
 
     nrows <- 25
 
