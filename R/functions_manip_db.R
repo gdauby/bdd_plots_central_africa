@@ -1678,6 +1678,7 @@ traits_list <- function(id_trait = NULL) {
 #' @param extract_traits whether species level traits should be extracted as well
 #' @param traits_to_genera if species-level traits should be extrapolated to genus level, by default is FALSE
 #' @param wd_fam_level logical, if wood density should be given at family level or not NOT YET FULLY AVAILABLE
+#' @param include_liana logical, if liana should be included, by default FALSE
 #'
 #' @importFrom DBI dbSendQuery dbFetch dbClearResult dbWriteTable
 #' @importFrom stringr str_flatten str_trim str_extract
@@ -1712,7 +1713,8 @@ query_plots <- function(team_lead = NULL,
                         collapse_multiple_val = FALSE,
                         extract_traits = TRUE,
                         traits_to_genera = FALSE,
-                        wd_fam_level = FALSE) {
+                        wd_fam_level = FALSE,
+                        include_liana = FALSE) {
 
   if (!exists("mydb")) call.mydb()
 
@@ -2459,6 +2461,11 @@ query_plots <- function(team_lead = NULL,
 
     }
 
+    if (!include_liana)
+      res_individuals_full <-
+      res_individuals_full %>%
+      dplyr::filter(liana == FALSE)
+
     res_individuals_full <-
       res_individuals_full %>%
       # dplyr::collect() %>%
@@ -2667,27 +2674,6 @@ query_plots <- function(team_lead = NULL,
 
 
 
-          # res_subset <- res_individuals_full %>%
-          #   filter(!id_n %in% list_genera$id_n)
-          #
-          # col_traits_char <- names(traits_idtax_char %>%
-          #         dplyr::select(-tax_gen))
-          #
-          # res_completed <-
-          #   res_individuals_full %>%
-          #   filter(id_n %in% list_genera$id_n) %>%
-          #   dplyr::select(-col_traits_char[col_traits_char %in% names(res_individuals_full)]) %>%
-          #   left_join(traits_idtax_char,
-          #             by = c("tax_gen" = "tax_gen"))
-          #
-          # res_individuals_full <- bind_rows(res_subset, res_completed)
-          #
-          # level_trait[which(res_individuals_full$id_n %in% list_genera$id_n)] <- "genus"
-
-          # res_individuals_full %>%
-          #   filter(id_n %in% list_genera$id_n) %>%
-          #   group_by(phenology) %>%
-          #   count()
 
         }
 
@@ -2882,23 +2868,6 @@ query_plots <- function(team_lead = NULL,
         }
 
 
-        #
-        #
-        # all_genera <- query_taxa(genus = unique(list_genera$tax_gen),
-        #                          only_genus = T,
-        #                             class = NULL, check_synonymy = F,
-        #                             extract_traits = F)
-        #
-        # tbl(mydb, "table_taxa") %>%
-        #   dplyr::filter(tax_gen %in% !!unique(list_genera$tax_gen)) %>%
-        #   dplyr::filter(is.na(tax_esp)) %>%
-        #   dplyr::select(idtax_n) %>%
-        #   dplyr::collect()
-        #
-        # all_genera_traits <- query_traits_measures(idtax = all_sp_genera %>%
-        #                                       filter(!is.na(tax_esp)) %>%
-        #                                       pull(idtax_n))
-
 
       }
     }
@@ -2981,8 +2950,15 @@ query_plots <- function(team_lead = NULL,
 
   res_list$extract <- res
 
-  if(show_multiple_census)
+  if (nrow(res) < 100)
+    print_table(res)
+
+
+  if(show_multiple_census) {
     res_list$census_features <- census_features
+
+    print_table(census_features)
+  }
 
   if (show_all_coordinates)
     res_list$coordinates <- coordinates_subplots
@@ -2991,6 +2967,9 @@ query_plots <- function(team_lead = NULL,
     res_list$coordinates_sf <- coordinates_subplots_plot_sf
 
   res_list <- res_list[!is.na(res_list)]
+
+
+
 
   if (length(res_list) == 1)
     res_list <- res_list[[1]]
@@ -9682,6 +9661,18 @@ add_traits_measures <- function(new_data,
       }
 
 
+      ### identify if measures are already within DB
+      cli::cli_alert_info("Identifying if imported values are already in DB")
+      trait_id <- unique(data_trait$id_trait)
+      selected_data_traits <-
+        data_trait %>%
+        dplyr::select(id_data_individuals,
+                      id_trait,
+                      id_liste_plots,
+                      id_sub_plots,
+                      trait,
+                      issue)
+
       #### identify if duplicate values in the dataset to upload
 
       duplicated_rows <- selected_data_traits %>%
@@ -9697,17 +9688,6 @@ add_traits_measures <- function(new_data,
         stop("Duplicated values for dataset to upload - ony one value attached to individual, plot and subplot can be uploaded at once")
       }
 
-      ### identify if measures are already within DB
-      cli::cli_alert_info("Identifying if imported values are already in DB")
-      trait_id <- unique(data_trait$id_trait)
-      selected_data_traits <-
-        data_trait %>%
-        dplyr::select(id_data_individuals,
-                      id_trait,
-                      id_liste_plots,
-                      id_sub_plots,
-                      trait,
-                      issue)
 
       all_vals <-
         dplyr::tbl(mydb, "data_traits_measures") %>%
@@ -13777,17 +13757,19 @@ query_taxa <-
           dplyr::relocate(idtax_n, .before = tax_order) %>%
           dplyr::relocate(idtax_good_n, .before = tax_order)
 
-        res_print <-
-          res_print %>%
-          mutate(across(where(is.character), ~ tidyr::replace_na(., "")))
+        print_table(res_print)
 
-        res_print <- suppressMessages(as_tibble(cbind(columns = names(res_print), record = t(res_print)),
-                                                .name_repair = "universal"))
-
-        res_print %>%
-          kableExtra::kable(format = "html", escape = F) %>%
-          kableExtra::kable_styling("striped", full_width = F) %>%
-          print()
+        # res_print <-
+        #   res_print %>%
+        #   mutate(across(where(is.character), ~ tidyr::replace_na(., "")))
+        #
+        # res_print <- suppressMessages(as_tibble(cbind(columns = names(res_print), record = t(res_print)),
+        #                                         .name_repair = "universal"))
+        #
+        # res_print %>%
+        #   kableExtra::kable(format = "html", escape = F) %>%
+        #   kableExtra::kable_styling("striped", full_width = F) %>%
+        #   print()
 
       }
 
@@ -15544,15 +15526,17 @@ match_tax <- function(idtax, queried_tax = NULL, verbose = TRUE) {
       dplyr::relocate(idtax_n, .before = tax_order) %>%
       dplyr::relocate(idtax_good_n, .before = tax_order)
 
-    res_print <-
-      res_print %>%
-      mutate_all(~ as.character(.)) %>%
-      mutate_all(~ tidyr::replace_na(., ""))
+    print_table(res_print)
 
-    as_tibble(cbind(columns = names(res_print), record = t(res_print))) %>%
-      kableExtra::kable(format = "html", escape = F) %>%
-      kableExtra::kable_styling("striped", full_width = F) %>%
-      print()
+    # res_print <-
+    #   res_print %>%
+    #   mutate_all(~ as.character(.)) %>%
+    #   mutate_all(~ tidyr::replace_na(., ""))
+    #
+    # as_tibble(cbind(columns = names(res_print), record = t(res_print))) %>%
+    #   kableExtra::kable(format = "html", escape = F) %>%
+    #   kableExtra::kable_styling("striped", full_width = F) %>%
+    #   print()
 
   }
 
@@ -16952,46 +16936,6 @@ add_sp_traits_measures <- function(new_data,
         }
 
       }
-
-
-      #
-      # duplicated_rows_with_issue_no_double <-
-      #   dplyr::bind_rows(selected_data_traits,
-      #                    all_vals) %>%
-      #   dplyr::filter(!is.na(issue),!grepl("more than one observation", issue)) %>%
-      #   dplyr::select(-issue) %>%
-      #   dplyr::group_by(id_data_individuals, id_trait, id_liste_plots, id_sub_plots) %>%
-      #   dplyr::count() %>%
-      #   dplyr::filter(n > 1)
-      #
-      # duplicated_rows_with_issue_double <-
-      #   dplyr::bind_rows(selected_data_traits,
-      #                    all_vals) %>%
-      #   dplyr::filter(!is.na(issue), grepl("more than one observation", issue)) %>%
-      #   dplyr::select(-issue) %>%
-      #   dplyr::group_by(id_data_individuals, id_trait, id_liste_plots, id_sub_plots) %>%
-      #   dplyr::count() %>%
-      #   dplyr::filter(n > 2)
-      #
-      # # %>% #
-      # #   dplyr::filter(!grepl("more than one observation", issue))
-      # duplicated_rows <-
-      #   dplyr::bind_rows(duplicated_rows, duplicated_rows_with_issue_no_double,
-      #                    duplicated_rows_with_issue_double)
-      #
-      # # duplicated_rows %>%
-      # #   filter(!id_data_individuals %in% selected_data_traits$id_data_individuals)
-      #
-
-
-
-      # data_trait <-
-      #   data_trait %>%
-      #   dplyr::rename_at("trait", ~ "trait_value")
-      #
-      # data_trait <-
-      #   data_trait %>%
-      #   dplyr::rename_at("id_n", ~ "id_data_individuals")
 
       cli::cli_h3(".add_modif_field")
       data_trait <-
@@ -18872,5 +18816,113 @@ test.order.subplot <- function(ind.extract, sub_plot){
 }
 
 
+#' print table as html in viewer
+#'
+#' print table as html in viewer reordered
+#'
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @param res_print tibble
+#'
+#'
+#' @return print html in viewer
+print_table <- function(res_print) {
+
+  res_print <-
+    res_print %>%
+    mutate(across(where(is.character), ~ tidyr::replace_na(., "")))
+
+  res_print <- suppressMessages(as_tibble(cbind(columns = names(res_print), record = t(res_print)),
+                                          .name_repair = "universal"))
+
+  res_print %>%
+    kableExtra::kable(format = "html", escape = F) %>%
+    kableExtra::kable_styling("striped", full_width = F) %>%
+    print()
+
+}
 
 
+
+
+#' Internal function
+#'
+#' Compute
+#'
+#' @return vector
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @param data_stand tibble
+#' @param subplotype string vector
+#'
+#' @export
+.link_country <- function(data_stand, subplotype) {
+
+  all_country <-
+    dplyr::tbl(mydb, "table_countries") %>%
+    dplyr::collect()
+
+  sorted_matches <-
+    .find_cat(
+      value_to_search = subplotype,
+      compared_table = all_country,
+      column_name = "country",
+      prompt_message = "Choose subplot feature (G for pattern searching): "
+    )
+
+  selected_name <- as.integer(sorted_matches$selected_name)
+
+  if(is.na(selected_name))
+    stop("Provide integer value for standardizing subplotype name")
+
+  selected_type_id <-
+    sorted_matches$sorted_matches %>%
+    dplyr::slice(selected_name) %>%
+    dplyr::select(id_subplotype) %>%
+    dplyr::pull()
+
+  select_type_features <-
+    sorted_matches$sorted_matches %>%
+    dplyr::slice(selected_name)
+
+  if(select_type_features$valuetype == "numeric") {
+    if(any(is.na(as.numeric(data_stand$subplottype)))) {
+      warning("Numeric value expected but some are not")
+      print(data_stand[which(is.na(as.numeric(data_stand$subplottype))),])
+    }
+
+    data_stand$subplottype <-
+      as.numeric(data_stand$subplottype)
+  }
+
+  issues <- vector(mode = "character", length = nrow(data_stand))
+  if(select_type_features$valuetype == "numeric") {
+    if(any(data_stand$subplottype[!is.na(data_stand$subplottype)] < select_type_features$minallowedvalue)) {
+      warning(paste(subplotype, "values lower than minallowedvalue for", subplottype, "for",
+                    sum(data_stand$subplottype < select_type_features$minallowedvalue), "entries"))
+      issues[data_stand$subplottype < select_type_features$minallowedvalue] <-
+        paste(subplottype, "lower than minallowedvalue")
+    }
+  }
+
+  if(select_type_features$valuetype == "numeric") {
+    if(any(data_stand$subplottype[!is.na(data_stand$subplottype)] > select_type_features$maxallowedvalue)) {
+      warning(paste(subplottype, "values lower than maxallowedvalue for", subplottype, "for",
+                    sum(data_stand$subplottype > select_type_features$maxallowedvalue), "entries"))
+      issues[data_stand$subplottype > select_type_features$maxallowedvalue] <-
+        paste(subplottype, "higher than maxallowedvalue")
+    }
+  }
+
+  issues[issues == ""] <- NA
+
+  data_stand <-
+    data_stand %>%
+    dplyr::mutate(id_subplottype = rep(selected_type_id, nrow(.)))
+
+  data_stand <-
+    data_stand %>%
+    dplyr::mutate(issue = issues)
+
+  return(data_stand)
+}
