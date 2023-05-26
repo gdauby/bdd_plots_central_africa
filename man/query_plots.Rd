@@ -28,7 +28,8 @@ query_plots(
   collapse_multiple_val = FALSE,
   extract_traits = TRUE,
   traits_to_genera = FALSE,
-  wd_fam_level = FALSE
+  wd_fam_level = FALSE,
+  include_liana = FALSE
 )
 }
 \arguments{
@@ -75,6 +76,8 @@ query_plots(
 \item{traits_to_genera}{if species-level traits should be extrapolated to genus level, by default is FALSE}
 
 \item{wd_fam_level}{logical, if wood density should be given at family level or not NOT YET FULLY AVAILABLE}
+
+\item{include_liana}{logical, if liana should be included, by default FALSE}
 }
 \value{
 A tibble of all plots or individuals

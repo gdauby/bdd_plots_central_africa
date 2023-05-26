@@ -1795,21 +1795,25 @@ query_plots <- function(team_lead = NULL,
     # query <- "SELECT * FROM data_liste_plots WHERE  team_leader ILIKE '%Dauby%' AND country IN ('Gabon', 'Cameroun')"
 
     if (!is.null(country)) {
-      if (length(country) == 1) {
-        query <-
-          gsub(
-            pattern = "MMM",
-            replacement = paste0(" country ILIKE '%", country, "%' AND MMM"),
-            x = query
-          )
-      } else{
-        query <-
-          gsub(
-            pattern = "MMM",
-            replacement = paste0("country IN ('", paste(country, collapse = "', '"), "') AND MMM"),
-            x = query
-          )
+
+      id_liste_plots_match <- vector('list', length(country))
+      for (i in 1:length(country)) {
+
+        query_country <-
+          paste0("SELECT * FROM table_countries WHERE country ILIKE '%", country[i], "%'")
+
+        rs_country <- func_try_fetch(con = mydb, sql = query_country)
+        rs_country <- dplyr::as_tibble(rs_country)
+
+        id_liste_plots_match[[i]] <- rs_country$id_country
       }
+
+      query <-
+        gsub(
+          pattern = "MMM",
+          replacement = paste0("id_country IN ('", paste(unlist(id_liste_plots_match), collapse = "', '"), "') AND MMM"),
+          x = query
+        )
     }
 
     if (!is.null(locality_name)) {
@@ -1987,6 +1991,16 @@ query_plots <- function(team_lead = NULL,
                      by = c("id_colnam" = "id_table_colnam")) %>%
     dplyr::rename(team_leader = colnam) %>%
     dplyr::relocate(team_leader, .after = plot_name)
+
+  ## link country
+  res <-
+    res %>%
+    dplyr::select(-country) %>% # remove old method
+    dplyr::left_join(dplyr::tbl(mydb, "table_countries") %>%
+                       dplyr::collect(),
+                     by = c("id_country" = "id_country")) %>%
+    # dplyr::rename(country = colnam) %>%
+    dplyr::relocate(country, .after = additional_people)
 
   if (nrow(res) == 0)
     stop("No plot are found based on inputs")
@@ -5251,6 +5265,164 @@ update_ident_specimens <- function(colnam = NULL,
 
 
 
+#' Update specimens data data
+#'
+#' Update specimens data plot _ at a time
+#'
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @param new_data data frame data containing id and new values
+#' @param col_names_select string plot name of the selected plots
+#' @param col_names_corresp string of the selected plots
+#' @param id_col integer indicate which name of col_names_select is the id for matching data
+#' @param launch_update logical if TRUE updates are performed
+#' @param add_backup logical whether backup of modified data should be recorded
+#'
+#'
+#' @return No return value individuals updated
+#' @export
+update_specimens_batch <- function(new_data,
+                                   col_names_select = NULL,
+                                   col_names_corresp = NULL,
+                                   id_col = 1,
+                                   launch_update = FALSE,
+                                   add_backup = TRUE) {
+
+  if(!exists("mydb")) call.mydb()
+
+  if (is.null(col_names_select)) {
+    col_names_select <- names(new_data)
+    cli::cli_alert_info("col_names_select is set as all names of new_data")
+  }
+
+  if (is.null(col_names_corresp)) {
+    col_names_corresp <- col_names_select
+    cli::cli_alert_info("col_names_corresp is set to names of col_names_select (it should be names of columns of specimens")
+  }
+
+  all_specimens <-
+    dplyr::tbl(mydb, "specimens") %>%
+    colnames()
+
+  if(length(col_names_select) != length(col_names_corresp))
+    stop("col_names_select and col_names_corresp should have same length")
+
+  for (i in 1:length(col_names_select))
+    if(!any(col_names_select[i] == colnames(new_data)))
+      stop(paste(col_names_select[i], "not found in new_data"))
+
+  for (i in 1:length(col_names_corresp))
+    if(!any(col_names_corresp[i] == all_specimens))
+      stop(paste(col_names_corresp[i], "not found in specimens table"))
+
+  id_db <- col_names_corresp[id_col]
+
+  if(!any(id_db == c("id_specimen"))) stop("id for matching should be id_specimens")
+
+  new_data_renamed <-
+    .rename_data(dataset = new_data,
+                 col_old = col_names_select,
+                 col_new = col_names_corresp)
+
+
+
+  output_matches <- .find_ids(dataset = new_data_renamed,
+                              col_new = col_names_corresp,
+                              id_col_nbr = id_col,
+                              type_data = "specimens")
+
+  matches_all <-
+    output_matches[[2]]
+
+  for (i in 1:length(matches_all)) {
+
+    field <- names(matches_all)[i]
+    var_new <- paste0(field, "_new")
+    matches <- matches_all[[i]]
+
+    if(launch_update & nrow(matches) > 0) {
+
+      matches <-
+        matches %>%
+        dplyr::select(id, dplyr::contains("_new"))
+      matches <-
+        .add_modif_field(matches)
+
+      all_id_match <- dplyr::pull(dplyr::select(matches, id))
+
+      if(add_backup) {
+
+        # quo_var_id <- rlang::parse_expr(quo_name(rlang::enquo(id_db)))
+        #
+        # all_rows_to_be_updated <-
+        #   dplyr::tbl(mydb, "specimens") %>%
+        #   dplyr::filter(!!quo_var_id %in% all_id_match) %>%
+        #   dplyr::collect()
+        #
+        # colnames_plots <-
+        #   dplyr::tbl(mydb, "followup_specimens")  %>%
+        #   dplyr::select(-date_modified, -modif_type, -id_fol_up_plots) %>%
+        #   dplyr::collect() %>%
+        #   dplyr::top_n(1) %>%
+        #   colnames()
+        #
+        # all_rows_to_be_updated <-
+        #   all_rows_to_be_updated %>%
+        #   dplyr::select(dplyr::one_of(colnames_plots))
+        #
+        # all_rows_to_be_updated <-
+        #   all_rows_to_be_updated %>%
+        #   mutate(date_modified = Sys.Date()) %>%
+        #   mutate(modif_type = field)
+        #
+        # print(all_rows_to_be_updated %>%
+        #         dplyr::select(modif_type, date_modified))
+        #
+        # DBI::dbWriteTable(mydb, "followup_updates_liste_plots",
+        #                   all_rows_to_be_updated,
+        #                   append = TRUE,
+        #                   row.names = FALSE)
+      }
+
+      # if(any(names(matches) == "idtax_n_new"))
+      #   matches <-
+      #   matches %>%
+      #   dplyr::mutate(idtax_n_new == as.integer(idtax_n_new))
+
+      ## create a temporary table with new data
+      DBI::dbWriteTable(mydb, "temp_table", matches,
+                        overwrite=T, fileEncoding = "UTF-8", row.names=F)
+
+      query_up <-
+        paste0("UPDATE specimens t1 SET (",field,", data_modif_d, data_modif_m, data_modif_y) = (t2.",var_new, ", t2.date_modif_d, t2.date_modif_m, t2.date_modif_y) FROM temp_table t2 WHERE t1.", id_db," = t2.id")
+
+      rs <-
+        DBI::dbSendStatement(mydb, query_up)
+
+      cat("Rows updated", RPostgres::dbGetRowsAffected(rs))
+      rs@sql
+      DBI::dbClearResult(rs)
+
+      cli::cli_alert_success("Successful update")
+
+    } else{
+
+      if (launch_update & nrow(matches) == 0)
+        cat("\n No new values found")
+
+      if (!launch_update)
+        cli::cli_alert_danger("No update because launch_update is FALSE")
+
+    }
+  }
+  return(matches_all)
+}
+
+
+
+
+
+
 
 #' Internal function
 #'
@@ -8268,7 +8440,8 @@ query_specimens <- function(collector = NULL,
       description,
       id_specimen,
       idtax_f,
-      id_tropicos
+      id_tropicos,
+      id_colnam
     )
 
   ## filter by collector or id_colnam (id of people table)
@@ -8294,6 +8467,15 @@ query_specimens <- function(collector = NULL,
     query_speci <-
       query_speci %>%
       dplyr::filter(colnbr %in% var)
+  }
+
+  if(!is.null(id_colnam) & is.null(id_search)) {
+
+    var <- rlang::enquo(id_colnam)
+
+    query_speci <-
+      query_speci %>%
+      dplyr::filter(id_colnam %in% var)
   }
 
   if(!is.null(number_min) & is.null(id_search)) {
@@ -10844,6 +11026,10 @@ replace_NA <- function(vec, inv = FALSE) {
   if(type_data == "plot_data")
     corresponding_data <-
       dplyr::tbl(mydb, "data_liste_plots")
+
+  if(type_data == "specimens")
+    corresponding_data <-
+      dplyr::tbl(mydb, "specimens")
 
   if(type_data == "trait_measures") {
     # all_data <-
@@ -16586,8 +16772,20 @@ choice_trait_cat <- function(id_trait) {
 
 
 
-
+#' Query in trait table
+#'
+#' Query in trait table by id or pattern
+#'
+#' @return tibble with query results
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @param id_trait integer id of trait to select
+#' @param pattern string vector trait to look for in the table
+#'
+#' @export
 query_trait <- function(id_trait = NULL, pattern = NULL) {
+
+  if(!exists("mydb_taxa")) call.mydb.taxa(pass = "Anyuser2022", user = "common")
 
   if (!is.null(id_trait)) {
     cli::cli_alert_info("query trait by id")
@@ -16632,6 +16830,45 @@ query_trait <- function(id_trait = NULL, pattern = NULL) {
 }
 
 
+
+#' Query in colnam table
+#'
+#' Query in colnam table by id or pattern
+#'
+#' @return tibble with query results
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @param id_trait integer id of trait to select
+#' @param pattern string vector trait to look for in the table
+#'
+#' @export
+query_colnam <- function(id_colnam = NULL, pattern = NULL) {
+
+  if(!exists("mydb")) call.mydb()
+
+  if (!is.null(id_colnam)) {
+    cli::cli_alert_info("query colnam by id")
+
+    table_colnam <- try_open_postgres_table(table = "table_colnam", con = mydb)
+
+    valuetype <-
+      table_colnam %>%
+      dplyr::filter(id_table_colnam == !!id_colnam) %>%
+      dplyr::collect()
+  }
+
+  if (is.null(id_colnam) & !is.null(pattern)) {
+
+    cli::cli_alert_info("query colnam by string pattern")
+
+    sql <- glue::glue_sql(paste0("SELECT * FROM table_colnam WHERE colnam ILIKE '%", pattern, "%'"))
+
+    valuetype <- func_try_fetch(con = mydb, sql = sql)
+  }
+
+  return(valuetype)
+
+}
 
 
 
@@ -18853,76 +19090,209 @@ print_table <- function(res_print) {
 #'
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
 #' @param data_stand tibble
-#' @param subplotype string vector
+#' @param country_field string vector
 #'
 #' @export
-.link_country <- function(data_stand, subplotype) {
+.link_country <- function(data_stand, country_field) {
 
-  all_country <-
-    dplyr::tbl(mydb, "table_countries") %>%
-    dplyr::collect()
-
-  sorted_matches <-
-    .find_cat(
-      value_to_search = subplotype,
-      compared_table = all_country,
-      column_name = "country",
-      prompt_message = "Choose subplot feature (G for pattern searching): "
-    )
-
-  selected_name <- as.integer(sorted_matches$selected_name)
-
-  if(is.na(selected_name))
-    stop("Provide integer value for standardizing subplotype name")
-
-  selected_type_id <-
-    sorted_matches$sorted_matches %>%
-    dplyr::slice(selected_name) %>%
-    dplyr::select(id_subplotype) %>%
-    dplyr::pull()
-
-  select_type_features <-
-    sorted_matches$sorted_matches %>%
-    dplyr::slice(selected_name)
-
-  if(select_type_features$valuetype == "numeric") {
-    if(any(is.na(as.numeric(data_stand$subplottype)))) {
-      warning("Numeric value expected but some are not")
-      print(data_stand[which(is.na(as.numeric(data_stand$subplottype))),])
-    }
-
-    data_stand$subplottype <-
-      as.numeric(data_stand$subplottype)
-  }
-
-  issues <- vector(mode = "character", length = nrow(data_stand))
-  if(select_type_features$valuetype == "numeric") {
-    if(any(data_stand$subplottype[!is.na(data_stand$subplottype)] < select_type_features$minallowedvalue)) {
-      warning(paste(subplotype, "values lower than minallowedvalue for", subplottype, "for",
-                    sum(data_stand$subplottype < select_type_features$minallowedvalue), "entries"))
-      issues[data_stand$subplottype < select_type_features$minallowedvalue] <-
-        paste(subplottype, "lower than minallowedvalue")
-    }
-  }
-
-  if(select_type_features$valuetype == "numeric") {
-    if(any(data_stand$subplottype[!is.na(data_stand$subplottype)] > select_type_features$maxallowedvalue)) {
-      warning(paste(subplottype, "values lower than maxallowedvalue for", subplottype, "for",
-                    sum(data_stand$subplottype > select_type_features$maxallowedvalue), "entries"))
-      issues[data_stand$subplottype > select_type_features$maxallowedvalue] <-
-        paste(subplottype, "higher than maxallowedvalue")
-    }
-  }
-
-  issues[issues == ""] <- NA
+  country_name <- "country_name"
 
   data_stand <-
     data_stand %>%
-    dplyr::mutate(id_subplottype = rep(selected_type_id, nrow(.)))
+    dplyr::rename_at(dplyr::vars(all_of(country_field)), ~ country_name)
+
+  all_names_country <-
+    dplyr::distinct(data_stand, country_name)
+
+  id_ <-
+    vector(mode = "integer", nrow(data_stand))
+
+  all_names_country <-
+    all_names_country %>%
+    filter(!is.na(country_name))
+
+
+  for (i in 1:nrow(all_names_country)) {
+
+    all_country <-
+      dplyr::tbl(mydb, "table_countries") %>%
+      dplyr::collect()
+
+    sorted_matches <-
+      .find_cat(
+        value_to_search = dplyr::pull(all_names_country)[i],
+        compared_table = all_country,
+        column_name = "country",
+        prompt_message = "Choose subplot feature (G for pattern searching): "
+      )
+
+    selected_name_id <-
+      sorted_matches$sorted_matches %>%
+      slice(sorted_matches$selected_name) %>%
+      pull(id_country)
+
+    id_[data_stand$country_name==dplyr::pull(all_names_country[i,1])] <-
+      selected_name_id
+
+  }
 
   data_stand <-
     data_stand %>%
-    dplyr::mutate(issue = issues)
+    mutate(id_country = id_)
 
   return(data_stand)
+}
+
+
+
+
+
+
+#' Update colnam
+#'
+#' Update colnam table
+#'
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#'
+#' @param trait_searched string genus name searched
+#' @param trait_id string genus name searched
+#' @param new_trait_name string new trait name
+#' @param new_relatedterm string new relatedterm name
+#' @param new_maxallowedvalue numeric new maxallowedvalue
+#' @param new_minallowedvalue numeric new minallowedvalue
+#' @param new_traitdescription string new traitdescription
+#' @param new_expectedunit string new expectedunit
+#' @param ask_before_update logical TRUE by default, ask for confirmation before updating
+#' @param add_backup logical TRUE by default, add backup of modified data
+#' @param show_results logical TRUE by default, show the data that has been modified
+#'
+#' @return No return value individuals updated
+#' @export
+update_colnam <- function(colnam_searched = NULL,
+                          colnam_id = NULL,
+                          new_colnam = NULL,
+                          new_surname = NULL,
+                          new_family_name = NULL,
+                          new_nationality = NULL,
+                          ask_before_update = TRUE,
+                          add_backup = TRUE,
+                          show_results = TRUE)
+{
+
+  if(!exists("mydb")) call.mydb()
+
+  if(all(is.null(c(colnam_searched, colnam_id))))
+    stop("\n Provide colnam_searched or colnam_id to update")
+
+  ### checking if at least one modification is asked
+  new_vals <- c(new_colnam, new_surname, new_family_name)
+  if(!any(!is.null(new_vals))) stop("\n No new values to be updated.")
+
+  ### querying for entries to be modified
+
+  queried_colnam <- query_colnam(id_colnam = colnam_id, pattern = colnam_searched)
+
+  print(queried_colnam %>% as.data.frame())
+  if(nrow(queried_colnam)>1) stop("more than one colnam selected, select one")
+  if(nrow(queried_colnam)==0) stop("no colnam selected, select one")
+
+  modif_types <-
+    vector(mode = "character", length = nrow(queried_colnam))
+
+  new_vals <-
+    dplyr::tibble(colnam = ifelse(!is.null(new_colnam), as.character(new_colnam),
+                                 queried_colnam$colnam),
+                  family_name = ifelse(!is.null(new_family_name), as.character(new_family_name),
+                                       queried_colnam$family_name),
+                  surname = ifelse(!is.null(new_surname), as.character(new_surname),
+                                       queried_colnam$surname),
+                  nationality = ifelse(!is.null(new_nationality), as.character(new_nationality),
+                                   queried_colnam$nationality))
+
+  new_vals <-
+    replace_NA(vec = new_vals)
+
+  sel_query_colnam <-
+    dplyr::bind_rows(new_vals, queried_colnam %>%
+                       dplyr::select(-id_table_colnam))
+
+  sel_query_colnam <-
+    replace_NA(vec = sel_query_colnam)
+
+  comp_vals <-
+    apply(sel_query_colnam, MARGIN = 2, FUN = function(x) x[1]!=x[2:length(x)])
+
+  if(any(is.na(comp_vals))) comp_vals <- comp_vals[!is.na(comp_vals)]
+
+  # modif_types[1:length(modif_types)] <-
+  #   paste(modif_types, rep(paste(names(comp_vals)[comp_vals], sep=", "), length(modif_types)), collapse ="__")
+
+  if(any(comp_vals)) {
+
+    cat(paste("\n Number of rows selected to be updated :", nrow(queried_colnam), "\n"))
+
+    if(ask_before_update) {
+
+
+      .comp_print_vec(vec_1 = sel_query_colnam[2,],
+                                  vec_2 = sel_query_colnam[1,])
+
+      Q <-
+        utils::askYesNo(msg = "Do you confirm you want to update these rows for selected fields?", default = FALSE)
+    }else{
+      Q <- TRUE
+    }
+
+    if(Q) {
+
+      if(add_backup) {
+        message("no back up for this table yet")
+        # query_trait <-
+        #   query_trait %>%
+        #   tibble::add_column(date_modified=Sys.Date()) %>%
+        #   tibble::add_column(modif_type=modif_types)
+        #
+        #
+        # DBI::dbWriteTable(mydb, "followup_updates_diconames", query_tax, append = TRUE, row.names = FALSE)
+
+      }
+
+      # queried_colnam <-
+      #   query_trait %>%
+      #   dplyr::select(-date_modif_d, -date_modif_m, -date_modif_y)
+
+      # query_trait <-
+      #   .add_modif_field(query_trait)
+
+      rs <-
+        DBI::dbSendQuery(mydb,
+                         statement = "UPDATE table_colnam SET colnam=$2, family_name=$3, surname=$4, nationality=$5 WHERE id_table_colnam = $1",
+                         params = list(queried_colnam$id_table_colnam, # $1
+                                     rep(ifelse(!is.null(new_colnam), as.character(new_colnam),
+                                                queried_colnam$colnam), nrow(queried_colnam)), # $2
+                                     rep(ifelse(!is.null(new_family_name), as.character(new_family_name),
+                                                queried_colnam$family_name), nrow(queried_colnam)), # $3
+                                     rep(ifelse(!is.null(new_surname), as.character(new_surname),
+                                                queried_colnam$surname), nrow(queried_colnam)), # $4
+                                     rep(ifelse(!is.null(new_nationality), as.character(new_nationality),
+                                                queried_colnam$nationality), nrow(queried_colnam))) # $5
+        )
+
+      DBI::dbClearResult(rs)
+
+      rs <-
+        DBI::dbSendQuery(mydb, statement="SELECT *FROM table_colnam WHERE id_table_colnam = $1",
+                         params=list(queried_colnam$id_table_colnam))
+      if(show_results) print(DBI::dbFetch(rs))
+      DBI::dbClearResult(rs)
+
+    }
+  }else{
+
+    if(!any(comp_vals)) print("No update performed because no values are different.")
+  }
+
+  # dbDisconnect(mydb)
+
 }
