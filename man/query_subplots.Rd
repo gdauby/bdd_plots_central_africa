@@ -5,6 +5,7 @@
 \title{List, selected subplots}
 \usage{
 query_subplots(
+  ids_plots = NULL,
   team_lead = NULL,
   plot_name = NULL,
   tag = NULL,
@@ -12,7 +13,8 @@ query_subplots(
   province = NULL,
   locality_name = NULL,
   method = NULL,
-  subtype = NULL
+  subtype = NULL,
+  verbose = TRUE
 )
 }
 \arguments{
@@ -31,6 +33,10 @@ query_subplots(
 \item{method}{stringfuzzy method name to look for}
 
 \item{subtype}{string subtype to select}
+
+\item{verbose}{logical}
+
+\item{id_plots}{integer}
 }
 \value{
 A tibble of all subplots

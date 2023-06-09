@@ -29,7 +29,8 @@ query_plots(
   extract_traits = TRUE,
   traits_to_genera = FALSE,
   wd_fam_level = FALSE,
-  include_liana = FALSE
+  include_liana = FALSE,
+  extract_subplot_features = TRUE
 )
 }
 \arguments{
