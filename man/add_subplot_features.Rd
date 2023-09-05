@@ -14,7 +14,8 @@ add_subplot_features(
   id_plot_name_corresp = "id_table_liste_plots_n",
   subplottype_field,
   add_data = FALSE,
-  ask_before_update = TRUE
+  ask_before_update = TRUE,
+  verbose = TRUE
 )
 }
 \arguments{
@@ -35,6 +36,8 @@ add_subplot_features(
 \item{add_data}{logical whether or not data should be added - by default FALSE}
 
 \item{ask_before_update}{logical ask before adding}
+
+\item{verbose}{logical}
 }
 \value{
 list of tibbles that should be/have been added

@@ -1984,15 +1984,15 @@ query_plots <- function(team_lead = NULL,
     dplyr::relocate(method, .after = data_provider)
 
   ## link colnam
-  res <-
-    res %>%
-    dplyr::select(-team_leader) %>% # remove old method
-    dplyr::left_join(dplyr::tbl(mydb, "table_colnam") %>%
-                       dplyr::collect(),
-                     by = c("id_colnam" = "id_table_colnam")) %>%
-    dplyr::rename(team_leader = colnam) %>%
-    dplyr::select(-family_name, -surname, -nationality) %>%
-    dplyr::relocate(team_leader, .after = plot_name)
+  # res <-
+  #   res %>%
+  #   dplyr::select(-team_leader) %>% # remove old method
+  #   dplyr::left_join(dplyr::tbl(mydb, "table_colnam") %>%
+  #                      dplyr::collect(),
+  #                    by = c("id_colnam" = "id_table_colnam")) %>%
+  #   dplyr::rename(team_leader = colnam) %>%
+  #   dplyr::select(-family_name, -surname, -nationality) %>%
+  #   dplyr::relocate(team_leader, .after = plot_name)
 
   ## link country
   res <-
@@ -2022,27 +2022,28 @@ query_plots <- function(team_lead = NULL,
         dplyr::relocate(plot_name, .before = year)
     }
 
-
+    res <- rm_field(res, field = c("additional_people", "team_leader"))
 
     res <-
       res %>%
-      dplyr::select(-additional_people) %>%
       dplyr::left_join(all_subplots$all_subplot_pivot,
                 by = c("id_liste_plots" = "id_table_liste_plots"))
 
     if (any(names(res) == "data_manager"))
       res <- res %>%
-      dplyr::relocate(data_manager, .after = team_leader)
+      dplyr::relocate(data_manager, .after = plot_name)
 
     if (any(names(res) == "principal_investigator"))
     res <- res %>%
-      dplyr::relocate(principal_investigator, .after = team_leader)
+      dplyr::relocate(principal_investigator, .after = plot_name)
 
     if (any(names(res) == "additional_people"))
       res <- res %>%
-      dplyr::relocate(additional_people, .after = team_leader)
+      dplyr::relocate(additional_people, .after = plot_name)
 
-
+    if (any(names(res) == "team_leader"))
+      res <- res %>%
+      dplyr::relocate(team_leader, .after = plot_name)
 
     # ### checking for subplots data
     # ids_plots <- res$id_liste_plots
@@ -3008,7 +3009,7 @@ query_plots <- function(team_lead = NULL,
 
   if(remove_ids & !extract_individuals) {
 
-    cli::cli_alert_warning("Identifiers are because the parameter 'remove_ids' = {remove_ids} ")
+    cli::cli_alert_warning("Identifiers are removed because the parameter 'remove_ids' = {remove_ids} ")
 
     # res <-
     #   res %>%
@@ -3148,6 +3149,7 @@ query_subplots <- function(ids_plots = NULL,
     all_sub_type <-
       all_sub_type %>%
       dplyr::filter(grepl(subtype, type))
+
     cli::cli_alert_info("Selected subplot features: {all_sub_type$type}")
 
     sub_plot_data <-
@@ -4196,8 +4198,9 @@ add_plots <- function(new_data,
 
   ## Checking if names plot are already in the database
   if(any(colnames(new_data_renamed) == "plot_name")) {
+
     found_plot <-
-      dplyr::tbl(mydb, "data_liste_plots") %>%
+      try_open_postgres_table(table = "data_liste_plots", con = mydb) %>%
       dplyr::filter(plot_name %in% !!new_data_renamed$plot_name) %>%
       dplyr::collect()
 
@@ -4241,57 +4244,226 @@ add_plots <- function(new_data,
 
     new_data_renamed <-
       new_data_renamed %>%
-      dplyr::select(-country)
+      dplyr::select(-country_name)
 
     col_names_corresp[which(col_names_corresp == "country")] <-
       "id_country"
 
   }
 
-
   ## Checking team_leader
   if(!any(names(new_data_renamed) == "team_leader")) {
 
-    stop("missing team_leader information")
+    cli::cli_alert_danger("missing team_leader column")
+
+    chose_pi <- askYesNo(msg = "Choose one team_leader for all plot ?")
+
+    if (chose_pi) {
+      id_team_leader <-
+        .link_colnam(
+          data_stand = tibble(team_leader = " "),
+          collector_field = "team_leader",
+          id_colnam = "id_team_leader"
+        )
+
+      id_team_leader <-
+        tibble(plot_name = new_data_renamed$plot_name,
+               team_leader = id_team_leader$id_team_leader)
+
+    }
 
   } else {
 
-    new_data_renamed <-
+    id_team_leader <-
       .link_colnam(data_stand = new_data_renamed,
-                   collector_field = "team_leader")
+                   collector_field = "team_leader",
+                   id_colnam = "team_leader")
 
-    new_data_renamed <-
+    # col_names_corresp[which(col_names_corresp == "team_leader")] <-
+    #   "id_colnam"
+
+  }
+
+  ## Checking team_leader
+  if(!any(names(new_data_renamed) == "PI")) {
+
+    cli::cli_alert_danger("missing PI column")
+
+    chose_pi <- askYesNo(msg = "Choose one PI for all plot ?")
+
+    if (chose_pi) {
+      id_pi <- .link_colnam(data_stand = tibble(PI = " "),
+                            collector_field = "PI", id_colnam = "id_pi")
+
+      id_pi <-
+        tibble(plot_name = new_data_renamed$plot_name,
+               PI = id_pi$id_pi)
+
+    }
+
+  } else {
+
+    pi_sep <-
       new_data_renamed %>%
-      dplyr::select(-col_name)
+      dplyr::select(plot_name, PI) %>%
+      tidyr::separate_rows(PI, sep = ",") %>%
+      mutate(PI = str_squish(PI))
 
-    col_names_corresp[which(col_names_corresp == "team_leader")] <-
-      "id_colnam"
+    id_pi <-
+      .link_colnam(data_stand = pi_sep,
+                   collector_field = "PI", id_colnam = "PI")
 
   }
 
 
+  ## Checking data manager
+  if(!any(names(new_data_renamed) == "data_manager")) {
+
+    cli::cli_alert_danger("missing data_manager column")
+
+    chose_data_manager <- askYesNo(msg = "Choose one data_manager for all plot ?")
+
+    if (chose_data_manager) {
+      data_manager <- .link_colnam(data_stand = tibble(data_manager = " "),
+                            collector_field = "data_manager",
+                            id_colnam = "id_data_manager")
+
+      id_data_manager <-
+        tibble(plot_name = new_data_renamed$plot_name,
+               data_manager = data_manager$id_data_manager)
+
+    }
+
+  } else {
+
+    data_manager_sep <-
+      new_data_renamed %>%
+      dplyr::select(plot_name, data_manager) %>%
+      tidyr::separate_rows(data_manager, sep = ",") %>%
+      mutate(data_manager = str_squish(data_manager))
+
+    data_manager_sep <-
+      .link_colnam(data_stand = data_manager_sep,
+                   collector_field = "data_manager", id_colnam = "data_manager")
+
+  }
+
+  if(!any(names(new_data_renamed) == "additional_people")) {
+
+    cli::cli_alert_danger("missing additional_people information")
+
+  } else {
+
+    add_col_sep <-
+      new_data_renamed %>%
+      dplyr::select(plot_name, additional_people) %>%
+      tidyr::separate_rows(additional_people, sep = ",") %>%
+      mutate(additional_people = str_squish(additional_people))
+
+    add_col_sep <-
+      .link_colnam(data_stand = add_col_sep,
+                   collector_field = "additional_people", id_colnam = "additional_people")
+
+    # add_col_sep <-
+    #   add_col_sep %>%
+    #   dplyr::select(-col_name)
+
+  }
+
+  new_data_renamed <-
+    rm_field(new_data_renamed,
+             field = c("team_leader", "PI", "additional_people", "data_manager"))
+
+  col_names_corresp <-
+    col_names_corresp[which(!col_names_corresp %in% c("team_leader", "PI", "additional_people", "data_manager"))]
+
   ## Checking coordinates
-  if (any(new_data_renamed$ddlat > 90) |
-      any(new_data_renamed$ddlon < -90))
-    stop("ERREUR dans ddlat, latitude provided impossible")
+  if (any(names(new_data_renamed) == "ddlat"))
+    if (any(new_data_renamed$ddlat > 90) | any(new_data_renamed$ddlat < -90)) stop("ddlat impossible")
+
+  if (any(names(new_data_renamed) == "ddlon"))
+    if (any(new_data_renamed$ddlon > 180) | any(new_data_renamed$ddlon < -180)) stop("ddlon impossible")
 
   new_data_renamed <-
     new_data_renamed %>%
-    dplyr::select(col_names_corresp)
+    dplyr::select(all_of(col_names_corresp))
 
   new_data_renamed <-
     new_data_renamed %>%
-    tibble::add_column(data_modif_d=lubridate::day(Sys.Date()),
-               data_modif_m=lubridate::month(Sys.Date()),
-               data_modif_y=lubridate::year(Sys.Date()))
-
-  DT::datatable(new_data_renamed)
+    mutate(
+      data_modif_d = lubridate::day(Sys.Date()),
+      data_modif_m = lubridate::month(Sys.Date()),
+      data_modif_y = lubridate::year(Sys.Date())
+    )
 
   add <- utils::askYesNo(msg = "Add these data to the table of plot data?")
 
   if(add) {
     DBI::dbWriteTable(mydb, "data_liste_plots", new_data_renamed, append = TRUE, row.names = FALSE)
     cli::cli_alert_success("{nrow(new_data_renamed)} plot imported in data_liste_plots")
+
+    ids_list_plot <-
+      try_open_postgres_table(table = "data_liste_plots", con = mydb) %>%
+      filter(plot_name %in% !!new_data_renamed$plot_name) %>%
+      collect() %>%
+      dplyr::select(id_liste_plots, plot_name)
+
+    if (exists(id_team_leader)) {
+
+      id_team_leader <-
+        id_team_leader %>%
+        left_join(ids_list_plot, by = c("plot_name" = "plot_name"))
+
+      add_subplot_features(new_data = id_team_leader,
+                           id_plot_name = "id_liste_plots",
+                           subplottype_field = c("team_leader"),
+                           add_data = T,
+                           ask_before_update = F)
+
+    }
+
+    if (exists(id_pi)) {
+
+      id_pi <-
+        id_pi %>%
+        left_join(ids_list_plot, by = c("plot_name" = "plot_name")) %>%
+        rename(principal_investigator = PI)
+
+      add_subplot_features(new_data = id_pi,
+                           id_plot_name = "id_liste_plots",
+                           subplottype_field = c("principal_investigator"),
+                           add_data = T,
+                           ask_before_update = F)
+
+    }
+
+    if (exists(add_col_sep)) {
+
+      add_col_sep <-
+        add_col_sep %>%
+        left_join(ids_list_plot, by = c("plot_name" = "plot_name"))
+
+      add_subplot_features(new_data = add_col_sep,
+                           id_plot_name = "id_liste_plots",
+                           subplottype_field = c("additional_people"),
+                           add_data = T,
+                           ask_before_update = F)
+
+    }
+
+    if (exists(data_manager_sep)) {
+
+      data_manager_sep <-
+        data_manager_sep %>%
+        left_join(ids_list_plot, by = c("plot_name" = "plot_name"))
+
+      add_subplot_features(new_data = data_manager_sep,
+                           id_plot_name = "id_liste_plots",
+                           subplottype_field = c("data_manager"),
+                           add_data = T,
+                           ask_before_update = F)
+
+    }
 
   }
 
@@ -4319,6 +4491,7 @@ add_plots <- function(new_data,
 #' @param subplottype_field string vector listing trait columns names in new_data
 #' @param add_data logical whether or not data should be added - by default FALSE
 #' @param ask_before_update logical ask before adding
+#' @param verbose logical
 #'
 #' @export
 add_subplot_features <- function(new_data,
@@ -4330,7 +4503,8 @@ add_subplot_features <- function(new_data,
                                  id_plot_name_corresp = "id_table_liste_plots_n",
                                  subplottype_field,
                                  add_data = FALSE,
-                                 ask_before_update = TRUE) {
+                                 ask_before_update = TRUE,
+                                 verbose = TRUE) {
 
   if(!exists("mydb")) call.mydb()
 
@@ -4353,21 +4527,21 @@ add_subplot_features <- function(new_data,
   if(is.null(plot_name_field) & is.null(id_plot_name)) stop("no plot links provided, provide either plot_name_field or id_plot_name")
 
   if (!any(col_names_corresp == "day")) {
-    warning("no information collection day provided")
+    if (verbose) cli::cli_alert_warning("no information collection day provided")
     new_data_renamed <-
       new_data_renamed %>%
       mutate(day = NA)
   }
 
   if (!any(col_names_corresp == "year")) {
-    warning("no information collection year provided")
+    if (verbose)  cli::cli_alert_warning("no information collection year provided")
     new_data_renamed <-
       new_data_renamed %>%
       mutate(year = NA)
   }
 
   if (!any(col_names_corresp == "month")) {
-    warning("no information collection month provided")
+    if (verbose)  cli::cli_alert_warning("no information collection month provided")
     new_data_renamed <-
       new_data_renamed %>%
       mutate(month = NA)
@@ -4384,7 +4558,7 @@ add_subplot_features <- function(new_data,
     new_data_renamed <-
       .link_colnam(data_stand = new_data_renamed, collector_field = collector_field)
   }else{
-    warning("no information on collector provided")
+    if (verbose)  cli::cli_alert_warning("no information on collector provided")
     new_data_renamed <-
       new_data_renamed %>%
       tibble::add_column(id_colnam = NA)
@@ -4406,7 +4580,7 @@ add_subplot_features <- function(new_data,
 
     new_data_renamed <-
       new_data_renamed %>%
-      dplyr::rename_at(dplyr::all_of(dplyr::vars(id_plot_name)), ~ id_plot_name_corresp)
+      dplyr::rename_at(dplyr::all_of(dplyr::vars(id_plot_name)), ~ dplyr::all_of(id_plot_name_corresp))
 
     if(any(colnames(new_data_renamed) == "plot_name"))
       new_data_renamed <-
@@ -4433,7 +4607,7 @@ add_subplot_features <- function(new_data,
     if(dplyr::filter(link_plot, is.na(plot_name)) %>%
        nrow() > 0) {
       print(dplyr::filter(link_plot, is.na(plot_name)))
-      warning("provided id plot not found in plot metadata")
+      if (verbose)  cli::cli_alert_warning("provided id plot not found in plot metadata")
     }
 
     if(id_plot_name_corresp == "id_table_liste_plots_n")
@@ -4704,6 +4878,20 @@ update_plot_data <- function(team_lead = NULL,
       new_id_colnam <- NULL
     }
 
+    if(!is.null(new_country)) {
+
+      new_id_country <-
+        .link_country(data_stand = tibble(colnam = new_country),
+                      country_field = 1)
+
+      new_id_country <-
+        new_id_country$id_country
+
+    } else {
+      new_id_country <- NULL
+    }
+
+
     new_values <-
       dplyr::tibble(
         plot_name = ifelse(!is.null(new_plot_name), new_plot_name, quer_plots$plot_name),
@@ -4713,7 +4901,11 @@ update_plot_data <- function(team_lead = NULL,
           new_id_colnam,
           quer_plots$id_colnam
         ),
-        country = ifelse(!is.null(new_country), new_country, quer_plots$country),
+        id_country = ifelse(
+          !is.null(new_id_country),
+          new_id_country,
+          quer_plots$id_country
+        ),
         ddlat = ifelse(!is.null(new_ddlat), new_ddlat, quer_plots$ddlat),
         ddlon = ifelse(!is.null(new_ddlon), new_ddlon, quer_plots$ddlon),
         elevation = ifelse(!is.null(new_elevation), new_elevation, quer_plots$elevation),
@@ -4804,12 +4996,12 @@ update_plot_data <- function(team_lead = NULL,
         }
 
         rs <-
-          DBI::dbSendQuery(mydb, statement="UPDATE data_liste_plots SET plot_name = $2, id_method = $3, id_colnam = $4, country = $5, ddlat = $6, ddlon = $7, elevation = $8, province = $9, data_provider = $10, locality_name = $11, data_modif_d=$12, data_modif_m=$13, data_modif_y=$14 WHERE id_liste_plots = $1",
+          DBI::dbSendQuery(mydb, statement="UPDATE data_liste_plots SET plot_name = $2, id_method = $3, id_colnam = $4, id_country = $5, ddlat = $6, ddlon = $7, elevation = $8, province = $9, data_provider = $10, locality_name = $11, data_modif_d=$12, data_modif_m=$13, data_modif_y=$14 WHERE id_liste_plots = $1",
                       params=list(quer_plots$id_liste_plots, # $1
                                   new_values$plot_name, # $2
                                   new_values$id_method, # $3
                                   new_values$id_colnam, # $4
-                                  new_values$country, # $5
+                                  new_values$id_country, # $5
                                   new_values$ddlat, # $6
                                   new_values$ddlon, # $7
                                   new_values$elevation, # $8
@@ -4986,6 +5178,155 @@ update_plot_data_batch <- function(new_data,
       cat("Rows updated", RPostgres::dbGetRowsAffected(rs))
       rs@sql
       DBI::dbClearResult(rs)
+
+      cli::cli_alert_success("Successful update")
+
+    } else{
+
+      if (launch_update & nrow(matches) == 0)
+        cat("\n No new values found")
+
+      if (!launch_update)
+        cli::cli_alert_danger("No update because launch_update is FALSE")
+
+    }
+  }
+  return(matches_all)
+}
+
+
+#' Update subplot data data
+#'
+#' Update subplot data plot _ at a time
+#'
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#' @param new_data data frame data containing id and new values
+#' @param col_names_select string plot name of the selected plots
+#' @param col_names_corresp string of the selected plots
+#' @param id_col integer indicate which name of col_names_select is the id for matching data
+#' @param launch_update logical if TRUE updates are performed
+#' @param add_backup logical whether backup of modified data should be recorded
+#'
+#'
+#' @return No return value individuals updated
+#' @export
+update_subplot_data_batch <- function(new_data,
+                                   col_names_select = NULL,
+                                   col_names_corresp = NULL,
+                                   id_col = 1,
+                                   launch_update = FALSE,
+                                   add_backup = TRUE) {
+
+  if(!exists("mydb")) call.mydb()
+
+  if (is.null(col_names_select)) {
+    col_names_select <- names(new_data)
+    cli::cli_alert_info("col_names_select is set as all names of new_data")
+  }
+
+  if (is.null(col_names_corresp)) {
+    col_names_corresp <- col_names_select
+    cli::cli_alert_info("col_names_corresp is set to names of col_names_select (it should be names of columns of data_liste_sub_plots")
+  }
+
+  all_colnames_ind <-
+    dplyr::tbl(mydb, "data_liste_sub_plots") %>%
+    colnames()
+
+  if(length(col_names_select) != length(col_names_corresp))
+    stop("col_names_select and col_names_corresp should have same length")
+
+  for (i in 1:length(col_names_select))
+    if(!any(col_names_select[i] == colnames(new_data)))
+      stop(paste(col_names_select[i], "not found in new_data"))
+
+  for (i in 1:length(col_names_corresp))
+    if(!any(col_names_corresp[i] == all_colnames_ind))
+      stop(paste(col_names_corresp[i], "not found in data_liste_sub_plots, check others tables"))
+
+  id_db <- col_names_corresp[id_col]
+
+  if(!any(id_db == c("id_sub_plots"))) stop("id for matching should be id_sub_plots")
+
+  new_data_renamed <-
+    .rename_data(dataset = new_data,
+                 col_old = col_names_select,
+                 col_new = col_names_corresp)
+
+
+  output_matches <- .find_ids(dataset = new_data_renamed,
+                              col_new = col_names_corresp,
+                              id_col_nbr = id_col,
+                              type_data = "data_liste_sub_plots")
+
+  matches_all <-
+    output_matches[[2]]
+
+  for (i in 1:length(matches_all)) {
+
+    field <- names(matches_all)[i]
+    var_new <- paste0(field, "_new")
+    matches <- matches_all[[i]]
+
+    if(launch_update & nrow(matches) > 0) {
+
+      matches <-
+        matches %>%
+        dplyr::select(id, dplyr::contains("_new"))
+
+      # matches <-
+      #   .add_modif_field(matches)
+
+      all_id_match <- dplyr::pull(dplyr::select(matches, id))
+
+      if(add_backup) {
+
+        quo_var_id <- rlang::parse_expr(quo_name(rlang::enquo(id_db)))
+
+        all_rows_to_be_updated <-
+          dplyr::tbl(mydb, "data_liste_sub_plots") %>%
+          dplyr::filter(!!quo_var_id %in% all_id_match) %>%
+          dplyr::collect()
+
+        colnames_plots <-
+          dplyr::tbl(mydb, "followup_updates_data_liste_sub_plots")  %>%
+          dplyr::select(-date_modified, -modif_type, -id_fol_up_sub_plots) %>%
+          dplyr::collect() %>%
+          dplyr::top_n(1) %>%
+          colnames()
+
+        all_rows_to_be_updated <-
+          all_rows_to_be_updated %>%
+          dplyr::select(dplyr::one_of(colnames_plots))
+
+        all_rows_to_be_updated <-
+          all_rows_to_be_updated %>%
+          mutate(date_modified = Sys.Date()) %>%
+          mutate(modif_type = field)
+
+        print(all_rows_to_be_updated %>%
+                dplyr::select(modif_type, date_modified))
+
+        DBI::dbWriteTable(mydb, "followup_updates_data_liste_sub_plots",
+                          all_rows_to_be_updated,
+                          append = TRUE,
+                          row.names = FALSE)
+      }
+
+      ## create a temporary table with new data
+      DBI::dbWriteTable(mydb, "temp_table", matches,
+                        overwrite=T, fileEncoding = "UTF-8", row.names=F)
+
+      # query_up <-
+      #   paste0("UPDATE data_liste_sub_plots t1 SET (",field,", data_modif_d, data_modif_m, data_modif_y) = (t2.",var_new, ", t2.date_modif_d, t2.date_modif_m, t2.date_modif_y) FROM temp_table t2 WHERE t1.", id_db," = t2.id")
+
+      # rs <-
+      #   DBI::dbSendStatement(mydb, query_up)
+
+      # cat("Rows updated", RPostgres::dbGetRowsAffected(rs))
+      # rs@sql
+      # DBI::dbClearResult(rs)
 
       cli::cli_alert_success("Successful update")
 
@@ -8624,7 +8965,26 @@ get_updates_diconame <- function(id = NULL,
 }
 
 
+#' Delete an entry in colnam table
+#'
+#' Delete an entry in colnam table using id for selection
+#'
+#'
+#' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
+#'
+#' @param id integer
+#'
+#' @return No values
+.delete_colnam <- function(id) {
 
+  if(!exists("mydb")) call.mydb()
+
+
+
+  DBI::dbExecute(mydb,
+                 "DELETE FROM table_colnam WHERE id_table_colnam=$1", params=list(id)
+  )
+}
 
 #' Exploring specimens data
 #'
@@ -11300,6 +11660,10 @@ replace_NA <- function(vec, inv = FALSE) {
     corresponding_data <-
       dplyr::tbl(mydb, "data_liste_plots")
 
+  if(type_data == "data_liste_sub_plots")
+    corresponding_data <-
+      dplyr::tbl(mydb, "data_liste_sub_plots")
+
   if(type_data == "specimens")
     corresponding_data <-
       dplyr::tbl(mydb, "specimens")
@@ -11457,7 +11821,7 @@ replace_NA <- function(vec, inv = FALSE) {
 #' @param collector_field string vector
 #'
 #' @export
-.link_colnam <- function(data_stand, collector_field) {
+.link_colnam <- function(data_stand, collector_field, id_colnam = "id_colnam") {
   col_name <- "col_name"
 
   data_stand <-
@@ -11537,69 +11901,13 @@ replace_NA <- function(vec, inv = FALSE) {
 
     }
 
-    # if(!any(all_colnames$colnam==ifelse(!is.na(dplyr::pull(all_names_collector)[i]),
-    #                                     dplyr::pull(all_names_collector)[i],
-    #                                     "kk"))) {
-    #   print(dplyr::pull(all_names_collector)[i])
-    #   sorted_matches <-
-    #     .find_similar_string(input = dplyr::pull(all_names_collector)[i],
-    #                          compared_table = all_colnames, column_name = "colnam")
-    #
-    #   selected_name <- ""
-    #   slide <- 0
-    #   while(selected_name=="") {
-    #     print(dplyr::pull(all_names_collector)[i])
-    #     slide <- slide + 1
-    #     sorted_matches %>%
-    #       tibble::add_column(ID=seq(1, nrow(.), 1)) %>%
-    #       dplyr::select(-id_table_colnam) %>%
-    #       dplyr::select(ID, colnam, family_name, surname, nationality) %>%
-    #       dplyr::slice((1+(slide-1)*10):((slide)*10)) %>%
-    #       print()
-    #     selected_name <-
-    #       readline(prompt="Choose ID whose name fit (if none enter 0): ")
-    #     if(slide*10>nrow(sorted_matches)) slide <- 0
-    #   }
-    #
-    #   selected_name <- as.integer(selected_name)
-    #
-    #   if(is.na(selected_name))
-    #     stop("Provide integer value for standardizing collector name")
-    #
-
-    #
-    #   if(selected_name>0) {
-    #     selected_name_id <-
-    #       sorted_matches %>%
-    #       dplyr::slice(selected_name) %>%
-    #       dplyr::select(id_table_colnam) %>%
-    #       dplyr::pull()
-    #   }
-    #
-    # }else{
-    #   selected_name <-
-    #     which(all_colnames$colnam==dplyr::pull(all_names_collector)[i])
-    #
-    #   selected_name_id <-
-    #     all_colnames %>%
-    #     dplyr::slice(selected_name) %>%
-    #     dplyr::select(id_table_colnam) %>%
-    #     dplyr::pull()
-    # }
-
-
-
-
     id_colname[data_stand$col_name==dplyr::pull(all_names_collector[i,1])] <-
       selected_name_id
-
-
-
   }
 
   data_stand <-
     data_stand %>%
-    tibble::add_column(id_colnam=id_colname)
+    mutate("{id_colnam}" := id_colname)
 
   return(data_stand)
 }
@@ -19503,3 +19811,25 @@ update_colnam <- function(colnam_searched = NULL,
   # dbDisconnect(mydb)
 
 }
+
+
+rm_field <- function(data, field) {
+
+  if (any(names(data) %in% field)) {
+
+    field <-
+      field[which(field %in% names(data))]
+
+    data <-
+      data %>%
+      dplyr::select(-all_of(field))
+
+  }
+
+  return(data)
+
+}
+
+
+
+

@@ -4,7 +4,7 @@
 \alias{.link_colnam}
 \title{Internal function}
 \usage{
-.link_colnam(data_stand, collector_field)
+.link_colnam(data_stand, collector_field, id_colnam = "id_colnam")
 }
 \arguments{
 \item{data_stand}{string tibble}
