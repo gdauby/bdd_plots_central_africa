@@ -2006,7 +2006,6 @@ query_plots <- function(team_lead = NULL,
     all_subplots <- query_subplots(ids_plots =  res$id_liste_plots)
 
     if (any(!is.na(all_subplots$census_features))) {
-
       census_features <- all_subplots$census_features
 
       census_features <-
