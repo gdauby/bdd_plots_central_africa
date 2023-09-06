@@ -212,7 +212,7 @@ launch_stand_tax_app <- function() {
     output$Box_match = renderUI({
       req(input$data1)
 
-      checkboxInput("authors", "Matching with authors name ?", TRUE)
+      checkboxInput("authors", "Matching with authors name ?", FALSE)
 
     })
 
@@ -388,6 +388,10 @@ launch_stand_tax_app <- function() {
           n == 1 ~ idtax_n
           ))
 
+      join.table %>%
+        select(idtax_n, Code) %>%
+        filter(is.na(idtax_n)) %>%
+        print()
 
       # print(join.table)
       # if more than one matching by name, take the first
@@ -451,6 +455,9 @@ launch_stand_tax_app <- function() {
       # %>%
       #   dplyr::mutate(detvalue=as.integer(detvalue))
 
+      DATA %>% select(ID.dico.name, original_tax_name, found.name) %>%
+        dplyr::filter(ID.dico.name == 0) %>% print()
+
       test <-
         DATA %>%
         dplyr::filter(ID.dico.name == 0) %>%
@@ -489,6 +496,8 @@ launch_stand_tax_app <- function() {
       test <-
         test %>%
         dplyr::rename(Code = 1)
+
+
 
       stand.list.name$df <-
         test %>%
@@ -2011,7 +2020,7 @@ query_plots <- function(team_lead = NULL,
 
     all_subplots <- query_subplots(ids_plots =  res$id_liste_plots)
 
-    if (!is.null(all_subplots$census_features)) {
+    if (!is.na(all_subplots$census_features)) {
 
       census_features <- all_subplots$census_features
 
@@ -2024,10 +2033,11 @@ query_plots <- function(team_lead = NULL,
 
     res <- rm_field(res, field = c("additional_people", "team_leader"))
 
-    res <-
+    if (!is.na(all_subplots$all_subplot_pivot))
+      res <-
       res %>%
       dplyr::left_join(all_subplots$all_subplot_pivot,
-                by = c("id_liste_plots" = "id_table_liste_plots"))
+                       by = c("id_liste_plots" = "id_table_liste_plots"))
 
     if (any(names(res) == "data_manager"))
       res <- res %>%
@@ -2045,134 +2055,6 @@ query_plots <- function(team_lead = NULL,
       res <- res %>%
       dplyr::relocate(team_leader, .after = plot_name)
 
-    # ### checking for subplots data
-    # ids_plots <- res$id_liste_plots
-    # sub_plot_data <-
-    #   dplyr::tbl(mydb, "data_liste_sub_plots") %>%
-    #   dplyr::filter(id_table_liste_plots %in% ids_plots)
-    #
-    # ## max census for each plot
-    # census_plots <-
-    #   sub_plot_data %>%
-    #   dplyr::filter(id_type_sub_plot == 27) %>% ### id of census information
-    #   dplyr::group_by(id_table_liste_plots) %>%
-    #   dplyr::summarise(number_of_census = max(typevalue, na.rm = T)) %>%
-    #   dplyr::collect()
-    #
-    # census_features <-
-    #   sub_plot_data %>%
-    #   dplyr::filter(id_type_sub_plot == 27) %>% ### id of census information
-    #   dplyr::left_join(dplyr::tbl(mydb, "table_colnam"),
-    #                    by = c("id_colnam" = "id_table_colnam")) %>%
-    #   dplyr::left_join(
-    #     dplyr::tbl(mydb, "data_liste_plots") %>%
-    #       dplyr::select(plot_name, id_liste_plots),
-    #     by = c("id_table_liste_plots" = "id_liste_plots")
-    #   ) %>%
-    #   dplyr::select(
-    #     year,
-    #     month,
-    #     day,
-    #     typevalue,
-    #     plot_name,
-    #     colnam,
-    #     additional_people,
-    #     id_sub_plots,
-    #     id_table_liste_plots
-    #   ) %>%
-    #   dplyr::collect()
-    #
-    # all_sub_type <-
-    #   sub_plot_data %>%
-    #   dplyr::distinct(id_type_sub_plot) %>%
-    #   dplyr::left_join(dplyr::tbl(mydb, "subplotype_list") %>%
-    #                      dplyr::select(type, valuetype, typedescription, id_subplotype),
-    #                    by=c("id_type_sub_plot"= "id_subplotype")) %>%
-    #   dplyr::collect()
-    #
-    # all_sub_type_to_summarise <-
-    #   all_sub_type %>%
-    #   dplyr::filter(type != "census"
-    #                 # ,
-    #                 # !grepl("ddlat", type),
-    #                 # !grepl("ddlon", type)
-    #   )
-    #
-    # ## if any plots features others than census, adding them to metadata
-    # if(nrow(all_sub_type_to_summarise) > 0) {
-    #
-    #   for (i in 1:nrow(all_sub_type_to_summarise)) {
-    #
-    #     id_sub_plot <-
-    #       all_sub_type_to_summarise %>%
-    #       dplyr::slice(i) %>%
-    #       dplyr::pull(id_type_sub_plot)
-    #
-    #     type_sub_plot <-
-    #       all_sub_type_to_summarise %>%
-    #       dplyr::slice(i) %>%
-    #       dplyr::pull(valuetype)
-    #
-    #     if(type_sub_plot == "numeric") {
-    #
-    #       summarized_subplot_data <-
-    #         sub_plot_data %>%
-    #         dplyr::filter(id_type_sub_plot == id_sub_plot) %>%
-    #         dplyr::group_by(id_table_liste_plots) %>%
-    #         dplyr::summarise(sum_sub_plot = mean(typevalue, na.rm=T)) %>%
-    #         dplyr::collect()
-    #
-    #       subplot_name <-
-    #         all_sub_type_to_summarise %>%
-    #         dplyr::slice(i) %>%
-    #         dplyr::pull(type)
-    #
-    #       subplot_name <-
-    #         paste0(subplot_name, "_averaged")
-    #
-    #       summarized_subplot_data <-
-    #         summarized_subplot_data %>%
-    #         dplyr::rename(!!subplot_name := sum_sub_plot)
-    #
-    #     }
-    #
-    #     if(type_sub_plot == "character") {
-    #
-    #       summarized_subplot_data <-
-    #         sub_plot_data %>%
-    #         dplyr::filter(id_type_sub_plot == id_sub_plot) %>%
-    #         dplyr::group_by(id_table_liste_plots) %>%
-    #         dplyr::collect() %>%
-    #         # mutate(sum_sub_plot = first(typevalue_char)) %>%
-    #         # select(id_table_liste_plots, sum_sub_plot)
-    #         dplyr::summarise(sum_sub_plot =
-    #                            ifelse(
-    #                              length(unique(typevalue_char)) > 1,
-    #                              stringr::str_flatten(typevalue_char, collapse = " | "),
-    #                              typevalue_char
-    #                            ))
-    #       subplot_name <-
-    #         all_sub_type_to_summarise %>%
-    #         dplyr::slice(i) %>%
-    #         dplyr::pull(type)
-    #
-    #       summarized_subplot_data <-
-    #         summarized_subplot_data %>%
-    #         dplyr::rename(!!subplot_name := sum_sub_plot)
-    #
-    #     }
-    #
-    #     res <-
-    #       res %>%
-    #       dplyr::left_join(summarized_subplot_data, by = c("id_liste_plots"="id_table_liste_plots"))
-    #
-    #   }
-    #
-    # } else {
-    #
-    #   cli::cli_alert_info("No sub_type (other than census) for selected plot(s)")
-    #
-    # }
 
     if(show_all_coordinates) {
       ### getting id subplot features for coordinates types
@@ -2184,9 +2066,13 @@ query_plots <- function(team_lead = NULL,
       #                                    filter(grepl("ddlat", type)) %>%
       #                                    pull(id_type_sub_plot))
 
-      all_ids_subplot_coordinates <-
-        all_subplots$all_subplots %>%
-        filter(grepl("ddlon", type) | grepl("ddlat", type))
+      if (!is.na(all_subplots$all_subplots)) {
+        all_ids_subplot_coordinates <-
+          all_subplots$all_subplots %>%
+          filter(grepl("ddlon", type) | grepl("ddlat", type))
+      } else {
+        all_ids_subplot_coordinates <- tibble()
+      }
 
       if(nrow(all_ids_subplot_coordinates) > 0) {
 
@@ -3128,218 +3014,227 @@ query_subplots <- function(ids_plots = NULL,
 
   }
 
+  nbe_subplot_data <- nrow(dplyr::distinct(sub_plot_data %>%
+                         dplyr::collect(),
+                       id_table_liste_plots))
+
   if (verbose) {
     cli::cli_alert_info("{length(ids_plots)} plots selected")
-    cli::cli_alert_info("subplot_features found for {nrow(dplyr::distinct(sub_plot_data %>%
-                                                         dplyr::collect(),
-                                                       id_table_liste_plots))} plots")}
+    cli::cli_alert_info("subplot_features found for {nbe_subplot_data} plots")}
 
-  all_sub_type <-
-    sub_plot_data %>%
-    dplyr::distinct(id_type_sub_plot) %>%
-    dplyr::left_join(
-      dplyr::tbl(mydb, "subplotype_list") %>%
-        dplyr::select(type, valuetype, typedescription, id_subplotype),
-      by = c("id_type_sub_plot" = "id_subplotype")
-    )
-  # %>%
-  #   dplyr::filter(type != "census")
+  if (nbe_subplot_data > 0) {
 
-  if (!is.null(subtype)) {
     all_sub_type <-
-      all_sub_type %>%
-      dplyr::filter(grepl(subtype, type))
-
-    cli::cli_alert_info("Selected subplot features: {all_sub_type$type}")
-
-    sub_plot_data <-
       sub_plot_data %>%
-      dplyr::filter(id_type_sub_plot %in% !!(all_sub_type %>%
-                                               dplyr::pull(id_type_sub_plot)))
-
-  }
-
-  extracted_data <-
-    sub_plot_data %>%
-    dplyr::left_join(all_sub_type,
-                     by = c("id_type_sub_plot" = "id_type_sub_plot")) %>%
-    dplyr::collect() %>%
-    # dplyr::left_join(
-    #   queried_plots %>%
-    #     dplyr::select(plot_name, id_liste_plots),
-    #   by = c("id_table_liste_plots" = "id_liste_plots")
-    # ) %>%
-    dplyr::select(id_table_liste_plots,
-                  year,
-                  month,
-                  day,
-                  type,
-                  valuetype,
-                  typevalue,
-                  typevalue_char,
-                  original_subplot_name,
-                  id_sub_plots,
-                  id_colnam,
-                  additional_people)
-
-  if (any(extracted_data$valuetype == "numeric")) {
-    numeric_subplots_pivot <-
-      extracted_data %>%
-      filter(valuetype == "numeric",
-             type != "census") %>%
-      select(id_table_liste_plots, typevalue, type) %>%
-      pivot_wider(
-        names_from = "type",
-        values_from = "typevalue",
-        values_fn = ~ mean(.x, na.rm = TRUE)
-      )
-  } else {
-    numeric_subplots_pivot <- NULL
-  }
-
-  if (any(extracted_data$valuetype == "character")) {
-    character_subplots_pivot <-
-      extracted_data %>%
-      filter(valuetype == "character",
-             type != "census") %>%
-      select(id_table_liste_plots, typevalue_char, type) %>%
-      pivot_wider(
-        names_from = "type",
-        values_from = "typevalue_char",
-        values_fn = ~ paste(.x, collapse = "|")
-      )
-  } else {
-    character_subplots_pivot <- NULL
-  }
-
-  if (any(extracted_data$type == "census")) {
-
-    census_plots <-
-      extracted_data %>%
-      dplyr::filter(type == "census")
-
-    ## max census for each plot
-    census_plots_nbr <-
-      census_plots %>%
-      dplyr::group_by(id_table_liste_plots) %>%
-      dplyr::summarise(number_of_census = max(typevalue, na.rm = T))
-
-    census_features <-
-      census_plots %>%
-      dplyr::left_join(dplyr::tbl(mydb, "table_colnam") %>%
-                         filter(id_table_colnam %in% !!census_plots$id_colnam) %>%
-                         collect(),
-                       by = c("id_colnam" = "id_table_colnam")) %>%
-      dplyr::select(
-        year,
-        month,
-        day,
-        typevalue,
-        colnam,
-        additional_people,
-        id_sub_plots,
-        id_table_liste_plots
+      dplyr::distinct(id_type_sub_plot) %>%
+      dplyr::left_join(
+        dplyr::tbl(mydb, "subplotype_list") %>%
+          dplyr::select(type, valuetype, typedescription, id_subplotype),
+        by = c("id_type_sub_plot" = "id_subplotype")
       )
 
-    nbr_census <- dplyr::distinct(census_features, typevalue)
-    census_dates_lists <- vector('list', nrow(nbr_census))
-    for (i in 1:nrow(nbr_census)) {
+    if (!is.null(subtype)) {
+      all_sub_type <-
+        all_sub_type %>%
+        dplyr::filter(grepl(subtype, type))
 
-      census_features_selected <-
-        census_features %>%
-        dplyr::filter(typevalue == i)
+      cli::cli_alert_info("Selected subplot features: {all_sub_type$type}")
 
-      census_features_selected <-
-        census_features_selected %>%
-        dplyr::mutate(date =
-                        paste(ifelse(!is.na(month),
-                                     month, 1), # if day is missing, by default 1
-                              ifelse(!is.na(day),
-                                     day, 1), # if month is missing, by default 1
-                              ifelse(!is.na(year),
-                                     year, ""),
-                              sep = "/")) %>%
-        dplyr::mutate(date_julian = date::as.date(date)) %>%
-        dplyr::select(date, date_julian, id_table_liste_plots)
-
-      date_name <- paste0("date_census_", i)
-      date_name_enquo1 <-
-        rlang::parse_expr(rlang::quo_name(rlang::enquo(date_name)))
-      date_name <- paste0("date_census_julian_", i)
-      date_name_enquo2 <-
-        rlang::parse_expr(rlang::quo_name(rlang::enquo(date_name)))
-
-      census_features_selected <-
-        census_features_selected %>%
-        dplyr::rename(!!date_name_enquo1 := date) %>%
-        dplyr::rename(!!date_name_enquo2 := date_julian)
-
-      census_dates_lists[[i]] <-census_features_selected
+      sub_plot_data <-
+        sub_plot_data %>%
+        dplyr::filter(id_type_sub_plot %in% !!(all_sub_type %>%
+                                                 dplyr::pull(id_type_sub_plot)))
 
     }
 
-  } else {
-    census_dates_lists <- NULL
-    census_plots_nbr <- NULL
-    census_features <- NULL
-  }
+    extracted_data <-
+      sub_plot_data %>%
+      dplyr::left_join(all_sub_type,
+                       by = c("id_type_sub_plot" = "id_type_sub_plot")) %>%
+      dplyr::collect() %>%
+      dplyr::select(id_table_liste_plots,
+                    year,
+                    month,
+                    day,
+                    type,
+                    valuetype,
+                    typevalue,
+                    typevalue_char,
+                    original_subplot_name,
+                    id_sub_plots,
+                    id_colnam,
+                    additional_people)
 
 
-  if (any(grepl("table_", extracted_data$valuetype))) {
 
-    table_ids_subplots <- extracted_data %>%
-      filter(grepl("table_", valuetype))
-
-    allvalutype <- distinct(table_ids_subplots, valuetype)
-
-
-    table_valutype_list <- vector('list', nrow(allvalutype))
-    for (i in 1:nrow(allvalutype)) {
-
-      ids_ <-
-        case_when(
-          table_ids_subplots$valuetype[i] == "table_colnam" ~ "id_table_colnam"
+    if (any(extracted_data$valuetype == "numeric")) {
+      numeric_subplots_pivot <-
+        extracted_data %>%
+        filter(valuetype == "numeric",
+               type != "census") %>%
+        select(id_table_liste_plots, typevalue, type) %>%
+        pivot_wider(
+          names_from = "type",
+          values_from = "typevalue",
+          values_fn = ~ mean(.x, na.rm = TRUE)
         )
+    } else {
+      numeric_subplots_pivot <- NULL
+    }
 
-      col_to_keep_ <-
-        case_when(
-          table_ids_subplots$valuetype[i] == "table_colnam" ~ "colnam"
-        )
-
-      table_collected <-
-        tbl(mydb, table_ids_subplots$valuetype[i]) %>%
-        collect()
-
-      table_ids_subplots <-
-        table_ids_subplots %>%
-        left_join(table_collected %>%
-                    dplyr::select(all_of(c(col_to_keep_, ids_))),
-                  by = c("typevalue" = ids_)) %>%
-        mutate(typevalue_char = !!rlang::parse_expr(col_to_keep_)) %>%
-        dplyr::select(-all_of(col_to_keep_))
-
-      table_valutype_list[[i]] <-
-        table_ids_subplots %>%
+    if (any(extracted_data$valuetype == "character")) {
+      character_subplots_pivot <-
+        extracted_data %>%
+        filter(valuetype == "character",
+               type != "census") %>%
         select(id_table_liste_plots, typevalue_char, type) %>%
         pivot_wider(
           names_from = "type",
           values_from = "typevalue_char",
-          values_fn = ~ paste(., collapse = ", ")
+          values_fn = ~ paste(.x, collapse = "|")
         )
+    } else {
+      character_subplots_pivot <- NULL
     }
+
+    if (any(extracted_data$type == "census")) {
+
+      census_plots <-
+        extracted_data %>%
+        dplyr::filter(type == "census")
+
+      ## max census for each plot
+      census_plots_nbr <-
+        census_plots %>%
+        dplyr::group_by(id_table_liste_plots) %>%
+        dplyr::summarise(number_of_census = max(typevalue, na.rm = T))
+
+      census_features <-
+        census_plots %>%
+        dplyr::left_join(dplyr::tbl(mydb, "table_colnam") %>%
+                           filter(id_table_colnam %in% !!census_plots$id_colnam) %>%
+                           collect(),
+                         by = c("id_colnam" = "id_table_colnam")) %>%
+        dplyr::select(
+          year,
+          month,
+          day,
+          typevalue,
+          colnam,
+          additional_people,
+          id_sub_plots,
+          id_table_liste_plots
+        )
+
+      nbr_census <- dplyr::distinct(census_features, typevalue)
+      census_dates_lists <- vector('list', nrow(nbr_census))
+      for (i in 1:nrow(nbr_census)) {
+
+        census_features_selected <-
+          census_features %>%
+          dplyr::filter(typevalue == i)
+
+        census_features_selected <-
+          census_features_selected %>%
+          dplyr::mutate(date =
+                          paste(ifelse(!is.na(month),
+                                       month, 1), # if day is missing, by default 1
+                                ifelse(!is.na(day),
+                                       day, 1), # if month is missing, by default 1
+                                ifelse(!is.na(year),
+                                       year, ""),
+                                sep = "/")) %>%
+          dplyr::mutate(date_julian = date::as.date(date)) %>%
+          dplyr::select(date, date_julian, id_table_liste_plots)
+
+        date_name <- paste0("date_census_", i)
+        date_name_enquo1 <-
+          rlang::parse_expr(rlang::quo_name(rlang::enquo(date_name)))
+        date_name <- paste0("date_census_julian_", i)
+        date_name_enquo2 <-
+          rlang::parse_expr(rlang::quo_name(rlang::enquo(date_name)))
+
+        census_features_selected <-
+          census_features_selected %>%
+          dplyr::rename(!!date_name_enquo1 := date) %>%
+          dplyr::rename(!!date_name_enquo2 := date_julian)
+
+        census_dates_lists[[i]] <-census_features_selected
+
+      }
+
+    } else {
+      census_dates_lists <- NULL
+      census_plots_nbr <- NULL
+      census_features <- NA
+    }
+
+
+    if (any(grepl("table_", extracted_data$valuetype))) {
+
+      table_ids_subplots <- extracted_data %>%
+        filter(grepl("table_", valuetype))
+
+      allvalutype <- distinct(table_ids_subplots, valuetype)
+
+
+      table_valutype_list <- vector('list', nrow(allvalutype))
+      for (i in 1:nrow(allvalutype)) {
+
+        ids_ <-
+          case_when(
+            table_ids_subplots$valuetype[i] == "table_colnam" ~ "id_table_colnam"
+          )
+
+        col_to_keep_ <-
+          case_when(
+            table_ids_subplots$valuetype[i] == "table_colnam" ~ "colnam"
+          )
+
+        table_collected <-
+          tbl(mydb, table_ids_subplots$valuetype[i]) %>%
+          collect()
+
+        table_ids_subplots <-
+          table_ids_subplots %>%
+          left_join(table_collected %>%
+                      dplyr::select(all_of(c(col_to_keep_, ids_))),
+                    by = c("typevalue" = ids_)) %>%
+          mutate(typevalue_char = !!rlang::parse_expr(col_to_keep_)) %>%
+          dplyr::select(-all_of(col_to_keep_))
+
+        table_valutype_list[[i]] <-
+          table_ids_subplots %>%
+          select(id_table_liste_plots, typevalue_char, type) %>%
+          pivot_wider(
+            names_from = "type",
+            values_from = "typevalue_char",
+            values_fn = ~ paste(., collapse = ", ")
+          )
+      }
+    } else {
+      table_valutype_list <- NULL
+    }
+
+    all_subplot_pivot <-
+      c(census_dates_lists, table_valutype_list, list(census_plots_nbr), list(character_subplots_pivot), list(numeric_subplots_pivot))
+
+    all_subplot_pivot <-  purrr::reduce(all_subplot_pivot[!unlist(lapply(all_subplot_pivot, is.null))],
+                                        dplyr::left_join, by = 'id_table_liste_plots')
+
+    return(list(all_subplots = extracted_data,
+                all_subplot_pivot = all_subplot_pivot,
+                census_features = census_features))
+
   } else {
-    table_valutype_list <- NULL
+
+    return(list(all_subplots = NA,
+                all_subplot_pivot = NA,
+                census_features = NA))
+
   }
 
-  all_subplot_pivot <-
-    c(census_dates_lists, table_valutype_list, list(census_plots_nbr), list(character_subplots_pivot), list(numeric_subplots_pivot))
 
-  all_subplot_pivot <-  purrr::reduce(all_subplot_pivot[!unlist(lapply(all_subplot_pivot, is.null))],
-                dplyr::left_join, by = 'id_table_liste_plots')
-
-  return(list(all_subplots = extracted_data,
-              all_subplot_pivot = all_subplot_pivot,
-              census_features = census_features))
 
 }
 
