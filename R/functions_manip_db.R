@@ -1774,32 +1774,6 @@ query_plots <- function(team_lead = NULL,
 
     query <- 'SELECT * FROM data_liste_plots WHERE MMM'
 
-    if(!is.null(team_lead)) {
-
-      id_liste_plots_match <- vector('list', length(team_lead))
-      for (i in 1:length(team_lead)) {
-
-        query_colnam <-
-          paste0("SELECT * FROM table_colnam WHERE colnam ILIKE '%", team_lead[i], "%'")
-
-        rs_colnam <- func_try_fetch(con = mydb, sql = query_colnam)
-        rs_colnam <- dplyr::as_tibble(rs_colnam)
-
-        # rs_col <- DBI::dbSendQuery(mydb, query_colnam)
-        # rs_colnam <- DBI::dbFetch(rs_col)
-        # DBI::dbClearResult(rs_col)
-
-        id_liste_plots_match[[i]] <- rs_colnam$id_table_colnam
-      }
-
-      query <-
-        gsub(
-          pattern = "MMM",
-          replacement = paste0("id_colnam IN ('", paste(unlist(id_liste_plots_match), collapse = "', '"), "') AND MMM"),
-          x = query
-        )
-
-    }
       # query <- gsub(pattern = "MMM", replacement = paste0(" team_leader ILIKE '%", team_lead, "%' AND MMM"), x=query)
 
     # query <- "SELECT * FROM data_liste_plots WHERE  team_leader ILIKE '%Dauby%' AND country IN ('Gabon', 'Cameroun')"
@@ -1998,12 +1972,47 @@ query_plots <- function(team_lead = NULL,
     # dplyr::rename(country = colnam) %>%
     dplyr::relocate(country, .after = additional_people)
 
-  if (nrow(res) == 0)
-    stop("No plot are found based on inputs")
+  if (extract_subplot_features & nrow(res) > 0) {
 
-  if (extract_subplot_features) {
+    all_subplots <- query_subplots(ids_plots =  res$id_liste_plots,
+                                   verbose = FALSE)
 
-    all_subplots <- query_subplots(ids_plots =  res$id_liste_plots)
+    id_plots_filtered <- c()
+    if(!is.null(team_lead)) {
+
+      id_liste_plots_match <- vector('list', length(team_lead))
+      for (i in 1:length(team_lead)) {
+
+        query_colnam <-
+          paste0("SELECT * FROM table_colnam WHERE colnam ILIKE '%", team_lead[i], "%'")
+
+        rs_colnam <- func_try_fetch(con = mydb, sql = query_colnam)
+        rs_colnam <- dplyr::as_tibble(rs_colnam)
+
+        id_liste_plots_match[[i]] <- rs_colnam$id_table_colnam
+      }
+
+      if (all(unlist(lapply(id_liste_plots_match, function(x) length(x) == 0)))) {
+        cli::cli_alert_warning("no team_leader found based on team_lead provided")
+      } else {
+
+        ids_team_lead <- unlist(id_liste_plots_match[unlist(lapply(id_liste_plots_match, function(x) length(x) > 0))])
+
+        id_plots_filtered <-
+          all_subplots$all_subplots %>%
+          filter(type == "team_leader") %>%
+          filter(typevalue %in% ids_team_lead) %>%
+          pull(id_table_liste_plots)
+
+        all_subplots$all_subplot_pivot <-
+          all_subplots$all_subplot_pivot %>%
+          filter(id_table_liste_plots %in% id_plots_filtered)
+
+        all_subplots$all_subplots <-
+          all_subplots$all_subplots %>%
+          filter(id_table_liste_plots %in% id_plots_filtered)
+      }
+    }
 
     if (any(!is.na(all_subplots$census_features))) {
       census_features <- all_subplots$census_features
@@ -2038,7 +2047,6 @@ query_plots <- function(team_lead = NULL,
     if (any(names(res) == "team_leader"))
       res <- res %>%
       dplyr::relocate(team_leader, .after = plot_name)
-
 
     if(show_all_coordinates) {
 
@@ -2154,66 +2162,14 @@ query_plots <- function(team_lead = NULL,
 
     }
 
-    # res <-
-    #   res %>%
-    #   dplyr::select(-date)
-    #
-    # if(nrow(census_features) > 1) {
-    #   cli::cli_rule(left = "Attaching census informations")
-    #   cli::cli_alert_info("Number of census found : {unique(pull(census_features, typevalue))}")
-    #
-    #   for (i in 1:nrow(dplyr::distinct(census_features, typevalue))) {
-    #
-    #
-    #     census_features_selected <-
-    #       census_features %>%
-    #       dplyr::filter(typevalue == i)
-    #
-    #     census_features_selected <-
-    #       census_features_selected %>%
-    #       dplyr::mutate(date =
-    #                       paste(ifelse(!is.na(month),
-    #                                    month, 1), # if day is missing, by default 1
-    #                             ifelse(!is.na(day),
-    #                                    day, 1), # if month is missing, by default 1
-    #                             ifelse(!is.na(year),
-    #                                    year, ""),
-    #                             sep = "/")) %>%
-    #       dplyr::mutate(date_julian = date::as.date(date))
-    #
-    #
-    #     res <-
-    #       res %>%
-    #       dplyr::left_join(
-    #         census_features_selected %>%
-    #           dplyr::select(id_table_liste_plots, date, date_julian),
-    #         by = c("id_liste_plots" = "id_table_liste_plots")
-    #       )
-    #
-    #     date_name <- paste0("date_census_", i)
-    #     date_name_enquo <-
-    #       rlang::parse_expr(rlang::quo_name(rlang::enquo(date_name)))
-    #
-    #     res <-
-    #       res %>%
-    #       dplyr::rename(!!date_name_enquo := date)
-    #
-    #     date_name <- paste0("date_census_julian_", i)
-    #     date_name_enquo <-
-    #       rlang::parse_expr(rlang::quo_name(rlang::enquo(date_name)))
-    #
-    #     res <-
-    #       res %>%
-    #       dplyr::rename(!!date_name_enquo := date_julian)
-    #
-    #   }
-    #
-    #   res <-
-    #     res %>%
-    #     dplyr::left_join(census_plots, by = c("id_liste_plots"="id_table_liste_plots"))
-    # }
+    if (length(id_plots_filtered) > 0)
+      res <-
+      res %>% filter(id_liste_plots %in% id_plots_filtered)
 
   }
+
+  if (nrow(res) == 0)
+    stop("No plot are found based on inputs")
 
   if(map) {
 
@@ -3005,8 +2961,6 @@ query_subplots <- function(ids_plots = NULL,
                     id_colnam,
                     additional_people)
 
-
-
     if (any(extracted_data$valuetype == "numeric")) {
       numeric_subplots_pivot <-
         extracted_data %>%
@@ -3157,10 +3111,16 @@ query_subplots <- function(ids_plots = NULL,
     }
 
     all_subplot_pivot <-
-      c(census_dates_lists, table_valutype_list, list(census_plots_nbr), list(character_subplots_pivot), list(numeric_subplots_pivot))
+      c(census_dates_lists,
+        table_valutype_list,
+        list(census_plots_nbr),
+        list(character_subplots_pivot),
+        list(numeric_subplots_pivot))
 
-    all_subplot_pivot <-  purrr::reduce(all_subplot_pivot[!unlist(lapply(all_subplot_pivot, is.null))],
-                                        dplyr::left_join, by = 'id_table_liste_plots')
+    all_subplot_pivot <-
+      purrr::reduce(all_subplot_pivot[!unlist(lapply(all_subplot_pivot, is.null))],
+                                        dplyr::full_join,
+                    by = 'id_table_liste_plots')
 
     return(list(all_subplots = extracted_data,
                 all_subplot_pivot = all_subplot_pivot,
