@@ -13,6 +13,8 @@ update_plot_data(
   id_table_plot = NULL,
   new_plot_name = NULL,
   new_team_leader = NULL,
+  new_principal_investigator = NULL,
+  new_data_manager = NULL,
   new_country = NULL,
   new_ddlat = NULL,
   new_ddlon = NULL,
@@ -41,6 +43,10 @@ update_plot_data(
 \item{new_plot_name}{string new plot name}
 
 \item{new_team_leader}{string new team leader}
+
+\item{new_principal_investigator}{string}
+
+\item{new_data_manager}{string}
 
 \item{new_country}{string new country}
 

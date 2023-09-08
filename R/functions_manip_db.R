@@ -2820,7 +2820,6 @@ query_plots <- function(team_lead = NULL,
   if (nrow(res) < 100)
     print_table(res)
 
-
   if(show_multiple_census) {
     res_list$census_features <- census_features
 
@@ -2834,9 +2833,6 @@ query_plots <- function(team_lead = NULL,
     res_list$coordinates_sf <- coordinates_subplots_plot_sf
 
   res_list <- res_list[!is.na(res_list)]
-
-
-
 
   if (length(res_list) == 1)
     res_list <- res_list[[1]]
@@ -4610,6 +4606,8 @@ add_subplot_features <- function(new_data,
 #' @param date_y integer year of collect of the selected plots
 #' @param id_table_plot integer id of plot to be updated
 #' @param new_team_leader string new team leader
+#' @param new_principal_investigator string
+#' @param new_data_manager string
 #' @param new_plot_name string new plot name
 #' @param new_country string new country
 #' @param new_ddlat double new latitude in decimal degrees
@@ -4630,6 +4628,8 @@ update_plot_data <- function(team_lead = NULL,
                              id_table_plot = NULL,
                              new_plot_name = NULL,
                              new_team_leader = NULL,
+                             new_principal_investigator = NULL,
+                            new_data_manager = NULL,
                              new_country = NULL,
                              new_ddlat = NULL,
                              new_ddlon = NULL,
@@ -4662,167 +4662,229 @@ update_plot_data <- function(team_lead = NULL,
 
   if (nrow(quer_plots) == 1) {
 
-    if(!is.null(new_method)) {
+    if (!is.null(new_team_leader) | !is.null(new_principal_investigator) | !is.null(data_manager)) {
 
-      id_new_method <- .link_method(method = new_method)
-
-    }
-
-    if(!is.null(new_team_leader)) {
+      if (!is.null(new_team_leader)) {new_colnam <- new_team_leader; colname_type = "team_leader"}
+      if (!is.null(new_principal_investigator)) {new_colnam <- new_principal_investigator; colname_type = "principal_investigator"}
+      if (!is.null(data_manager)) {new_colnam <- data_manager; colname_type = "data_manager"}
 
       new_id_colnam <-
-        .link_colnam(data_stand = tibble(colnam = new_team_leader),
+        .link_colnam(data_stand = tibble(colnam = new_colnam),
                      collector_field = 1)
 
-      new_id_colnam <-
-        new_id_colnam$id_colnam
+      subplots_list <-
+        query_subplots(ids_plots = quer_plots$id_liste_plots, verbose = FALSE)
 
-    } else {
-      new_id_colnam <- NULL
-    }
+      existing_data <-
+        subplots_list$all_subplots %>%
+        filter(type == colname_type)
 
-    if(!is.null(new_country)) {
+      if (nrow(existing_data) > 0) {
 
-      new_id_country <-
-        .link_country(data_stand = tibble(colnam = new_country),
-                      country_field = 1)
+        if (any(existing_data$typevalue == new_id_colnam$id_colnam)) {
+          cli::cli_alert_warning(glue::glue("{colname_type} information already linked to plot"))
+          conf <- FALSE
+        } else {
 
-      new_id_country <-
-        new_id_country$id_country
+          cli::cli_alert_info(glue::glue("{colname_type} information already available for this plot"))
+          print(subplots_list$all_subplot_pivot %>% pull(colname_type))
 
-    } else {
-      new_id_country <- NULL
-    }
+          conf <- askYesNo(msg = glue::glue("Add {colname_type} information ?"))
 
-
-    new_values <-
-      dplyr::tibble(
-        plot_name = ifelse(!is.null(new_plot_name), new_plot_name, quer_plots$plot_name),
-        id_method  = ifelse(!is.null(new_method), id_new_method, quer_plots$id_method),
-        id_colnam = ifelse(
-          !is.null(new_id_colnam),
-          new_id_colnam,
-          quer_plots$id_colnam
-        ),
-        id_country = ifelse(
-          !is.null(new_id_country),
-          new_id_country,
-          quer_plots$id_country
-        ),
-        ddlat = ifelse(!is.null(new_ddlat), new_ddlat, quer_plots$ddlat),
-        ddlon = ifelse(!is.null(new_ddlon), new_ddlon, quer_plots$ddlon),
-        elevation = ifelse(!is.null(new_elevation), new_elevation, quer_plots$elevation),
-        province = ifelse(!is.null(new_province), new_province, quer_plots$province),
-        data_provider = ifelse(!is.null(new_data_provider), new_data_provider, quer_plots$data_provider),
-        locality_name = ifelse(!is.null(new_locality_name), new_locality_name, quer_plots$locality_name)
-      )
-
-    comp_res <- .comp_print_vec(vec_1 = quer_plots  %>%
-                                  dplyr::select(!!colnames(new_values)),
-                                vec_2 = new_values)
-
-    print(comp_res$comp_html)
-
-    comp_values <- comp_res$comp_tb
-
-
-    if (!is.vector(comp_values)) {
-
-      if (any(comp_values %>% pull())) {
-
-        modif <- TRUE
-
-      } else {
-        modif <- FALSE
-      }
-
-    } else {
-
-      if (comp_values) {
-
-        modif <- TRUE
-
-      } else {
-        modif <- FALSE
-      }
-
-    }
-
-    if (modif) {
-
-      # col_sel <-
-      #   comp_values %>%
-      #   dplyr::select_if( ~ sum(.) > 0) %>%
-      #   colnames()
-      # cli::cli_h1("Previous values")
-      # print(quer_plots %>%
-      #         dplyr::select(!!col_sel))
-      # cli::cli_h1("New values")
-      # print(new_values %>%
-      #         dplyr::select(!!col_sel))
-
-      if(ask_before_update) {
-
-        Q <- utils::askYesNo("Confirm these modifications?")
-
-      } else {
-
-        Q <- TRUE
-
-      }
-
-
-      if(Q) {
-
-        modif_types <-
-          paste0(names(comp_values), sep="__")
-
-        if(add_backup) {
-
-          colnames_plots <-
-            dplyr::tbl(mydb, "followup_updates_liste_plots")  %>%
-            dplyr::select(-date_modified, -modif_type, -id_fol_up_plots) %>%
-            # dplyr::top_n(1) %>%
-            dplyr::collect(n=1) %>%
-            colnames()
-
-          quer_plots <-
-            quer_plots %>%
-            dplyr::select(dplyr::one_of(colnames_plots))
-
-          quer_plots <-
-            quer_plots %>%
-            tibble::add_column(date_modified=Sys.Date()) %>%
-            tibble::add_column(modif_type=paste0(modif_types, collapse = ""))
-
-          DBI::dbWriteTable(mydb, "followup_updates_liste_plots", quer_plots, append = TRUE, row.names = FALSE)
         }
 
-        rs <-
-          DBI::dbSendQuery(mydb, statement="UPDATE data_liste_plots SET plot_name = $2, id_method = $3, id_colnam = $4, id_country = $5, ddlat = $6, ddlon = $7, elevation = $8, province = $9, data_provider = $10, locality_name = $11, data_modif_d=$12, data_modif_m=$13, data_modif_y=$14 WHERE id_liste_plots = $1",
-                      params=list(quer_plots$id_liste_plots, # $1
-                                  new_values$plot_name, # $2
-                                  new_values$id_method, # $3
-                                  new_values$id_colnam, # $4
-                                  new_values$id_country, # $5
-                                  new_values$ddlat, # $6
-                                  new_values$ddlon, # $7
-                                  new_values$elevation, # $8
-                                  new_values$province, # $9
-                                  new_values$data_provider, # $10,
-                                  new_values$locality_name, # $11
-                                  lubridate::day(Sys.Date()), # $12
-                                  lubridate::month(Sys.Date()), # $13
-                                  lubridate::year(Sys.Date()))) # $14
+      } else {
 
-        # if(show_results) print(dbFetch(rs))
-        DBI::dbClearResult(rs)
+        conf <- TRUE
 
       }
 
-    }else{
+      if (conf) {
 
-      cli::cli_alert_info("no update because no values differents from the entry")
+        if (ask_before_update) {
+
+          Q <- utils::askYesNo("Confirm adding these modifications?")
+
+        } else {
+
+          Q <- TRUE
+
+        }
+
+        if (Q) {
+
+          add_subplot_features(new_data = tibble({{colname_type}} := new_id_colnam$id_colnam,
+                                                 id_liste_plot = quer_plots$id_liste_plots),
+                               id_plot_name = "id_liste_plot",
+                               subplottype_field = colname_type,
+                               ask_before_update = FALSE,
+                               verbose = TRUE,
+                               add_data = TRUE)
+
+          cli::cli_alert_success(glue::glue("added {colname_type} information"))
+        }
+
+      }
+
+
+
+
+
+
+      # new_id_colnam <-
+      #   new_id_colnam$id_colnam
+
+    } else {
+
+      if(!is.null(new_method)) {
+
+        id_new_method <- .link_method(method = new_method)
+
+      }
+
+      if(!is.null(new_country)) {
+
+        new_id_country <-
+          .link_country(data_stand = tibble(colnam = new_country),
+                        country_field = 1)
+
+        new_id_country <-
+          new_id_country$id_country
+
+      } else {
+        new_id_country <- NULL
+      }
+
+      new_values <-
+        dplyr::tibble(
+          plot_name = ifelse(!is.null(new_plot_name), new_plot_name, quer_plots$plot_name),
+          id_method  = ifelse(!is.null(new_method), id_new_method, quer_plots$id_method),
+          # id_colnam = ifelse(
+          #   !is.null(new_id_colnam),
+          #   new_id_colnam,
+          #   quer_plots$id_colnam
+          # ),
+          id_country = ifelse(
+            !is.null(new_id_country),
+            new_id_country,
+            quer_plots$id_country
+          ),
+          ddlat = ifelse(!is.null(new_ddlat), new_ddlat, quer_plots$ddlat),
+          ddlon = ifelse(!is.null(new_ddlon), new_ddlon, quer_plots$ddlon),
+          elevation = ifelse(!is.null(new_elevation), new_elevation, quer_plots$elevation),
+          province = ifelse(!is.null(new_province), new_province, quer_plots$province),
+          data_provider = ifelse(!is.null(new_data_provider), new_data_provider, quer_plots$data_provider),
+          locality_name = ifelse(!is.null(new_locality_name), new_locality_name, quer_plots$locality_name)
+        )
+
+      comp_res <- .comp_print_vec(vec_1 = quer_plots  %>%
+                                    dplyr::select(!!colnames(new_values)),
+                                  vec_2 = new_values)
+
+      print(comp_res$comp_html)
+
+      comp_values <- comp_res$comp_tb
+
+
+      if (!is.vector(comp_values)) {
+
+        if (any(comp_values %>% pull())) {
+
+          modif <- TRUE
+
+        } else {
+          modif <- FALSE
+        }
+
+      } else {
+
+        if (comp_values) {
+
+          modif <- TRUE
+
+        } else {
+          modif <- FALSE
+        }
+
+      }
+
+      if (modif) {
+
+        # col_sel <-
+        #   comp_values %>%
+        #   dplyr::select_if( ~ sum(.) > 0) %>%
+        #   colnames()
+        # cli::cli_h1("Previous values")
+        # print(quer_plots %>%
+        #         dplyr::select(!!col_sel))
+        # cli::cli_h1("New values")
+        # print(new_values %>%
+        #         dplyr::select(!!col_sel))
+
+        if (ask_before_update) {
+
+          Q <- utils::askYesNo("Confirm these modifications?")
+
+        } else {
+
+          Q <- TRUE
+
+        }
+
+
+        if(Q) {
+
+          modif_types <-
+            paste0(names(comp_values), sep="__")
+
+          if(add_backup) {
+
+            colnames_plots <-
+              dplyr::tbl(mydb, "followup_updates_liste_plots")  %>%
+              dplyr::select(-date_modified, -modif_type, -id_fol_up_plots) %>%
+              # dplyr::top_n(1) %>%
+              dplyr::collect(n=1) %>%
+              colnames()
+
+            quer_plots <-
+              quer_plots %>%
+              dplyr::select(dplyr::one_of(colnames_plots))
+
+            quer_plots <-
+              quer_plots %>%
+              tibble::add_column(date_modified=Sys.Date()) %>%
+              tibble::add_column(modif_type=paste0(modif_types, collapse = ""))
+
+            DBI::dbWriteTable(mydb, "followup_updates_liste_plots", quer_plots, append = TRUE, row.names = FALSE)
+          }
+
+          rs <-
+            DBI::dbSendQuery(mydb, statement="UPDATE data_liste_plots SET plot_name = $2, id_method = $3, id_country = $4, ddlat = $5, ddlon = $6, elevation = $7, province = $8, data_provider = $9, locality_name = $10, data_modif_d=$11, data_modif_m=$12, data_modif_y=$13 WHERE id_liste_plots = $1",
+                             params=list(quer_plots$id_liste_plots, # $1
+                                         new_values$plot_name, # $2
+                                         new_values$id_method, # $3
+                                         # new_values$id_colnam, # $4
+                                         new_values$id_country, # $5
+                                         new_values$ddlat, # $6
+                                         new_values$ddlon, # $7
+                                         new_values$elevation, # $8
+                                         new_values$province, # $9
+                                         new_values$data_provider, # $10,
+                                         new_values$locality_name, # $11
+                                         lubridate::day(Sys.Date()), # $12
+                                         lubridate::month(Sys.Date()), # $13
+                                         lubridate::year(Sys.Date()))) # $14
+
+          # if(show_results) print(dbFetch(rs))
+          DBI::dbClearResult(rs)
+
+        }
+
+      } else {
+
+        cli::cli_alert_info("no update because no values differents from the entry")
+
+      }
 
     }
 
