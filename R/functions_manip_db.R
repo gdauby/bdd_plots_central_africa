@@ -2282,9 +2282,11 @@ query_plots <- function(team_lead = NULL,
     selec_plot_tables <-
       # dplyr::tbl(mydb, "data_liste_plots") %>%
       res %>%
-      dplyr::select(plot_name, team_leader, country, locality_name,
+      dplyr::select(plot_name,  country, locality_name, #team_leader,
                     data_provider, id_liste_plots,
-                    dplyr::contains("date_census"))
+                    dplyr::contains("date_census"),
+                    dplyr::contains("team_leader"),
+                    dplyr::contains("principal_investigator"))
 
     res_individuals_full <-
       merge_individuals_taxa(id_individual = id_individual,
