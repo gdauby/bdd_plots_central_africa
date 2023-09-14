@@ -15,6 +15,7 @@ update_plot_data(
   new_team_leader = NULL,
   new_principal_investigator = NULL,
   new_data_manager = NULL,
+  new_additional_people = NULL,
   new_country = NULL,
   new_ddlat = NULL,
   new_ddlon = NULL,
@@ -23,6 +24,7 @@ update_plot_data(
   new_province = NULL,
   new_data_provider = NULL,
   new_locality_name = NULL,
+  new_topo_comment = NULL,
   add_backup = TRUE,
   ask_before_update = TRUE
 )
@@ -48,6 +50,8 @@ update_plot_data(
 
 \item{new_data_manager}{string}
 
+\item{new_additional_people}{string}
+
 \item{new_country}{string new country}
 
 \item{new_ddlat}{double new latitude in decimal degrees}
@@ -59,6 +63,8 @@ update_plot_data(
 \item{new_method}{string new method data}
 
 \item{new_province}{string new province data}
+
+\item{new_topo_comment}{string}
 
 \item{add_backup}{logical whether backup of modified data should be recorded}
 }

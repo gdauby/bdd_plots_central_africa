@@ -455,8 +455,8 @@ launch_stand_tax_app <- function() {
       # %>%
       #   dplyr::mutate(detvalue=as.integer(detvalue))
 
-      DATA %>% select(ID.dico.name, original_tax_name, found.name) %>%
-        dplyr::filter(ID.dico.name == 0) %>% print()
+      # DATA %>% select(ID.dico.name, original_tax_name, found.name) %>%
+      #   dplyr::filter(ID.dico.name == 0) %>% print()
 
       test <-
         DATA %>%
@@ -1996,7 +1996,8 @@ query_plots <- function(team_lead = NULL,
         cli::cli_alert_warning("no team_leader found based on team_lead provided")
       } else {
 
-        ids_team_lead <- unlist(id_liste_plots_match[unlist(lapply(id_liste_plots_match, function(x) length(x) > 0))])
+        ids_team_lead <-
+          unlist(id_liste_plots_match[unlist(lapply(id_liste_plots_match, function(x) length(x) > 0))])
 
         id_plots_filtered <-
           all_subplots$all_subplots %>%
@@ -2358,16 +2359,24 @@ query_plots <- function(team_lead = NULL,
         collapse_multiple_val = collapse_multiple_val
       )
 
-    if (length(all_traits_list) > 0) {
-      for (i in 1:length(all_traits_list)) {
-        res_individuals_full <-
-          res_individuals_full %>%
-          dplyr::left_join(all_traits_list[[i]] %>%
-                             dplyr::select(-id_old),
-                           by = c("id_n" = "id_n"))
+    res_individuals_full <-
+      res_individuals_full %>%
+      left_join(purrr::reduce(all_traits_list,
+                              dplyr::full_join,
+                              by = 'id_n'),
+                by = 'id_n')
 
-      }
-    }
+
+    # if (length(all_traits_list) > 0) {
+    #   for (i in 1:length(all_traits_list)) {
+    #     res_individuals_full <-
+    #       res_individuals_full %>%
+    #       dplyr::left_join(all_traits_list[[i]] %>%
+    #                          dplyr::select(-id_old),
+    #                        by = c("id_n" = "id_n"))
+    #
+    #   }
+    # }
 
     if (extract_traits) {
 
@@ -2463,7 +2472,7 @@ query_plots <- function(team_lead = NULL,
             dplyr::ungroup() %>%
             dplyr::distinct()
 
-          if (verbose) cli::cli_alert_info("Extracting most frequent value for categorical traits at genus level")
+          cli::cli_alert_info("Extracting most frequent value for categorical traits at genus level")
 
           traits_idtax_char <-
             traits_idtax_char %>%
@@ -2735,8 +2744,6 @@ query_plots <- function(team_lead = NULL,
           #   count()
 
         }
-
-
 
       }
     }
@@ -4209,7 +4216,7 @@ add_plots <- function(new_data,
       collect() %>%
       dplyr::select(id_liste_plots, plot_name)
 
-    if (exists(id_team_leader)) {
+    if (exists("id_team_leader")) {
 
       id_team_leader <-
         id_team_leader %>%
@@ -4223,7 +4230,7 @@ add_plots <- function(new_data,
 
     }
 
-    if (exists(id_pi)) {
+    if (exists("id_pi")) {
 
       id_pi <-
         id_pi %>%
@@ -4238,7 +4245,7 @@ add_plots <- function(new_data,
 
     }
 
-    if (exists(add_col_sep)) {
+    if (exists("add_col_sep")) {
 
       add_col_sep <-
         add_col_sep %>%
@@ -4252,7 +4259,7 @@ add_plots <- function(new_data,
 
     }
 
-    if (exists(data_manager_sep)) {
+    if (exists("data_manager_sep")) {
 
       data_manager_sep <-
         data_manager_sep %>%
@@ -4609,6 +4616,7 @@ add_subplot_features <- function(new_data,
 #' @param id_table_plot integer id of plot to be updated
 #' @param new_team_leader string new team leader
 #' @param new_principal_investigator string
+#' @param new_additional_people string
 #' @param new_data_manager string
 #' @param new_plot_name string new plot name
 #' @param new_country string new country
@@ -4617,6 +4625,7 @@ add_subplot_features <- function(new_data,
 #' @param new_elevation integer new elevation data
 #' @param new_method string new method data
 #' @param new_province string new province data
+#' @param new_topo_comment string
 #' @param add_backup logical whether backup of modified data should be recorded
 #'
 #'
@@ -4632,6 +4641,7 @@ update_plot_data <- function(team_lead = NULL,
                              new_team_leader = NULL,
                              new_principal_investigator = NULL,
                             new_data_manager = NULL,
+                            new_additional_people = NULL,
                              new_country = NULL,
                              new_ddlat = NULL,
                              new_ddlon = NULL,
@@ -4640,6 +4650,7 @@ update_plot_data <- function(team_lead = NULL,
                              new_province = NULL,
                              new_data_provider = NULL,
                              new_locality_name = NULL,
+                            new_topo_comment = NULL,
                              add_backup = TRUE,
                              ask_before_update = TRUE) {
 
@@ -4664,22 +4675,30 @@ update_plot_data <- function(team_lead = NULL,
 
   if (nrow(quer_plots) == 1) {
 
-    if (!is.null(new_team_leader) | !is.null(new_principal_investigator) | !is.null(data_manager)) {
+    if (!is.null(new_team_leader) | !is.null(new_principal_investigator) | !is.null(new_data_manager) | !is.null(new_additional_people)) {
 
       if (!is.null(new_team_leader)) {new_colnam <- new_team_leader; colname_type = "team_leader"}
       if (!is.null(new_principal_investigator)) {new_colnam <- new_principal_investigator; colname_type = "principal_investigator"}
-      if (!is.null(data_manager)) {new_colnam <- data_manager; colname_type = "data_manager"}
+      if (!is.null(new_data_manager)) {new_colnam <- new_data_manager; colname_type = "data_manager"}
+      if (!is.null(new_additional_people)) {new_colnam <- new_additional_people; colname_type = "additional_people"}
+
+      all_new_colnam <- tibble(colnam = new_colnam) %>%
+        tidyr::separate_rows(colnam, sep = ",") %>% pull()
 
       new_id_colnam <-
-        .link_colnam(data_stand = tibble(colnam = new_colnam),
+        .link_colnam(data_stand = tibble(colnam = all_new_colnam),
                      collector_field = 1)
 
       subplots_list <-
         query_subplots(ids_plots = quer_plots$id_liste_plots, verbose = FALSE)
 
-      existing_data <-
-        subplots_list$all_subplots %>%
-        filter(type == colname_type)
+      if (any(!is.na(subplots_list$all_subplots))) {
+        existing_data <-
+          subplots_list$all_subplots %>%
+          filter(type == colname_type)
+      } else {
+        existing_data <- tibble()
+      }
 
       if (nrow(existing_data) > 0) {
 
@@ -4773,10 +4792,16 @@ update_plot_data <- function(team_lead = NULL,
           ),
           ddlat = ifelse(!is.null(new_ddlat), new_ddlat, quer_plots$ddlat),
           ddlon = ifelse(!is.null(new_ddlon), new_ddlon, quer_plots$ddlon),
-          elevation = ifelse(!is.null(new_elevation), new_elevation, quer_plots$elevation),
-          province = ifelse(!is.null(new_province), new_province, quer_plots$province),
-          data_provider = ifelse(!is.null(new_data_provider), new_data_provider, quer_plots$data_provider),
-          locality_name = ifelse(!is.null(new_locality_name), new_locality_name, quer_plots$locality_name)
+          elevation = ifelse(!is.null(new_elevation),
+                             new_elevation, quer_plots$elevation),
+          province = ifelse(!is.null(new_province),
+                            new_province, quer_plots$province),
+          data_provider = ifelse(!is.null(new_data_provider),
+                                 new_data_provider, quer_plots$data_provider),
+          locality_name = ifelse(!is.null(new_locality_name),
+                                 new_locality_name, quer_plots$locality_name),
+          topo_comment = ifelse(!is.null(new_topo_comment),
+                                    new_topo_comment, quer_plots$topo_comment)
         )
 
       comp_res <- .comp_print_vec(vec_1 = quer_plots  %>%
@@ -4861,7 +4886,7 @@ update_plot_data <- function(team_lead = NULL,
           }
 
           rs <-
-            DBI::dbSendQuery(mydb, statement="UPDATE data_liste_plots SET plot_name = $2, id_method = $3, id_country = $4, ddlat = $5, ddlon = $6, elevation = $7, province = $8, data_provider = $9, locality_name = $10, data_modif_d=$11, data_modif_m=$12, data_modif_y=$13 WHERE id_liste_plots = $1",
+            DBI::dbSendQuery(mydb, statement="UPDATE data_liste_plots SET plot_name = $2, id_method = $3, id_country = $4, ddlat = $5, ddlon = $6, elevation = $7, province = $8, data_provider = $9, locality_name = $10, topo_comment = $11, data_modif_d=$12, data_modif_m=$13, data_modif_y=$14 WHERE id_liste_plots = $1",
                              params=list(quer_plots$id_liste_plots, # $1
                                          new_values$plot_name, # $2
                                          new_values$id_method, # $3
@@ -4873,9 +4898,10 @@ update_plot_data <- function(team_lead = NULL,
                                          new_values$province, # $9
                                          new_values$data_provider, # $10,
                                          new_values$locality_name, # $11
-                                         lubridate::day(Sys.Date()), # $12
-                                         lubridate::month(Sys.Date()), # $13
-                                         lubridate::year(Sys.Date()))) # $14
+                                         new_values$topo_comment, # $12
+                                         lubridate::day(Sys.Date()), # $13
+                                         lubridate::month(Sys.Date()), # $14
+                                         lubridate::year(Sys.Date()))) # $15
 
           # if(show_results) print(dbFetch(rs))
           DBI::dbClearResult(rs)
@@ -10472,10 +10498,15 @@ add_traits_measures <- function(new_data,
         #               collect(), by=c("id_liste_plots"="id_liste_plots")) %>%
         #   distinct(plot_name, id_sub_plots)
 
-        message(paste("\n Excluding", nrow(duplicated_rows), "values because already in DB"))
-        data_trait <-
+        cli::cli_alert_warning("{nrow(duplicated_rows)} values excluding values because already in DB")
+
+        rm_val <- askYesNo(msg = "Exclude these values ?")
+
+        if (rm_val)
+          data_trait <-
           data_trait %>%
           dplyr::filter(!id_data_individuals %in% duplicated_rows$id_data_individuals)
+
 
         if(nrow(data_trait)<1) stop("no new values anymore to import after excluding duplicates")
       }
@@ -11132,7 +11163,18 @@ add_specimens <- function(new_data ,
   traits_linked <-
     res_individuals_full %>%
     dplyr::left_join(traits_measures, by = c("id_n" = "id_data_individuals")) %>%
-    dplyr::select(id_n, id_old, id_trait_measures, id_sub_plots, traitvalue, traitvalue_char, trait, issue, day, month, year) %>%
+    dplyr::select(
+      id_n,
+      id_trait_measures,
+      id_sub_plots,
+      traitvalue,
+      traitvalue_char,
+      trait,
+      issue,
+      day,
+      month,
+      year
+    ) %>%
     dplyr::filter(!is.na(trait)) %>%
     dplyr::filter(trait  %in% traits)
 
@@ -11159,14 +11201,14 @@ add_specimens <- function(new_data ,
       if(valuetype == "numeric") {
         traits_linked_subset <-
           traits_linked_subset %>%
-          dplyr::select(trait, traitvalue, issue, day, month, year, id_n, id_old, id_trait_measures,
+          dplyr::select(trait, traitvalue, issue, day, month, year, id_n, id_trait_measures,
                         id_sub_plots)
       }
 
       if(valuetype == "character" | valuetype == "ordinal") {
         traits_linked_subset <-
           traits_linked_subset %>%
-          dplyr::select(trait, traitvalue_char, issue, day, month, year, id_n, id_old, id_trait_measures,
+          dplyr::select(trait, traitvalue_char, issue, day, month, year, id_n, id_trait_measures,
                         id_sub_plots) %>%
           dplyr::mutate(traitvalue = traitvalue_char) %>%
           dplyr::select(-traitvalue_char)
@@ -11205,17 +11247,27 @@ add_specimens <- function(new_data ,
             traits_linked_subset %>%
             dplyr::collect() %>%
             dplyr::group_by(id_n) %>%
-            dplyr::summarise(traitvalue = dplyr::last(traitvalue),
-                             trait = dplyr::last(trait),
-                             !!issue_name:= dplyr::last(!!issue_name_enquo),
-                             day = dplyr::last(day),
-                             month = dplyr::last(month),
-                             year= dplyr::last(year),
-                             id_old= dplyr::last(id_old),
-                             id_trait_measures = dplyr::last(id_trait_measures),
-                             id_sub_plots = dplyr::last(id_sub_plots)) %>%
-            dplyr::select(trait, traitvalue, !!issue_name_enquo, day, month, year, id_n, id_old, id_trait_measures,
-                          id_sub_plots)
+            dplyr::summarise(
+              traitvalue = dplyr::last(traitvalue),
+              trait = dplyr::last(trait),!!issue_name := dplyr::last(!!issue_name_enquo),
+              day = dplyr::last(day),
+              month = dplyr::last(month),
+              year = dplyr::last(year),
+              # id_old= dplyr::last(id_old),
+              id_trait_measures = dplyr::last(id_trait_measures),
+              id_sub_plots = dplyr::last(id_sub_plots)
+            ) %>%
+            dplyr::select(
+              trait,
+              traitvalue,
+              !!issue_name_enquo,
+              day,
+              month,
+              year,
+              id_n,
+              id_trait_measures,
+              id_sub_plots
+            )
         }else{
 
           ids_subs <-
@@ -11226,14 +11278,21 @@ add_specimens <- function(new_data ,
           subs_plots_concerned <-
             dplyr::tbl(mydb, "data_liste_sub_plots") %>%
             dplyr::filter(id_sub_plots %in% ids_subs) %>%
-            dplyr::select(id_sub_plots, id_table_liste_plots, id_type_sub_plot, typevalue, month, year) %>%
-            dplyr::left_join(dplyr::tbl(mydb, "subplotype_list") %>%
-                               dplyr::select(type, id_subplotype),
-                             by=c("id_type_sub_plot"="id_subplotype")) %>%
+            dplyr::select(id_sub_plots,
+                          id_table_liste_plots,
+                          id_type_sub_plot,
+                          typevalue,
+                          month,
+                          year) %>%
+            dplyr::left_join(
+              dplyr::tbl(mydb, "subplotype_list") %>%
+                dplyr::select(type, id_subplotype),
+              by = c("id_type_sub_plot" = "id_subplotype")
+            ) %>%
             dplyr::select(-id_type_sub_plot) %>%
             dplyr::collect()
 
-          if(nrow(subs_plots_concerned)>0 & !collapse_multiple_val) {
+          if(nrow(subs_plots_concerned) > 0 & !collapse_multiple_val) {
 
             ## if the multiple values for individuals are for different census, putting multiple_census as TRUE
             if(all(subs_plots_concerned$type == "census") &
@@ -11253,7 +11312,7 @@ add_specimens <- function(new_data ,
             }
           }
 
-          if(collapse_multiple_val) {
+          if (collapse_multiple_val) {
 
             traits_linked_subset <-
               traits_linked_subset %>%
@@ -11391,28 +11450,6 @@ add_specimens <- function(new_data ,
         }
       }
 
-      # if(!all(is.na(traits_linked_subset_spread$id_sub_plots))) {
-      #   ids_subs <- traits_linked_subset_spread$id_sub_plots
-      #   ids_subs <- unique(ids_subs[!is.na(ids_subs)])
-      #
-      #   traits_linked_subset_spread <-
-      #     traits_linked_subset_spread %>%
-      #     dplyr::left_join(tbl(mydb, "data_liste_sub_plots") %>%
-      #                        dplyr::filter(id_sub_plots %in% ids_subs) %>%
-      #                        dplyr::select(id_sub_plots, id_type_sub_plot, typevalue, month, year) %>%
-      #                        left_join(tbl(mydb, "subplotype_list") %>%
-      #                                    dplyr::select(type, id_subplotype),
-      #                                  by=c("id_type_sub_plot"="id_subplotype")) %>%
-      #                        dplyr::select(-id_type_sub_plot) %>%
-      #                        collect(), by=c("id_sub_plots"="id_sub_plots"))
-      #
-      # }
-
-
-      # traits_linked_subset_spread <-
-      #   traits_linked_subset_spread %>%
-      #   dplyr::select(!!trait_name_enquo, !!issue_name_enquo, !!id_new_name,
-      #                 id_n, id_old, id_sub_plots)
 
       for (j in 1:length(traits_linked_subset_spread_list))
         all_traits_list[[length(all_traits_list)+1]] <- traits_linked_subset_spread_list[[j]]
