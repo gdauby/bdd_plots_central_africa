@@ -2359,14 +2359,13 @@ query_plots <- function(team_lead = NULL,
         collapse_multiple_val = collapse_multiple_val
       )
 
-    res_individuals_full <-
+    if (length(all_traits_list) > 0)
+      res_individuals_full <-
       res_individuals_full %>%
       left_join(purrr::reduce(all_traits_list,
                               dplyr::full_join,
                               by = 'id_n'),
                 by = 'id_n')
-
-
     # if (length(all_traits_list) > 0) {
     #   for (i in 1:length(all_traits_list)) {
     #     res_individuals_full <-
@@ -5168,8 +5167,8 @@ update_subplot_data_batch <- function(new_data,
         matches %>%
         dplyr::select(id, dplyr::contains("_new"))
 
-      # matches <-
-      #   .add_modif_field(matches)
+      matches <-
+        .add_modif_field(matches)
 
       all_id_match <- dplyr::pull(dplyr::select(matches, id))
 
@@ -5207,19 +5206,25 @@ update_subplot_data_batch <- function(new_data,
                           row.names = FALSE)
       }
 
+
+      field_ <- rlang::parse_expr(quo_name(rlang::enquo(field)))
+
+      matches <- matches %>%
+        rename(!!field_ := paste0(field, "_new"))
+
       ## create a temporary table with new data
       DBI::dbWriteTable(mydb, "temp_table", matches,
                         overwrite=T, fileEncoding = "UTF-8", row.names=F)
 
-      # query_up <-
-      #   paste0("UPDATE data_liste_sub_plots t1 SET (",field,", data_modif_d, data_modif_m, data_modif_y) = (t2.",var_new, ", t2.date_modif_d, t2.date_modif_m, t2.date_modif_y) FROM temp_table t2 WHERE t1.", id_db," = t2.id")
+      query_up <-
+        paste0("UPDATE data_liste_sub_plots t1 SET (",field,", date_modif_d, date_modif_m, date_modif_y) = (t2.",field, ", t2.date_modif_d, t2.date_modif_m, t2.date_modif_y) FROM temp_table t2 WHERE t1.", id_db," = t2.id")
 
-      # rs <-
-      #   DBI::dbSendStatement(mydb, query_up)
+      rs <-
+        DBI::dbSendStatement(mydb, query_up)
 
-      # cat("Rows updated", RPostgres::dbGetRowsAffected(rs))
-      # rs@sql
-      # DBI::dbClearResult(rs)
+      cat("Rows updated", RPostgres::dbGetRowsAffected(rs))
+      rs@sql
+      DBI::dbClearResult(rs)
 
       cli::cli_alert_success("Successful update")
 
@@ -10452,7 +10457,8 @@ add_traits_measures <- function(new_data,
                         id_sub_plots,
                         issue) %>%
         dplyr::count() %>%
-        dplyr::filter(n > 1)
+        dplyr::filter(n > 1) %>%
+        filter(id_data_individuals %in% selected_data_traits$id_data_individuals)
       # %>% # , id_data_individuals==73764
       # dplyr::filter(!grepl("more than one observation", issue))
 
@@ -12595,6 +12601,7 @@ process_trimble_data <- function(PATH = NULL, plot_name = NULL, format = "dbf") 
       dplyr::filter(New_quadra == "yes") %>%
       dplyr::select(ID, New_quadra, X_theo, Y_theo) %>%
       dplyr::mutate(quadrat = paste(X_theo, Y_theo, sep = "_"))
+
 
     missing_quadrats <-
       all_expected_combination %>%
