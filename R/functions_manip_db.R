@@ -2154,6 +2154,11 @@ query_plots <- function(team_lead = NULL,
         coordinates_subplots_plot_sf <-
           do.call('rbind', coordinates_subplots_plot_sf)
 
+        coordinates_subplots_plot_sf <-
+          coordinates_subplots_plot_sf %>%
+          left_join(res %>% dplyr::select(id_liste_plots, plot_name),
+                    by = c("id_liste_plots" = "id_liste_plots"))
+
       } else {
 
         show_all_coordinates <- FALSE
@@ -2351,7 +2356,7 @@ query_plots <- function(team_lead = NULL,
     all_traits <- traits_list()
     all_traits_list <-
       .get_trait_individuals_values(
-        traits = all_traits$trait,
+        traits =  all_traits$trait, #
         src_individuals = res_individuals_full,
         # id_individuals = res_individuals_full$id_n,
         show_multiple_measures = show_multiple_census,
@@ -7242,41 +7247,46 @@ update_traits_measures <- function(new_data,
                                    col_names_corresp = NULL,
                                    id_trait = NULL,
                                    id_col,
-
-                                   trait_values_new_data = NULL,
-                                   # col_names_trait_corresp = NULL,
-                                   measures_property_new_data = NULL,
-                                   col_names_property_corresp = NULL,
-                                   id_new_data,
-                                   col_name_id_corresp,
                                    launch_update = FALSE,
                                    add_backup = TRUE) {
 
   if(!exists("mydb")) call.mydb()
 
-  if (is.null(col_names_corresp))
+  if (is.null(col_names_select)) {
+    col_names_select <- names(new_data)
+    cli::cli_alert_info("col_names_select is set as all names of new_data")
+  }
+
+  if (is.null(col_names_corresp)) {
     col_names_corresp <- col_names_select
+    cli::cli_alert_info("col_names_corresp is set to names of col_names_select (it should be names of columns of data_traits_measures")
+  }
 
   for (i in 1:length(col_names_select))
     if(!any(col_names_select[i] == colnames(new_data)))
       stop(paste(col_names_select[i], "not found in new_data"))
 
-  new_data <-
-    .link_trait(data_stand = new_data,
-                trait = col_names_select[id_trait])
+  if (!is.null(id_trait)) {
 
-  found_trait <- traits_list(id_trait = new_data$id_trait)
+    new_data <-
+      .link_trait(data_stand = new_data,
+                  trait = col_names_select[id_trait], issues = new_data$issue)
 
-  new_data <-
-    new_data %>%
-    rename(traitvalue = trait)
+    found_trait <- traits_list() %>% filter(id_trait %in% unique(new_data$id_trait))
 
-  if (found_trait$valuetype == "numeric") {
+    if (found_trait$valuetype == "numeric") {
 
-    col_names_corresp[id_trait] <- "traitvalue"
-    col_names_select[id_trait] <- "traitvalue"
+      col_names_corresp[id_trait] <- "traitvalue"
+      col_names_select[id_trait] <- "trait"
 
+    }
   }
+
+
+  # new_data <-
+  #   new_data %>%
+  #   rename(traitvalue = trait)
+
 
   all_colnames_trait <-
     dplyr::tbl(mydb, "data_traits_measures") %>%
@@ -7301,7 +7311,7 @@ update_traits_measures <- function(new_data,
   output_matches <- .find_ids(dataset = new_data_renamed,
                               col_new = col_names_corresp,
                               id_col_nbr = id_col,
-                              type_data = "trait")
+                              type_data = "trait_measures")
 
   matches_all <-
     output_matches[[2]]
@@ -7312,7 +7322,7 @@ update_traits_measures <- function(new_data,
     var_new <- paste0(field, "_new")
     matches <- matches_all[[i]]
 
-    if(launch_update & nrow(matches)>0) {
+    if(launch_update & nrow(matches) > 0) {
 
       matches <-
         matches %>%
@@ -7361,7 +7371,6 @@ update_traits_measures <- function(new_data,
       query_up <-
         paste0("UPDATE data_traits_measures t1 SET ",field," = t2.",var_new, " FROM temp_table t2 WHERE t1.", id_db," = t2.id")
 
-      DBI::dbClearResult(rs)
 
       rs <-
         DBI::dbSendStatement(mydb, query_up)
@@ -7377,14 +7386,8 @@ update_traits_measures <- function(new_data,
 
     }
   }
+
   return(matches_all)
-
-
-
-
-
-
-
 
   # if(!is.null(trait_values_new_data)) { #  & !is.null(col_names_trait_corresp)
   #
@@ -11204,18 +11207,47 @@ add_specimens <- function(new_data ,
         dplyr::distinct(valuetype) %>%
         dplyr::pull()
 
-      if(valuetype == "numeric") {
+      if (valuetype == "numeric") {
         traits_linked_subset <-
           traits_linked_subset %>%
-          dplyr::select(trait, traitvalue, issue, day, month, year, id_n, id_trait_measures,
+          dplyr::select(trait,
+                        traitvalue,
+                        issue,
+                        day,
+                        month,
+                        year,
+                        id_n,
+                        id_trait_measures,
                         id_sub_plots)
+
+        traits_linked_subset <-
+          traits_linked_subset %>%
+          group_by(id_n, id_sub_plots) %>%
+          summarise(trait = first(trait),
+                    traitvalue = mean(traitvalue),
+                    issue = first(issue),
+                    day = first(day),
+                    month = first(month),
+                    year = first(year),
+                    id_trait_measures = first(id_trait_measures),
+                    ) %>%
+          ungroup()
       }
 
-      if(valuetype == "character" | valuetype == "ordinal") {
+      if (valuetype == "character" | valuetype == "ordinal") {
         traits_linked_subset <-
           traits_linked_subset %>%
-          dplyr::select(trait, traitvalue_char, issue, day, month, year, id_n, id_trait_measures,
-                        id_sub_plots) %>%
+          dplyr::select(
+            trait,
+            traitvalue_char,
+            issue,
+            day,
+            month,
+            year,
+            id_n,
+            id_trait_measures,
+            id_sub_plots
+          ) %>%
           dplyr::mutate(traitvalue = traitvalue_char) %>%
           dplyr::select(-traitvalue_char)
       }
@@ -11242,7 +11274,7 @@ add_specimens <- function(new_data ,
         nrow()
 
       multiple_census <- FALSE
-      if(nbe_individuals_double > 0) {
+      if (nbe_individuals_double > 0) {
 
         # warning(paste("more than one trait value for at least one individual for", all_trait[i]))
         cli::cli_alert_danger("more than one trait value for at least one individual for {all_trait[i]}")
@@ -11520,11 +11552,6 @@ replace_NA <- function(vec, inv = FALSE) {
 
   }
 
-
-
-
-
-
   return(vec)
 
 }
@@ -11595,8 +11622,8 @@ replace_NA <- function(vec, inv = FALSE) {
       # new_name <- col_new[-id_col_nbr]
 
       corresponding_data <-
-        dplyr::tbl(mydb_taxa, "data_traits_measures") %>%
-        dplyr::select(id_trait_measures, traitvalue)
+        dplyr::tbl(mydb, "data_traits_measures") %>%
+        dplyr::select(id_trait_measures, traitvalue, issue)
       # %>%
         # dplyr::collect() %>%
         # rename(!!new_name := traitvalue)
@@ -11614,7 +11641,7 @@ replace_NA <- function(vec, inv = FALSE) {
   corresponding_data <-
     corresponding_data %>%
     dplyr::select(dplyr::all_of(col_new)) %>%
-    dplyr::rename_at(dplyr::all_of(dplyr::vars(col_new[id_col_nbr])), ~ id) %>%
+    dplyr::rename_at(dplyr::vars(col_new[id_col_nbr]), ~ id) %>%
     dplyr::filter(id %in% ids_new_data) %>%
     dplyr::collect()
 
@@ -11935,9 +11962,10 @@ replace_NA <- function(vec, inv = FALSE) {
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
 #' @param data_stand tibble
 #' @param trait string vector
+#' @param issues string vector
 #'
 #' @export
-.link_trait <- function(data_stand, trait, column_name = "trait") {
+.link_trait <- function(data_stand, trait, column_name = "trait", issues = NULL) {
 
   trait_newnames <- "trait"
 
@@ -12006,7 +12034,9 @@ replace_NA <- function(vec, inv = FALSE) {
     }
   }
 
-  issues <- vector(mode = "character", length = nrow(data_stand))
+
+  if (is.null(issues)) issues <- vector(mode = "character", length = nrow(data_stand))
+
   if (select_trait_features$valuetype == "numeric") {
     if (any(data_stand$trait < select_trait_features$minallowedvalue)) {
       warning(
@@ -12044,11 +12074,11 @@ replace_NA <- function(vec, inv = FALSE) {
 
   data_stand <-
     data_stand %>%
-    tibble::add_column(id_trait = rep(selected_trait_id, nrow(.)))
+    mutate(id_trait = rep(selected_trait_id, nrow(.)))
 
   data_stand <-
     data_stand %>%
-    tibble::add_column(issue = issues)
+    mutate(issue = issues)
 
   return(data_stand)
 }
@@ -17279,7 +17309,7 @@ query_colnam <- function(id_colnam = NULL, pattern = NULL) {
 
     valuetype <-
       table_colnam %>%
-      dplyr::filter(id_table_colnam == !!id_colnam) %>%
+      dplyr::filter(id_table_colnam %in% !!id_colnam) %>%
       dplyr::collect()
   }
 
