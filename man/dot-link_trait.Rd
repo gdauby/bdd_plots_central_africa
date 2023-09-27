@@ -4,12 +4,14 @@
 \alias{.link_trait}
 \title{Internal function}
 \usage{
-.link_trait(data_stand, trait, column_name = "trait")
+.link_trait(data_stand, trait, column_name = "trait", issues = NULL)
 }
 \arguments{
 \item{data_stand}{tibble}
 
 \item{trait}{string vector}
+
+\item{issues}{string vector}
 }
 \value{
 vector
