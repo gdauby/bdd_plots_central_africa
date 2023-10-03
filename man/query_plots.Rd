@@ -22,6 +22,7 @@ query_plots(
   id_individual = NULL,
   id_plot = NULL,
   id_tax = NULL,
+  id_specimen = NULL,
   show_multiple_census = FALSE,
   show_all_coordinates = FALSE,
   remove_ids = TRUE,
@@ -65,6 +66,8 @@ query_plots(
 \item{id_individual}{numeric id of individual to be extracted}
 
 \item{id_plot}{numeric id of plot to be extracted}
+
+\item{id_specimen}{numeric id of specimen linked to individuals}
 
 \item{show_multiple_census}{logical whether multiple census should be shown, by default FALSE}
 

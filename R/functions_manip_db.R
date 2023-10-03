@@ -1681,6 +1681,7 @@ traits_list <- function(id_trait = NULL) {
 #' @param map_type string mapview or ggplot, mapview by default
 #' @param id_individual numeric id of individual to be extracted
 #' @param id_plot numeric id of plot to be extracted
+#' @param id_specimen numeric id of specimen linked to individuals
 #' @param show_multiple_census logical whether multiple census should be shown, by default FALSE
 #' @param remove_ids logical remove all ids columns, by default TRUE
 #' @param collapse_multiple_val logical whether multiple traits measures should be collapsed (resulting values as character, separated by dash)
@@ -1716,6 +1717,7 @@ query_plots <- function(team_lead = NULL,
                         id_individual = NULL,
                         id_plot = NULL,
                         id_tax = NULL,
+                        id_specimen = NULL,
                         show_multiple_census = FALSE,
                         show_all_coordinates = FALSE,
                         remove_ids = TRUE,
@@ -1728,8 +1730,28 @@ query_plots <- function(team_lead = NULL,
 
   if (!exists("mydb")) call.mydb()
 
-  if (!is.null(id_individual))
+  if (!is.null(id_individual) | !is.null(id_specimen))
   {
+
+    if (!is.null(id_specimen)) {
+
+      cli::cli_rule(left = "Extracting individuals linked to specimens")
+
+      tbl <- "data_link_specimens"
+      sql <- glue::glue_sql("SELECT * FROM {`tbl`} WHERE id_specimen IN ({vals*})",
+                            vals = id_specimen, .con = mydb)
+
+      res <- func_try_fetch(con = mydb, sql = sql)
+
+      if (nrow(res) == 0) {
+        stop("No individuals in the database linked to this specimen")
+      }
+
+      if (!is.null(id_individual)) cli::cli_alert_info("id_individual provided is not considered and individuals linked to id_specimen is used instead")
+
+      id_individual <- res$id_n
+
+    }
 
     cli::cli_rule(left = "Extracting from queried individuals - id_individual")
     extract_individuals <- TRUE
@@ -2119,7 +2141,7 @@ query_plots <- function(team_lead = NULL,
                   rmOutliers = T
                 ))
 
-              poly_plot <- as(cor_coord$polygon, 'sf')
+              poly_plot <- st_as_sf(cor_coord$polygon)
               sf::st_crs(poly_plot) <- cor_coord$codeUTM
 
               poly_plot <- sf::st_transform(poly_plot, 4326)
@@ -2951,7 +2973,7 @@ query_subplots <- function(ids_plots = NULL,
         filter(valuetype == "numeric",
                type != "census") %>%
         select(id_table_liste_plots, typevalue, type) %>%
-        pivot_wider(
+        tidyr::pivot_wider(
           names_from = "type",
           values_from = "typevalue",
           values_fn = ~ mean(.x, na.rm = TRUE)
@@ -2966,7 +2988,7 @@ query_subplots <- function(ids_plots = NULL,
         filter(valuetype == "character",
                type != "census") %>%
         select(id_table_liste_plots, typevalue_char, type) %>%
-        pivot_wider(
+        tidyr::pivot_wider(
           names_from = "type",
           values_from = "typevalue_char",
           values_fn = ~ paste(.x, collapse = "|")
@@ -3084,7 +3106,7 @@ query_subplots <- function(ids_plots = NULL,
         table_valutype_list[[i]] <-
           table_ids_subplots %>%
           select(id_table_liste_plots, typevalue_char, type) %>%
-          pivot_wider(
+          tidyr::pivot_wider(
             names_from = "type",
             values_from = "typevalue_char",
             values_fn = ~ paste(., collapse = ", ")
@@ -4090,7 +4112,7 @@ add_plots <- function(new_data,
       new_data_renamed %>%
       dplyr::select(plot_name, PI) %>%
       tidyr::separate_rows(PI, sep = ",") %>%
-      mutate(PI = str_squish(PI))
+      mutate(PI = stringr::str_squish(PI))
 
     id_pi <-
       .link_colnam(data_stand = pi_sep,
@@ -4125,7 +4147,7 @@ add_plots <- function(new_data,
       new_data_renamed %>%
       dplyr::select(plot_name, data_manager) %>%
       tidyr::separate_rows(data_manager, sep = ",") %>%
-      mutate(data_manager = str_squish(data_manager))
+      mutate(data_manager = stringr::str_squish(data_manager))
 
     data_manager_sep <-
       .link_colnam(data_stand = data_manager_sep,
@@ -4145,7 +4167,7 @@ add_plots <- function(new_data,
       new_data_renamed %>%
       dplyr::select(plot_name, additional_people) %>%
       tidyr::separate_rows(additional_people, sep = ",") %>%
-      mutate(additional_people = str_squish(additional_people))
+      mutate(additional_people = stringr::str_squish(additional_people))
 
     add_col_sep <-
       .link_colnam(data_stand = add_col_sep,
@@ -11161,7 +11183,7 @@ add_specimens <- function(new_data ,
     ) %>%
     dplyr::filter(!is.na(trait)) %>%
     dplyr::filter(trait  %in% traits) %>%
-    dplyr::mutate(traitvalue_char = str_squish(traitvalue_char))
+    dplyr::mutate(traitvalue_char = stringr::str_squish(traitvalue_char))
 
 
   if(nrow(traits_linked) > 0) {
