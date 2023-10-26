@@ -2002,30 +2002,25 @@ query_plots <- function(team_lead = NULL,
     id_plots_filtered <- c()
     if(!is.null(team_lead)) {
 
-      id_liste_plots_match <- vector('list', length(team_lead))
-      for (i in 1:length(team_lead)) {
+      id_liste_plots_match <-
+        .link_colnam(data_stand = tibble(colnam = team_lead),
+                                           collector_field = 1)
 
-        query_colnam <-
-          paste0("SELECT * FROM table_colnam WHERE colnam ILIKE '%", team_lead[i], "%'")
-
-        rs_colnam <- func_try_fetch(con = mydb, sql = query_colnam)
-        rs_colnam <- dplyr::as_tibble(rs_colnam)
-
-        id_liste_plots_match[[i]] <- rs_colnam$id_table_colnam
-      }
-
-      if (all(unlist(lapply(id_liste_plots_match, function(x) length(x) == 0)))) {
+      if (!exists("id_liste_plots_match")) {
         cli::cli_alert_warning("no team_leader found based on team_lead provided")
       } else {
 
         ids_team_lead <-
-          unlist(id_liste_plots_match[unlist(lapply(id_liste_plots_match, function(x) length(x) > 0))])
+          id_liste_plots_match$id_colnam
 
         id_plots_filtered <-
           all_subplots$all_subplots %>%
           filter(type == "team_leader") %>%
           filter(typevalue %in% ids_team_lead) %>%
           pull(id_table_liste_plots)
+
+        if (nrow(id_plots_filtered) == 0)
+          cli::cli_alert_danger("No plot found for this team_leader")
 
         all_subplots$all_subplot_pivot <-
           all_subplots$all_subplot_pivot %>%
@@ -2198,6 +2193,8 @@ query_plots <- function(team_lead = NULL,
 
   if (nrow(res) == 0)
     stop("No plot are found based on inputs")
+
+  res <- res %>% dplyr::arrange(plot_name)
 
   if(map) {
 
@@ -9682,7 +9679,9 @@ add_traits_measures <- function(new_data,
       new_data_renamed %>%
       dplyr::left_join(
         dplyr::tbl(mydb, "data_individuals") %>%
-          dplyr::select(idtax_n, id_n, sous_plot_name) %>% dplyr::collect(),
+          dplyr::select(idtax_n, id_n, sous_plot_name) %>%
+          dplyr::filter(id_n %in% !!unique(new_data_renamed$id_n)) %>%
+          dplyr::collect(),
         by = c("id_n" = "id_n")
       )
 
@@ -10398,7 +10397,8 @@ add_traits_measures <- function(new_data,
 
       if (nrow(duplicated_rows) > 0) {
         print(duplicated_rows)
-        stop("Duplicated values for dataset to upload - ony one value attached to individual, plot and subplot can be uploaded at once")
+        cli::cli_alert_warning("Duplicated values for dataset to upload - ony one value attached to individual, plot and subplot can be uploaded at once")
+        if (!askYesNo(msg = "Are you sure you want to continue ?")) stop("check duplicated value")
       }
 
 
@@ -10504,15 +10504,16 @@ add_traits_measures <- function(new_data,
         #               collect(), by=c("id_liste_plots"="id_liste_plots")) %>%
         #   distinct(plot_name, id_sub_plots)
 
-        cli::cli_alert_warning("{nrow(duplicated_rows)} values excluding values because already in DB")
-
         rm_val <- askYesNo(msg = "Exclude these values ?")
 
-        if (rm_val)
-          data_trait <-
-          data_trait %>%
-          dplyr::filter(!id_data_individuals %in% duplicated_rows$id_data_individuals)
+        if (rm_val) {
 
+          data_trait <-
+            data_trait %>%
+            dplyr::filter(!id_data_individuals %in% duplicated_rows$id_data_individuals)
+
+          cli::cli_alert_warning("{nrow(duplicated_rows)} values excluded values because already in DB")
+        }
 
         if(nrow(data_trait)<1) stop("no new values anymore to import after excluding duplicates")
       }
