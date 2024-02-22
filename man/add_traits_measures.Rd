@@ -15,6 +15,7 @@ add_traits_measures(
   id_tag_plot = NULL,
   id_specimen = NULL,
   traits_field,
+  allow_multiple_value = FALSE,
   add_data = FALSE
 )
 }
@@ -38,6 +39,8 @@ add_traits_measures(
 \item{id_specimen}{string column name which contain the ID of specimen}
 
 \item{traits_field}{string vector listing trait columns names in new_data}
+
+\item{allow_multiple_value}{if multiple values linked to one individual can be uploaded at once}
 
 \item{add_data}{logical whether or not data should be added - by default FALSE}
 }
