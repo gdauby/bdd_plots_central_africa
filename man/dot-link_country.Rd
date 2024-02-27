@@ -4,12 +4,14 @@
 \alias{.link_country}
 \title{Internal function}
 \usage{
-.link_country(data_stand, country_field)
+.link_country(data_stand, country_field, country_id_field = "id_country")
 }
 \arguments{
 \item{data_stand}{tibble}
 
 \item{country_field}{string vector}
+
+\item{country_id_field}{name of the column that will store the id}
 }
 \value{
 vector

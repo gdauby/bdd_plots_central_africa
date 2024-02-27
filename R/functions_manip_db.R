@@ -19004,9 +19004,10 @@ print_table <- function(res_print) {
 #' @author Gilles Dauby, \email{gilles.dauby@@ird.fr}
 #' @param data_stand tibble
 #' @param country_field string vector
+#' @param country_id_field name of the column that will store the id
 #'
 #' @export
-.link_country <- function(data_stand, country_field) {
+.link_country <- function(data_stand, country_field, country_id_field = "id_country") {
 
   country_name <- "country_name"
 
@@ -19042,7 +19043,7 @@ print_table <- function(res_print) {
     selected_name_id <-
       sorted_matches$sorted_matches %>%
       slice(sorted_matches$selected_name) %>%
-      pull(id_country)
+      pull(which(grepl("id", names(sorted_matches$sorted_matches))))
 
     id_[data_stand$country_name==dplyr::pull(all_names_country[i,1])] <-
       selected_name_id
@@ -19051,7 +19052,8 @@ print_table <- function(res_print) {
 
   data_stand <-
     data_stand %>%
-    mutate(id_country = id_)
+    mutate({{country_id_field}} := id_)
+    # mutate(id_country = id_)
 
   return(data_stand)
 }
