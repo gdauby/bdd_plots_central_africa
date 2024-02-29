@@ -1,0 +1,611 @@
+---
+title: "Plot individual summary"
+author: "Gilles Dauby"
+date: '`r invisible( Sys.setlocale("LC_TIME", "C") ); format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  html_document:
+    toc: true
+  pdf_document:
+    toc: true
+---
+
+
+
+```{r setup, include=FALSE}
+
+# RUN <- TRUE
+# knitr::opts_chunk$set(echo = FALSE, comment = NA, fig.align = "center", include = RUN)
+library(knitr)
+library(tidyverse)
+library(kableExtra)
+source("D:/MonDossierR/database.transects/plotsdatabase/R/functions_manip_db.R")
+call.mydb(pass = "Amap2020", user = "dauby")
+plot_name <- "Nemeyong005"
+options(knitr.kable.NA = '')
+
+```
+
+```{r plotChar, include=FALSE, echo=F}
+
+select_data_plot <-
+  query_plots(
+    plot_name = plot_name,
+    show_multiple_census = TRUE,
+    remove_ids = FALSE,
+    map = FALSE
+  )
+
+
+```
+
+
+```{r selecLoc, include=FALSE, echo=FALSE}
+
+# elevation <- raster::raster("D:/SIG/altitude layers/mn15_grd/elevation.crop.africa.asc")
+# 
+# all_plot_loc <-
+#   query_plots(locality_name = select_data_plot[[1]]$locality_name)
+# data_sf <- sf::st_as_sf(all_plot_loc, coords = c("ddlon", "ddlat"), crs = 4326)
+# 
+# elevation_cropped <- 
+#   raster::crop(elevation, extent(data_sf)+3)
+# 
+# map.p <- values(elevation_cropped)
+# xy. <- xyFromCell(elevation_cropped, cell = 1:ncell(elevation_cropped))
+# map.p <- cbind(xy., map.p)
+# map.p <- map.p[which(!is.na(map.p[,3])),]
+# df <- data.frame(map.p)
+# colnames(df) <- c("Longitude", "Latitude", "MAP")
+# 
+# gg <- 
+#   ggplot() +
+#   geom_raster(data=df, aes(y=Latitude, x=Longitude, fill=MAP))
+  
+
+# sbbox <- ggmap::make_bbox(lon = all_plot_loc$ddlon, lat = all_plot_loc$ddlat, f = 0.05)
+# background <- ggmap::get_map(location = sbbox, maptype = "terrain", source = "google") # get
+# # 
+# theme_ggmap <- theme(legend.title = element_blank(), legend.position="bottom", axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border = element_rect(linetype = "solid", color = "black", size = 1.5, fill = NA), axis.text.x = element_text(angle = if(sbbox[3]-sbbox[1]<4.5){90}))
+# 
+# final_map <- 
+#   ggmap::ggmap(background) +
+#   geom_sf(data =data_sf$geometry, inherit.aes = FALSE, size = 3, show.legend = "point") +
+#   scale_color_manual(values = c("Herbarium" = "#990000", "Silicagel" = "#339900", "Observation" = "#333399")) +
+#   theme_ggmap +
+#   annotation_scale(width_hint = 0.3, height = unit(0.2, "cm")) +
+#   annotation_north_arrow(location = "bl", which_north = "true",  height = unit(1, "cm"), width = unit(1, "cm"), pad_x = unit(0.05, "cm"), pad_y = unit(0.45, "cm"), style = north_arrow_fancy_orienteering)
+
+
+# 
+# map_types <- c("Esri.WorldImagery")
+# 
+# mapview::mapview(data_sf, map.types = map_types)
+
+```
+
+
+
+## Selected plot and census
+
+```{r results='asis', echo=F, warning=F, message=F}
+
+subset1 <-
+  select_data_plot[[1]] %>%
+  dplyr::select(plot_name,
+                team_leader,
+                additional_people,
+                forest_type,
+                ddlat,
+                ddlon)
+
+# %>% 
+#   tidyr::replace_na("")
+
+print(kable_styling(
+  kable(
+    subset1,
+    format = "html",
+    align = "l",
+    row.names = FALSE,
+    col.names = c(
+      "plot name",
+      "team leader of first census",
+      "additional people",
+      "forest type",
+      "ddlat",
+      "ddlon"
+    )
+  ),
+  full_width = F
+))
+
+#, latex_options = c("striped", "hold_position", "scale_down")
+
+subset2 <-
+  select_data_plot[[2]] %>%
+  dplyr::rename(census = typevalue) %>%
+  dplyr::select(-id_sub_plots,-id_table_liste_plots)
+# %>% 
+#     tidyr::replace_na("")
+
+print(kable_styling(
+  kable(
+    subset2,
+    format = "html",
+    align = "l",
+    row.names = FALSE,
+    col.names = c(
+      "Year of census",
+      "Month of census",
+      "Day of census",
+      "census number",
+      "plot_name",
+      "team leader",
+      "additional people"
+    )
+  ),
+  full_width = F
+))
+#, latex_options = c("striped", "hold_position", "scale_down")
+
+
+```
+
+
+
+```{r extract-ind, include=F, echo=F, warning=F, message=F}
+
+select_data <-
+  query_plots(
+    plot_name = plot_name,
+    extract_individuals = TRUE,
+    show_multiple_census = FALSE,
+    remove_ids = TRUE
+  )
+
+select_data_with_id <-
+  query_plots(
+    plot_name = plot_name,
+    extract_individuals = TRUE,
+    show_multiple_census = TRUE,
+    remove_ids = FALSE
+  )
+
+
+if (!any(colnames(select_data)=="tree_height")) {
+  
+  select_data <- select_data %>% 
+  add_column(tree_height = NA) %>% 
+  mutate(tree_height = as.numeric(tree_height))
+  
+  select_data_with_id$extract <-
+    select_data_with_id$extract %>% 
+  add_column(tree_height = NA) %>% 
+  mutate(tree_height = as.numeric(tree_height))
+
+}
+
+if (!any(names(select_data) == "height_of_stem_diameter")) {
+
+    select_data <- select_data %>% 
+  add_column(height_of_stem_diameter = NA) %>% 
+  mutate(height_of_stem_diameter = as.numeric(height_of_stem_diameter))
+  
+  select_data_with_id$extract <-
+    select_data_with_id$extract %>% 
+  add_column(height_of_stem_diameter = NA) %>% 
+  mutate(height_of_stem_diameter = as.numeric(height_of_stem_diameter))  
+  
+}
+
+
+subset <-
+  select_data %>%
+  dplyr::select(
+    plot_name,
+    sous_plot_name,
+    ind_num_sous_plot,
+    tax_infra_level,
+    tax_fam,
+    tax_gen,
+    original_tax_name,
+    herbarium_nbe_type,
+    herbarium_nbe_char,
+    dplyr::contains("tree_height"),
+    dplyr::contains("height_of_stem_diameter"),
+    dplyr::contains("stem_diameter"),
+    dplyr::contains("observations")
+  ) %>%
+  dplyr::arrange(ind_num_sous_plot) %>%
+  mutate(tax_infra_level = ifelse(
+    is.na(tax_infra_level),
+    ifelse(is.na(tax_gen), tax_fam, tax_gen),
+    tax_infra_level
+  )) %>% 
+  dplyr::select(-dplyr::contains("_issue")) %>% 
+  dplyr::select(-tax_fam, -tax_gen) # , -observations_issue, -stem_diameter_issue
+
+
+subset_with_id <-
+  select_data_with_id$extract %>%
+  dplyr::select(
+    plot_name,
+    sous_plot_name,
+    ind_num_sous_plot,
+    tax_infra_level,
+    tax_fam,
+    tax_gen,
+    original_tax_name,
+    herbarium_nbe_type,
+    herbarium_nbe_char,
+    id_n,
+    dplyr::contains("tree_height"),
+    dplyr::contains("height_of_stem_diameter"),
+    dplyr::contains("stem_diameter"),
+    dplyr::contains("observations")
+  ) %>%
+  dplyr::arrange(ind_num_sous_plot) %>%
+  mutate(tax_infra_level = ifelse(
+    is.na(tax_infra_level),
+    ifelse(is.na(tax_gen), tax_fam, tax_gen),
+    tax_infra_level
+  )) %>% 
+  dplyr::select(-dplyr::contains("_issue")) %>% 
+  dplyr::select(-tax_fam, -tax_gen)
+
+
+```
+
+## Plot statistics
+```{r compPlotStats, echo=F, eval=T, warning=F, message=F, include=F}
+nbe_ind_plot <- 
+  select_data %>% 
+  dplyr::group_by(plot_name) %>% 
+  dplyr::count() %>%
+  dplyr::rename(nbe_ind = n)
+
+
+nbe_species_plot <- 
+  select_data %>% 
+  dplyr::filter(!is.na(tax_esp)) %>% 
+  dplyr::group_by(plot_name) %>% 
+  dplyr::summarise(nbe_species = length(unique(tax_infra_level)))
+
+nbe_genus_plot <- 
+  select_data %>% 
+  dplyr::filter(!is.na(tax_gen)) %>% 
+  dplyr::group_by(plot_name) %>% 
+  dplyr::summarise(nbe_genera = length(unique(tax_gen)))
+
+nbe_ind_unidentified_plot <- 
+  select_data %>% 
+  dplyr::filter(is.na(tax_esp)) %>% 
+  dplyr::group_by(plot_name) %>% 
+  count() %>% 
+  dplyr::rename(nbe_unident_ind = n)
+
+stats_plot <- 
+  nbe_ind_plot %>% 
+  left_join(nbe_species_plot) %>% 
+  left_join(nbe_genus_plot) %>% 
+  left_join(nbe_ind_unidentified_plot)
+
+top_abundant_taxa <- 
+  select_data %>% 
+  group_by(tax_infra_level) %>% 
+  count() %>% 
+  arrange(desc(n)) %>% 
+  ungroup() %>% 
+  filter(!is.na(tax_infra_level)) %>% 
+  slice(1:15)
+
+
+```
+
+
+```{r showPlotQtats, results='asis', echo=F}
+
+print(kable_styling(
+    kable(stats_plot, format = "html", align = "l", 
+          row.names = FALSE, col.names = c("Quadrat", "Number of ind.",
+                                          "Number of sp.", "Number of genus", 
+                                          "Number of unidentified ind.")), 
+    full_width = F))
+
+
+```
+
+
+```{r showTopAbTaxa, results='asis', echo=F}
+
+
+print(kable_styling(
+    kable(top_abundant_taxa, format = "html", align = "l", 
+          row.names = FALSE, col.names = c("taxa", "Number of ind.")), 
+    full_width = F))
+
+```
+
+## Quadrats statistics
+
+
+```{r compQuadStats, echo=F, eval=T, warning=F, message=F, include=F}
+
+nbe_ind_quadrat <- 
+  select_data %>% 
+  dplyr::group_by(sous_plot_name) %>% 
+  dplyr::count() %>%
+  dplyr::rename(nbe_ind = n) %>% 
+  tidyr::replace_na(list(sous_plot_name = "Not assigned to quadrat"))
+
+nbe_species_quadrat <- 
+  select_data %>% 
+  dplyr::filter(!is.na(tax_esp)) %>% 
+  dplyr::group_by(sous_plot_name) %>% 
+  dplyr::summarise(nbe_species = length(unique(tax_infra_level))) %>% 
+  tidyr::replace_na(list(sous_plot_name = "Not assigned to quadrat"))
+
+nbe_genus_quadrat <- 
+  select_data %>% 
+  dplyr::filter(!is.na(tax_gen)) %>% 
+  dplyr::group_by(sous_plot_name) %>% 
+  dplyr::summarise(nbe_genera = length(unique(tax_gen))) %>% 
+  tidyr::replace_na(list(sous_plot_name = "Not assigned to quadrat"))
+
+nbe_ind_unidentified <- 
+  select_data %>% 
+  dplyr::filter(is.na(tax_esp)) %>% 
+  dplyr::group_by(sous_plot_name) %>% 
+  count() %>% 
+  dplyr::rename(nbe_unident_ind = n) %>% 
+  tidyr::replace_na(list(sous_plot_name = "Not assigned to quadrat"))
+
+
+stats_quadrat <- 
+  nbe_ind_quadrat %>% 
+  left_join(nbe_species_quadrat) %>% 
+  left_join(nbe_genus_quadrat) %>% 
+  left_join(nbe_ind_unidentified) %>% 
+  dplyr::mutate(quad_num = as.numeric(sous_plot_name)) %>% 
+  dplyr::arrange(quad_num)
+
+
+
+# if(nrow(subset2)>1) {
+#   
+#   
+# }
+# 
+# stem_census <- 
+#   colnames(select_data)[grepl("stem_diameter_census_1", colnames(select_data)) &
+#   !grepl("issue", colnames(select_data)) &
+#     !grepl("height", colnames(select_data))]
+# 
+# stem_census <- rlang::enquo(stem_census)
+# 
+# tidyselect::vars_select(colnames(select_data), -contains("issue"))
+# 
+# select_data %>% 
+#   filter_at(vars(contains("stem_diameter_census_1")) > 100) %>% 
+#   dplyr::select(!!stem_census) %>% 
+# 
+#   
+#     filter(!!rlang::enquo(stem_census)<20)
+#   nrow(), sous_plot_name=="1") %>% 
+#   distinct(tax_gen)
+# 
+# select_data %>% 
+#   dplyr::filter(!is.na(stem_diameter_census_1)) %>% nrow
+# 
+# select_data %>% 
+#   dplyr::filter(!is.na(tax_esp), sous_plot_name=="1") %>% 
+#   distinct(full_name_no_auth)
+
+
+```
+
+```{r showQuadQtats, results='asis', echo=F}
+
+print(kable_styling(
+    kable(stats_quadrat %>% 
+            dplyr::select(-quad_num), format = "html", align = "l", 
+          row.names = FALSE, col.names = c("Quadrat", "Number of ind.",
+                                          "Number of sp.", "Number of genus", 
+                                          "Number of unidentified ind.")), 
+    full_width = F))
+
+```
+
+
+## Showing each individual
+```{r, echo=F, eval=T, warning=F, message=F, include=F}
+
+stem_census <-
+  subset %>% 
+  select(-contains("issue"), -contains("height")) %>% 
+  select(contains("stem_diameter"))
+
+if(ncol(stem_census)>1) {
+new_recruit <- vector(mode = "numeric", length = ncol(stem_census)-1)
+for (i in 1:(ncol(stem_census)-1)) {
+  new_rec_tag <- mapply(function(x, y){ifelse(is.na(x) & !is.na(y), 1, 0)}, stem_census[,i], stem_census[,i+1])
+  
+  new_recruit[i] <- sum(new_rec_tag[,1])
+}
+
+new_recruit_tb <- 
+  tibble(census = seq(2, ncol(stem_census), 1),nbe_new_recruit = new_recruit)
+  
+}
+
+
+
+```
+
+
+```{r showNewRecruits, results='asis', echo=F}
+if(ncol(stem_census)>1) {
+print(kable_styling(
+    kable(new_recruit_tb, format = "html", align = "l", 
+          row.names = FALSE, col.names = c("Census", "
+                                           Number of new recruits")), 
+    full_width = F))
+}
+
+```
+
+
+```{r results='asis', echo=F}
+
+subset <- 
+  subset %>% 
+  mutate(original_tax_name = stringr::str_trim(original_tax_name))
+
+subset_reformated <- 
+  subset %>% 
+  rename(P = plot_name,
+    quad = sous_plot_name,
+         tag = ind_num_sous_plot,
+         tax = tax_infra_level, 
+         TaxOr = original_tax_name,
+         Ht = herbarium_nbe_type,
+         Hr = herbarium_nbe_char,
+         Hs = height_of_stem_diameter,
+         dbh = stem_diameter,
+    Th = tree_height) %>% 
+  tidyr::replace_na(list(Ht = "", Hs = "", Th = "")) %>% 
+  # dplyr::select(-height_of_stem_diameter_issue, -stem_diameter_issue) %>% 
+  add_column(dbh_n = "", Th_n = "")
+
+subset_reformated$Ht <- gsub("IRD Plot ", "IP", subset_reformated$Ht)
+subset_reformated$Hr <- gsub("IRD Plot ", "IP", subset_reformated$Hr)
+
+regexp <- "[[:digit:]]+"
+subset_reformated$P <-
+  stringr::str_extract(subset$plot_name, regexp)
+  
+subset_reformated <- subset_reformated %>% 
+  mutate(P = as.numeric(P))
+
+subset_reformated$P <-
+  stringr::str_extract(subset$plot_name, regexp)
+
+subset_reformated$tax <- gsub(" ", " \n", subset_reformated$tax)
+
+print(kable_styling(
+    kable(subset_reformated, format = "html", align = "l", latex_options = c("striped", "hold_position"), 
+    full_width = T, padding = 0), font_size = 10))
+
+###
+
+subset_with_id <- 
+  subset_with_id %>% 
+  mutate(original_tax_name = stringr::str_trim(original_tax_name))
+
+
+subset_reformated_with_id <- 
+  subset_with_id %>% 
+  rename(P = plot_name,
+    quad = sous_plot_name,
+         tag = ind_num_sous_plot,
+         tax = tax_infra_level, 
+         TaxOr = original_tax_name,
+         Ht = herbarium_nbe_type,
+         Hr = herbarium_nbe_char,
+         Hs = height_of_stem_diameter,
+         dbh = stem_diameter,
+    Th = tree_height) %>% 
+  tidyr::replace_na(list(Ht = "", Hs = "", Th = "")) %>% 
+  # dplyr::select(-height_of_stem_diameter_issue, -stem_diameter_issue) %>% 
+  add_column(dbh_new = "", dbh_height_new  = "", observations_new = "", herbarium_specimen = "", tag_new = "", ident_new = "")
+
+subset_reformated_with_id$Ht <- gsub("IRD Plot ", "IP", subset_reformated_with_id$Ht)
+subset_reformated_with_id$Hr <- gsub("IRD Plot ", "IP", subset_reformated_with_id$Hr)
+
+regexp <- "[[:digit:]]+"
+subset_reformated_with_id$P <-
+  stringr::str_extract(subset$plot_name, regexp)
+  
+subset_reformated_with_id <- 
+  subset_reformated_with_id %>% 
+  mutate(P = as.numeric(P))
+
+subset_reformated_with_id$P <-
+  stringr::str_extract(subset$plot_name, regexp)
+
+subset_reformated_with_id$tax <- gsub(" ", " \n", subset_reformated_with_id$tax)
+
+writexl::write_xlsx(subset_reformated_with_id, paste0(plot_name, "_encoding_census.xlsx"))
+
+
+```
+
+
+```{r leafTraits, results='asis', echo=F, warning=F, message=F}
+
+# subset_observations <-
+#   select_data %>%
+#   dplyr::select(plot_name, sous_plot_name, ind_num_sous_plot, full_name_no_auth, original_tax_name,
+#                 herbarium_nbe_type, herbarium_nbe_char, tree_height,
+#                 dplyr::contains("height_of_stem_diameter"),
+#                 dplyr::contains("stem_diameter"),
+#                 dplyr::contains("observations")) %>%
+#   dplyr::arrange(ind_num_sous_plot)
+# 
+# # subset_observations %>%
+# #   dplyr::select(dplyr::contains("observations"))
+# 
+# subset_leaf_area <-
+#   select_data %>%
+#   dplyr::select(plot_name, sous_plot_name, ind_num_sous_plot, full_name_no_auth, original_tax_name,
+#                 dplyr::contains("leaf_area")) %>%
+#   dplyr::arrange(ind_num_sous_plot)
+# 
+# 
+# if(any(colnames(subset_leaf_area)=="leaf_area")) {
+#   subset_leaf_area <-
+#   subset_leaf_area %>%
+#   mutate(original_tax_name = stringr::str_trim(original_tax_name)) %>%
+#   dplyr::filter(!is.na(leaf_area))
+# if(nrow(subset_leaf_area)>0) {
+#   print(kable_styling(
+#     kable(subset_leaf_area, format = "html", align = "l", latex_options = c("striped", "hold_position"), 
+#     full_width = T, padding = 0), font_size = 10))
+# }
+# }
+
+
+
+
+```
+
+
+```{r StemTraits, results='asis', echo=F, warning=F, message=F}
+
+
+# subset_observations %>%
+#   dplyr::select(dplyr::contains("observations"))
+# 
+# subset_twig <-
+#   select_data %>%
+#   dplyr::select(plot_name, sous_plot_name, ind_num_sous_plot, full_name_no_auth, original_tax_name,
+#                 dplyr::contains("twig")) %>%
+#   dplyr::arrange(ind_num_sous_plot)
+# 
+# if(any(colnames(subset_leaf_area)=="twig_fresh_volume")) {
+#   subset_twig <-
+#   subset_twig %>%
+#   mutate(original_tax_name = stringr::str_trim(original_tax_name)) %>%
+#   dplyr::filter(!is.na(twig_fresh_volume))
+# if(nrow(subset_twig)>0) {
+#   print(kable_styling(
+#     kable(subset_twig, format = "html", align = "l", latex_options = c("striped", "hold_position"), 
+#     full_width = T, padding = 0), font_size = 10))
+# }
+#   
+# }
+
+
+
+
+```
