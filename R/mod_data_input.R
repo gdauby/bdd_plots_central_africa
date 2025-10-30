@@ -24,12 +24,12 @@ mod_data_input_ui <- function(id) {
 #'
 #' @param id Character, module ID
 #' @param provided_data Reactive or data.frame, optional pre-loaded data
-#' @param language Reactive returning current language ("en" or "fr")
+#' @param i18n Translator object from shiny.i18n
 #'
 #' @return Reactive data.frame with user data
 #'
 #' @keywords internal
-mod_data_input_server <- function(id, provided_data = NULL, language = shiny::reactive("en")) {
+mod_data_input_server <- function(id, provided_data = NULL, i18n) {
   shiny::moduleServer(id, function(input, output, session) {
 
     # Reactive values
@@ -38,14 +38,9 @@ mod_data_input_server <- function(id, provided_data = NULL, language = shiny::re
     excel_sheets <- shiny::reactiveVal(NULL)
     uploaded_file_path <- shiny::reactiveVal(NULL)
 
-    # Get translations
-    t <- shiny::reactive({
-      get_translations(language())
-    })
-
     # Module title
     output$title <- shiny::renderText({
-      t()$data_input_title
+      i18n$t("data_input_title")
     })
 
     # Input controls
@@ -64,16 +59,16 @@ mod_data_input_server <- function(id, provided_data = NULL, language = shiny::re
         if (!is.null(data_to_check) && nrow(data_to_check) > 0) {
           shiny::div(
             shiny::icon("check-circle", class = "fa-2x", style = "color: green;"),
-            shiny::p(t()$data_using_r_data, style = "font-weight: bold;")
+            shiny::p(i18n$t("data_using_r_data"), style = "font-weight: bold;")
           )
         } else {
           # Show file upload
           shiny::tagList(
             shiny::fileInput(
               inputId = ns("file_upload"),
-              label = t()$data_upload_file,
+              label = i18n$t("data_upload_file"),
               accept = c(".xlsx", ".xls", ".csv"),
-              placeholder = t()$data_choose_file
+              placeholder = i18n$t("data_choose_file")
             ),
             shiny::uiOutput(ns("sheet_selector"))
           )
@@ -83,9 +78,9 @@ mod_data_input_server <- function(id, provided_data = NULL, language = shiny::re
         shiny::tagList(
           shiny::fileInput(
             inputId = ns("file_upload"),
-            label = t()$data_upload_file,
+            label = i18n$t("data_upload_file"),
             accept = c(".xlsx", ".xls", ".csv"),
-            placeholder = t()$data_choose_file
+            placeholder = i18n$t("data_choose_file")
           ),
           shiny::uiOutput(ns("sheet_selector"))
         )
@@ -102,7 +97,7 @@ mod_data_input_server <- function(id, provided_data = NULL, language = shiny::re
         style = "margin-top: -10px; margin-bottom: 10px;",
         shiny::selectInput(
           inputId = ns("excel_sheet"),
-          label = "Select sheet:",
+          label = i18n$t("select_sheet"),
           choices = excel_sheets(),
           selected = excel_sheets()[1]
         )
@@ -148,13 +143,13 @@ mod_data_input_server <- function(id, provided_data = NULL, language = shiny::re
           shinybusy::hide_spinner()
 
           shiny::showNotification(
-            t()$msg_file_uploaded,
+            i18n$t("msg_file_uploaded"),
             type = "message",
             duration = 3
           )
         } else {
           shiny::showNotification(
-            "Unsupported file format. Please upload .xlsx, .xls, or .csv file.",
+            i18n$t("msg_unsupported_format"),
             type = "error",
             duration = 5
           )
@@ -164,7 +159,7 @@ mod_data_input_server <- function(id, provided_data = NULL, language = shiny::re
         shinybusy::hide_spinner()
 
         shiny::showNotification(
-          paste(t()$msg_error, e$message),
+          paste(i18n$t("msg_error"), e$message),
           type = "error",
           duration = 10
         )
@@ -193,7 +188,7 @@ mod_data_input_server <- function(id, provided_data = NULL, language = shiny::re
         shinybusy::hide_spinner()
 
         shiny::showNotification(
-          paste0(t()$msg_file_uploaded, " (Sheet: ", input$excel_sheet, ")"),
+          paste0(i18n$t("msg_file_uploaded"), " (Sheet: ", input$excel_sheet, ")"),
           type = "message",
           duration = 3
         )
@@ -202,7 +197,7 @@ mod_data_input_server <- function(id, provided_data = NULL, language = shiny::re
         shinybusy::hide_spinner()
 
         shiny::showNotification(
-          paste(t()$msg_error, e$message),
+          paste(i18n$t("msg_error"), e$message),
           type = "error",
           duration = 10
         )
@@ -242,7 +237,7 @@ mod_data_input_server <- function(id, provided_data = NULL, language = shiny::re
         shiny::p(
           shiny::strong(file_name()),
           shiny::br(),
-          paste(nrow(data), t()$data_rows, ",", ncol(data), t()$data_columns)
+          paste(nrow(data), i18n$t("data_rows"), ",", ncol(data), i18n$t("data_columns"))
         )
       )
     })

@@ -26,5 +26,5 @@ A tibble of all subplot features
 Provide list of subplot features of plot
 }
 \author{
-Gilles Dauby, \email{gilles.dauby@ird.fr}
+
 }

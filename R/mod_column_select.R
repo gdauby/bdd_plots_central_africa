@@ -24,22 +24,17 @@ mod_column_select_ui <- function(id) {
 #' @param id Character, module ID
 #' @param data Reactive data.frame from data input module
 #' @param initial_column Character, optional pre-selected column name
-#' @param language Reactive returning current language ("en" or "fr")
+#' @param i18n Translator object from shiny.i18n
 #'
 #' @return Reactive list with $column (selected column name) and $include_authors (logical)
 #'
 #' @keywords internal
-mod_column_select_server <- function(id, data, initial_column = NULL, language = shiny::reactive("en")) {
+mod_column_select_server <- function(id, data, initial_column = NULL, i18n) {
   shiny::moduleServer(id, function(input, output, session) {
-
-    # Get translations
-    t <- shiny::reactive({
-      get_translations(language())
-    })
 
     # Module title
     output$title <- shiny::renderText({
-      t()$column_select_title
+      i18n$t("column_select_title")
     })
 
     # Column selection controls
@@ -56,7 +51,7 @@ mod_column_select_server <- function(id, data, initial_column = NULL, language =
         return(
           shiny::div(
             style = "color: red;",
-            shiny::p(t()$msg_error, "No character columns found in data")
+            shiny::p(i18n$t("msg_error"), "No character columns found in data")
           )
         )
       }
@@ -71,16 +66,16 @@ mod_column_select_server <- function(id, data, initial_column = NULL, language =
       shiny::tagList(
         shiny::selectInput(
           inputId = ns("column_name"),
-          label = t()$column_select_name,
+          label = i18n$t("column_select_name"),
           choices = char_cols,
           selected = selected_col
         ),
         shiny::checkboxInput(
           inputId = ns("include_authors"),
-          label = t()$column_match_authors,
+          label = i18n$t("column_match_authors"),
           value = FALSE
         ),
-        shiny::helpText(t()$column_match_authors_help)
+        shiny::helpText(i18n$t("column_match_authors_help"))
       )
     })
 

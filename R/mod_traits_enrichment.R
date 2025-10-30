@@ -52,26 +52,21 @@ mod_traits_enrichment_ui <- function(id) {
 #' @param id Character, module ID
 #' @param results Reactive list from review module (contains final matched data)
 #' @param column_name Reactive returning the selected column name containing taxa
-#' @param language Reactive returning current language ("en" or "fr")
+#' @param i18n Translator object from shiny.i18n
 #'
 #' @return NULL
 #'
 #' @keywords internal
-mod_traits_enrichment_server <- function(id, results, column_name, language = shiny::reactive("en")) {
+mod_traits_enrichment_server <- function(id, results, column_name, i18n) {
   shiny::moduleServer(id, function(input, output, session) {
 
     # Reactive values
     enriched_data <- shiny::reactiveVal(NULL)
     enrichment_in_progress <- shiny::reactiveVal(FALSE)
 
-    # Get translations
-    t <- shiny::reactive({
-      get_translations(language())
-    })
-
     # Module title
     output$title <- shiny::renderText({
-      "Enrich with Traits"
+      i18n$t("traits_title")
     })
 
     # Enrichment status
@@ -95,7 +90,7 @@ mod_traits_enrichment_server <- function(id, results, column_name, language = sh
           style = "padding: 15px; background-color: #fff3cd; border-radius: 5px;",
           shiny::p(
             shiny::icon("exclamation-triangle"),
-            "No matched taxa found. Complete the matching process first.",
+            i18n$t("msg_no_matched_taxa"),
             style = "color: #856404; margin: 0;"
           )
         )
@@ -127,14 +122,14 @@ mod_traits_enrichment_server <- function(id, results, column_name, language = sh
           inputId = ns("categorical_format"),
           label = NULL,
           choices = c(
-            "Most frequent value (mode)" = "mode",
-            "All values (concatenated)" = "concat"
-          ),
+            i18n$t("traits_agg_mode"),
+            i18n$t("traits_agg_concat")
+          ) %>% setNames(c("mode", "concat")),
           selected = "mode"
         ),
         shiny::tags$small(
           class = "text-muted",
-          "How to aggregate categorical traits when multiple values exist"
+          i18n$t("traits_agg_help")
         )
       )
     })
@@ -149,11 +144,11 @@ mod_traits_enrichment_server <- function(id, results, column_name, language = sh
           inputId = ns("include_cols"),
           label = NULL,
           choices = c(
-            "Original input names" = "original",
-            "Corrected names" = "corrected",
-            "Taxonomic IDs" = "ids",
-            "Match metadata" = "metadata"
-          ),
+            i18n$t("traits_col_original"),
+            i18n$t("traits_col_corrected"),
+            i18n$t("traits_col_ids"),
+            i18n$t("traits_col_metadata")
+          ) %>% setNames(c("original", "corrected", "ids", "metadata")),
           selected = c("original", "corrected", "ids")
         )
       )
@@ -204,7 +199,7 @@ mod_traits_enrichment_server <- function(id, results, column_name, language = sh
 
         if (nrow(matched_taxa) == 0) {
           shiny::showNotification(
-            "No matched taxa to enrich",
+            i18n$t("msg_no_matched_to_enrich"),
             type = "warning"
           )
           enrichment_in_progress(FALSE)
@@ -239,7 +234,7 @@ mod_traits_enrichment_server <- function(id, results, column_name, language = sh
 
         if (is.null(traits_result) || (!has_numeric && !has_categorical)) {
           shiny::showNotification(
-            "No trait data found for these taxa",
+            i18n$t("msg_no_trait_data"),
             type = "warning",
             duration = 5
           )
@@ -268,7 +263,7 @@ mod_traits_enrichment_server <- function(id, results, column_name, language = sh
 
         if (nrow(enriched_filtered) == 0) {
           shiny::showNotification(
-            "No matched taxa to enrich. All input names are unmatched or invalid.",
+            i18n$t("msg_all_unmatched"),
             type = "warning",
             duration = 5
           )

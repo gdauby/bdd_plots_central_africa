@@ -173,45 +173,70 @@ app_taxonomic_match <- function(
       shiny::stopApp()
     })
 
+    # Initialize shiny.i18n Translator
+    # Handle both development (inst/translations) and installed (translations) paths
+    trans_path <- system.file("translations", package = "plotsdatabase")
+
+    # Fallback for development mode
+    if (trans_path == "" || !dir.exists(trans_path)) {
+      # Try development path
+      pkg_path <- find.package("plotsdatabase", quiet = TRUE)
+      if (length(pkg_path) > 0) {
+        dev_path <- file.path(dirname(pkg_path), "plotsdatabase", "inst", "translations")
+        if (dir.exists(dev_path)) {
+          trans_path <- dev_path
+        }
+      }
+    }
+
+    if (!dir.exists(trans_path)) {
+      stop("Translation files not found. Please install the package with devtools::install()")
+    }
+
+    i18n <- shiny.i18n::Translator$new(
+      translation_json_path = trans_path
+    )
+    i18n$set_translation_language(language)
+
     # Language management
     current_language <- mod_language_toggle_server("language", initial = language)
 
-    # Get translations
-    t <- shiny::reactive({
-      get_translations(current_language())
+    # Update translator when language changes
+    shiny::observeEvent(current_language(), {
+      i18n$set_translation_language(current_language())
     })
 
     # App title and subtitle
     output$app_title <- shiny::renderText({
-      t()$app_title
+      i18n$t("app_title")
     })
 
     output$app_subtitle <- shiny::renderText({
-      t()$app_subtitle
+      i18n$t("app_subtitle")
     })
 
     # Tab labels (need to be reactive for language switching)
     output$tab_auto_match <- shiny::renderText({
-      t()$tab_auto_match
+      i18n$t("tab_auto_match")
     })
 
     output$tab_review <- shiny::renderText({
-      t()$tab_review
+      i18n$t("tab_review")
     })
 
     output$tab_export <- shiny::renderText({
-      t()$tab_export
+      i18n$t("tab_export")
     })
 
     output$tab_traits <- shiny::renderText({
-      "Enrich with Traits"
+      i18n$t("tab_traits")
     })
 
     # Data input module
     user_data <- mod_data_input_server(
       "data_input",
       provided_data = data,
-      language = current_language
+      i18n = i18n
     )
 
     # Column selection module
@@ -219,7 +244,7 @@ app_taxonomic_match <- function(
       "column_select",
       data = user_data,
       initial_column = name_column,
-      language = current_language
+      i18n = i18n
     )
 
     # Auto matching module
@@ -229,14 +254,14 @@ app_taxonomic_match <- function(
       column_name = shiny::reactive(column_info()$column),
       include_authors = shiny::reactive(column_info()$include_authors),
       min_similarity = min_similarity,
-      language = current_language
+      i18n = i18n
     )
 
     # Progress tracker module
     mod_progress_tracker_server(
       "progress",
       match_results = match_results,
-      language = current_language
+      i18n = i18n
     )
 
     # Manual review module
@@ -246,7 +271,7 @@ app_taxonomic_match <- function(
       mode = mode,
       max_suggestions = max_suggestions,
       min_similarity = min_similarity,
-      language = current_language
+      i18n = i18n
     )
 
     # Results export module (use reviewed results instead of just matched results)
@@ -254,7 +279,7 @@ app_taxonomic_match <- function(
       "export",
       results = reviewed_results,
       original_data = user_data,
-      language = current_language
+      i18n = i18n
     )
 
     # Traits enrichment module
@@ -262,7 +287,7 @@ app_taxonomic_match <- function(
       "traits",
       results = reviewed_results,
       column_name = shiny::reactive(column_info()$column),
-      language = current_language
+      i18n = i18n
     )
   }
 

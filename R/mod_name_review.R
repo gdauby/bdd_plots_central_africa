@@ -45,14 +45,14 @@ mod_name_review_ui <- function(id) {
 #' @param mode Character, review mode ("interactive" or "batch")
 #' @param max_suggestions Integer, maximum suggestions per name
 #' @param min_similarity Numeric, minimum similarity threshold
-#' @param language Reactive returning current language ("en" or "fr")
+#' @param i18n shiny.i18n Translator object
 #'
 #' @return Reactive list with updated match results
 #'
 #' @keywords internal
 mod_name_review_server <- function(id, match_results, mode = "interactive",
                                    max_suggestions = 10, min_similarity = 0.3,
-                                   language = shiny::reactive("en")) {
+                                   i18n) {
   shiny::moduleServer(id, function(input, output, session) {
 
     # Reactive values
@@ -61,11 +61,6 @@ mod_name_review_server <- function(id, match_results, mode = "interactive",
     review_decisions <- shiny::reactiveVal(list())
     updated_data <- shiny::reactiveVal(NULL)
     custom_search_matches <- shiny::reactiveVal(NULL)
-
-    # Get translations
-    t <- shiny::reactive({
-      get_translations(language())
-    })
 
     # Initialize unmatched names from match results
     shiny::observe({
@@ -87,7 +82,7 @@ mod_name_review_server <- function(id, match_results, mode = "interactive",
 
     # Module title
     output$title <- shiny::renderText({
-      t()$review_title
+      i18n$t("review_title")
     })
 
     # Review status
@@ -102,7 +97,7 @@ mod_name_review_server <- function(id, match_results, mode = "interactive",
             style = "padding: 20px; background-color: #d4edda; border-radius: 5px;",
             shiny::h4(
               shiny::icon("check-circle"),
-              t()$msg_no_unmatched,
+              i18n$t("msg_no_unmatched"),
               style = "color: #155724; margin: 0;"
             )
           )
@@ -119,7 +114,7 @@ mod_name_review_server <- function(id, match_results, mode = "interactive",
           shiny::column(
             width = 4,
             shiny::p(
-              shiny::strong(t()$progress_total),
+              shiny::strong(i18n$t("progress_total")),
               total,
               style = "margin: 0;"
             )
@@ -135,7 +130,7 @@ mod_name_review_server <- function(id, match_results, mode = "interactive",
           shiny::column(
             width = 4,
             shiny::p(
-              shiny::strong(t()$progress_remaining),
+              shiny::strong(i18n$t("progress_remaining")),
               remaining,
               style = "margin: 0; color: #856404;"
             )
@@ -156,14 +151,14 @@ mod_name_review_server <- function(id, match_results, mode = "interactive",
       shiny::div(
         style = "padding: 20px; background-color: #f8f9fa; border-radius: 5px; border: 2px solid #007bff;",
         shiny::h4(
-          t()$review_input_name,
+          i18n$t("review_input_name"),
           style = "margin-top: 0; color: #495057;"
         ),
         shiny::h3(
           current_name,
           shiny::tags$small(
             class = "text-muted ml-3",
-            paste0("(", curr_idx, " ", t()$unit_of, " ", length(unmatched), ")")
+            paste0("(", curr_idx, " ", i18n$t("unit_of"), " ", length(unmatched), ")")
           ),
           style = "margin-bottom: 0; color: #007bff;"
         )
@@ -185,7 +180,7 @@ mod_name_review_server <- function(id, match_results, mode = "interactive",
       max_suggestions = shiny::reactive(max_suggestions),
       min_similarity = shiny::reactive(min_similarity),
       include_authors = shiny::reactive(FALSE),
-      language = language
+      i18n = i18n
     )
 
     # Manual input option
@@ -195,11 +190,11 @@ mod_name_review_server <- function(id, match_results, mode = "interactive",
       shiny::div(
         shiny::h5(
           shiny::icon("search"),
-          "Search Taxonomic Backbone",
+          i18n$t("search_title"),
           style = "color: #495057;"
         ),
         shiny::p(
-          "Enter a taxonomic name to search the backbone database. Select a taxonomic level to narrow results.",
+          i18n$t("search_help"),
           class = "text-muted",
           style = "font-size: 0.9em;"
         ),
@@ -216,14 +211,11 @@ mod_name_review_server <- function(id, match_results, mode = "interactive",
             width = 3,
             shiny::selectInput(
               inputId = ns("custom_level"),
-              label = "Taxonomic level:",
-              choices = c(
-                "All levels" = "all",
-                "Species" = "species",
-                "Genus" = "genus",
-                "Family" = "family",
-                "Order" = "order",
-                "Infraspecific" = "infraspecific"
+              label = i18n$t("tax_level"),
+              choices = stats::setNames(
+                c("all", "species", "genus", "family", "order", "infraspecific"),
+                c(i18n$t("level_all"), i18n$t("level_species"), i18n$t("level_genus"),
+                  i18n$t("level_family"), i18n$t("level_order"), i18n$t("level_infraspecific"))
               ),
               selected = "all"
             )
@@ -242,7 +234,7 @@ mod_name_review_server <- function(id, match_results, mode = "interactive",
         shiny::hr(),
         shiny::actionButton(
           inputId = ns("mark_unresolved"),
-          label = t()$review_mark_unresolved,
+          label = i18n$t("review_mark_unresolved"),
           class = "btn-secondary"
         )
       )
@@ -262,7 +254,7 @@ mod_name_review_server <- function(id, match_results, mode = "interactive",
             width = 4,
             shiny::actionButton(
               inputId = ns("btn_previous"),
-              label = shiny::tagList(shiny::icon("arrow-left"), t()$review_prev),
+              label = shiny::tagList(shiny::icon("arrow-left"), i18n$t("review_prev")),
               class = "btn-secondary btn-block",
               disabled = if (curr_idx == 1) "disabled" else NULL
             )
@@ -271,7 +263,7 @@ mod_name_review_server <- function(id, match_results, mode = "interactive",
             width = 4,
             shiny::actionButton(
               inputId = ns("btn_skip"),
-              label = t()$review_skip,
+              label = i18n$t("review_skip"),
               class = "btn-outline-secondary btn-block"
             )
           ),
@@ -279,7 +271,7 @@ mod_name_review_server <- function(id, match_results, mode = "interactive",
             width = 4,
             shiny::actionButton(
               inputId = ns("btn_next"),
-              label = shiny::tagList(t()$review_next, shiny::icon("arrow-right")),
+              label = shiny::tagList(i18n$t("review_next"), shiny::icon("arrow-right")),
               class = "btn-primary btn-block",
               disabled = if (curr_idx >= length(unmatched)) "disabled" else NULL
             )
@@ -456,7 +448,7 @@ mod_name_review_server <- function(id, match_results, mode = "interactive",
                     class = "text-right",
                     shiny::actionButton(
                       inputId = ns(paste0("select_custom_", i)),
-                      label = "Select",
+                      label = i18n$t("review_select_match"),
                       class = "btn-sm btn-info",
                       onclick = paste0("Shiny.setInputValue('", ns("custom_selected_row"), "', ", i, ");")
                     )
@@ -561,7 +553,7 @@ mod_name_review_server <- function(id, match_results, mode = "interactive",
         current_index(curr + 1)
       } else {
         shiny::showNotification(
-          "Review complete! Go to Export tab to download results.",
+          i18n$t("msg_review_complete"),
           type = "message",
           duration = 5
         )

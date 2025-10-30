@@ -39,22 +39,17 @@ mod_results_export_ui <- function(id) {
 #' @param id Character, module ID
 #' @param results Reactive list from auto matching module
 #' @param original_data Reactive data.frame, original user data
-#' @param language Reactive returning current language ("en" or "fr")
+#' @param i18n shiny.i18n Translator object
 #'
 #' @return NULL (handles download only)
 #'
 #' @keywords internal
-mod_results_export_server <- function(id, results, original_data, language = shiny::reactive("en")) {
+mod_results_export_server <- function(id, results, original_data, i18n) {
   shiny::moduleServer(id, function(input, output, session) {
-
-    # Get translations
-    t <- shiny::reactive({
-      get_translations(language())
-    })
 
     # Module title
     output$title <- shiny::renderText({
-      t()$export_title
+      i18n$t("export_title")
     })
 
     # Format selection
@@ -62,14 +57,13 @@ mod_results_export_server <- function(id, results, original_data, language = shi
       ns <- session$ns
 
       shiny::tagList(
-        shiny::h4(t()$export_format),
+        shiny::h4(i18n$t("export_format")),
         shiny::radioButtons(
           inputId = ns("export_format"),
           label = NULL,
-          choices = c(
-            "Excel (.xlsx)" = "xlsx",
-            "CSV (.csv)" = "csv",
-            "R data (.rds)" = "rds"
+          choices = stats::setNames(
+            c("xlsx", "csv", "rds"),
+            c(i18n$t("format_excel"), i18n$t("format_csv"), i18n$t("format_rds"))
           ),
           selected = "xlsx"
         )
@@ -81,15 +75,14 @@ mod_results_export_server <- function(id, results, original_data, language = shi
       ns <- session$ns
 
       shiny::tagList(
-        shiny::h4(t()$export_include),
+        shiny::h4(i18n$t("export_include")),
         shiny::checkboxGroupInput(
           inputId = ns("include_columns"),
           label = NULL,
-          choices = c(
-            "Original data" = "original",
-            "Matched IDs (idtax_n, idtax_good_n)" = "ids",
-            "Corrected names" = "corrected",
-            "Match metadata (method, score, synonyms)" = "metadata"
+          choices = stats::setNames(
+            c("original", "ids", "corrected", "metadata"),
+            c(i18n$t("export_col_original"), i18n$t("export_col_ids"),
+              i18n$t("export_col_corrected"), i18n$t("export_col_metadata"))
           ),
           selected = c("original", "ids", "corrected", "metadata")
         )
@@ -104,7 +97,7 @@ mod_results_export_server <- function(id, results, original_data, language = shi
         shiny::div(
           shiny::downloadButton(
             outputId = ns("download_data"),
-            label = t()$export_download,
+            label = i18n$t("export_download"),
             class = "btn-success"
           ),
           style = "margin-bottom: 20px;"
@@ -113,7 +106,7 @@ mod_results_export_server <- function(id, results, original_data, language = shi
         shiny::div(
           shiny::p(
             shiny::icon("exclamation-triangle"),
-            t()$export_not_ready,
+            i18n$t("export_not_ready"),
             style = "color: orange;"
           )
         )
@@ -128,7 +121,7 @@ mod_results_export_server <- function(id, results, original_data, language = shi
                      csv = ".csv",
                      rds = ".rds")
 
-        paste0(t()$export_filename, "_", format(Sys.Date(), "%Y%m%d"), ext)
+        paste0(i18n$t("export_filename"), "_", format(Sys.Date(), "%Y%m%d"), ext)
       },
 
       content = function(file) {
