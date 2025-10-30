@@ -1,0 +1,139 @@
+key,en,fr
+app_title,Taxonomic Name Standardization for Tropical African Plants,Standardisation de noms taxonomiques pour les plantes d'Afrique tropicale
+app_subtitle,Standardize species names against the taxonomic backbone,Standardiser les noms d'espèces selon le référentiel taxonomique
+tab_auto_match,Auto Match,Appariement auto
+tab_review,Review,Révision
+tab_export,Export,Exporter
+tab_traits,Enrich with Traits,Enrichir avec traits
+data_input_title,Data Input,Données d'entrée
+data_upload_file,Upload Excel file,Télécharger un fichier Excel
+data_upload_help,Select an Excel file (.xlsx) containing taxonomic names,Sélectionner un fichier Excel (.xlsx) contenant les noms taxonomiques
+data_choose_file,Choose file...,Choisir un fichier...
+data_using_r_data,Using R data from environment,Utilisation des données R de l'environnement
+data_rows,rows,lignes
+data_columns,columns,colonnes
+column_select_title,Column Selection,Sélection de colonne
+column_select_name,Select name column:,Sélectionner la colonne de noms :
+column_select_help,Choose the column containing taxonomic names to standardize,Choisir la colonne contenant les noms taxonomiques à standardiser
+column_match_authors,Match with author names,Apparier avec les noms d'auteurs
+column_match_authors_help,Include author names in matching (slower but more precise),Inclure les noms d'auteurs dans l'appariement (plus lent mais plus précis)
+auto_match_title,Automatic Matching,Appariement automatique
+auto_match_start,Start Matching,Démarrer l'appariement
+auto_match_running,Matching in progress...,Appariement en cours...
+auto_match_complete,Matching complete!,Appariement terminé !
+auto_match_summary,Matching Summary,Résumé de l'appariement
+auto_match_total,Total unique names:,Total de noms uniques :
+auto_match_exact,Exact matches:,Correspondances exactes :
+auto_match_genus,Genus-level matches:,Correspondances au niveau du genre :
+auto_match_fuzzy,Fuzzy matches:,Correspondances approximatives :
+auto_match_unmatched,Requiring review:,Nécessitant une révision :
+auto_match_min_sim,Minimum similarity:,Similarité minimale :
+auto_match_min_sim_help,Threshold for fuzzy matching (0-1 higher = stricter),Seuil pour l'appariement approximatif (0-1 plus élevé = plus strict)
+progress_title,Progress Summary,Résumé de progression
+progress_total,Total unique names:,Total de noms uniques :
+progress_matched,Successfully matched:,Appariés avec succès :
+progress_review,Requiring review:,Nécessitant une révision :
+progress_remaining,Remaining:,Restant :
+progress_percent,Progress:,Progression :
+review_title,Review Unmatched Names,Réviser les noms non appariés
+review_remaining,remaining,restant(s)
+review_input_name,Input name:,Nom saisi :
+review_suggestions,Suggestions (ranked by similarity):,Suggestions (classées par similarité) :
+review_no_suggestions,No suggestions found,Aucune suggestion trouvée
+review_custom_name,Enter custom name:,Saisir un nom personnalisé :
+review_mark_unresolved,Mark as unresolved,Marquer comme non résolu
+review_select_match,Select,Sélectionner
+review_score,score:,score :
+review_family,Family:,Famille :
+review_genus,Genus:,Genre :
+review_method,Match method:,Méthode d'appariement :
+review_prev,Previous,Précédent
+review_next,Next,Suivant
+review_skip,Skip,Passer
+review_accept,Accept,Accepter
+review_num_suggestions,Number of suggestions:,Nombre de suggestions :
+review_sort,Sort by:,Trier par :
+review_sort_similarity,Similarity,Similarité
+review_sort_alphabetical,Alphabetical,Alphabétique
+review_mode,Review mode:,Mode de révision :
+review_mode_interactive,Interactive (one-by-one),Interactif (un par un)
+review_mode_batch,Batch (table view),Par lot (vue tableau)
+suggestions_title,Suggestions for:,Suggestions pour :
+suggestions_no_match,No matches found,Aucune correspondance trouvée
+suggestions_show_more,Show more...,Afficher plus...
+suggestions_show_authors,Show authors,Afficher les auteurs
+export_title,Export Results,Exporter les résultats
+export_format,Export format:,Format d'export :
+export_format_xlsx,Excel (.xlsx) - recommended,Excel (.xlsx) - recommandé
+export_format_csv,CSV (.csv),CSV (.csv)
+export_format_rds,R data (.rds),Données R (.rds)
+export_include,Include columns:,Inclure les colonnes :
+export_include_original,Original data,Données originales
+export_include_ids,Matched IDs (idtax_n idtax_good_n),IDs appariés (idtax_n idtax_good_n)
+export_include_corrected,Corrected names,Noms corrigés
+export_include_metadata,Match metadata (method score),Métadonnées d'appariement (méthode score)
+export_include_hierarchy,Taxonomic hierarchy (family genus),Hiérarchie taxonomique (famille genre)
+export_download,Download,Télécharger
+export_filename,standardized_taxonomy,taxonomie_standardisee
+export_ready,Results ready for export,Résultats prêts pour l'export
+export_not_ready,Complete matching and review before exporting,Terminer l'appariement et la révision avant d'exporter
+language_label,Language:,Langue :
+language_en,English,English
+language_fr,Français,Français
+msg_loading,Loading...,Chargement...
+msg_processing,Processing...,Traitement...
+msg_error,Error:,Erreur :
+msg_warning,Warning:,Avertissement :
+msg_success,Success:,Succès :
+msg_no_data,No data loaded,Aucune donnée chargée
+msg_select_column,Please select a column to standardize,Veuillez sélectionner une colonne à standardiser
+msg_no_unmatched,All names successfully matched!,Tous les noms ont été appariés avec succès !
+msg_file_uploaded,File uploaded successfully,Fichier téléchargé avec succès
+msg_matching_complete,Matching process completed,Processus d'appariement terminé
+msg_downloading_backbone,Downloading taxonomic backbone from database... This may take a moment especially with slow internet connection.,Téléchargement du référentiel taxonomique depuis la base de données... Cela peut prendre un moment surtout avec une connexion internet lente.
+msg_go_to_review,Go to the Review tab to manually review unmatched names.,Allez dans l'onglet Révision pour réviser manuellement les noms non appariés.
+msg_unsupported_format,Unsupported file format. Please upload .xlsx .xls or .csv file.,Format de fichier non pris en charge. Veuillez télécharger un fichier .xlsx .xls ou .csv.
+msg_review_complete,Review complete! Go to Export tab to download results.,Révision terminée ! Allez dans l'onglet Exporter pour télécharger les résultats.
+msg_no_matched_taxa,No matched taxa found. Complete the matching process first.,Aucun taxon apparié trouvé. Terminez d'abord le processus d'appariement.
+msg_no_matched_to_enrich,No matched taxa to enrich,Aucun taxon apparié à enrichir
+msg_no_trait_data,No trait data found for these taxa,Aucune donnée de trait trouvée pour ces taxons
+msg_all_unmatched,No matched taxa to enrich. All input names are unmatched or invalid.,Aucun taxon apparié à enrichir. Tous les noms saisis sont non appariés ou invalides.
+btn_start,Start,Démarrer
+btn_stop,Stop,Arrêter
+btn_continue,Continue,Continuer
+btn_reset,Reset,Réinitialiser
+btn_cancel,Cancel,Annuler
+btn_close,Close,Fermer
+btn_help,Help,Aide
+unit_percent,%,%
+unit_of,of,de
+search_title,Search Taxonomic Backbone,Rechercher dans le référentiel taxonomique
+search_help,Enter a taxonomic name to search the backbone database. Select a taxonomic level to narrow results.,Entrez un nom taxonomique pour rechercher dans la base de données du référentiel. Sélectionnez un niveau taxonomique pour affiner les résultats.
+search_label,Search:,Rechercher :
+filter_level,Filter by level,Filtrer par niveau
+filter_by_level,Filter by level,Filtrer par niveau
+tax_level,Taxonomic level:,Niveau taxonomique :
+select_sheet,Select sheet:,Sélectionner la feuille :
+level_all,All levels,Tous les niveaux
+level_species,Species,Espèce
+level_genus,Genus,Genre
+level_family,Family,Famille
+level_order,Order,Ordre
+level_infraspecific,Infraspecific,Infraspécifique
+sort_similarity,Similarity,Similarité
+sort_alphabetical,Alphabetical,Alphabétique
+format_excel,Excel (.xlsx),Excel (.xlsx)
+format_csv,CSV (.csv),CSV (.csv)
+format_rds,R data (.rds),Données R (.rds)
+export_col_original,Original data,Données originales
+export_col_ids,Matched IDs (idtax_n idtax_good_n),IDs appariés (idtax_n idtax_good_n)
+export_col_corrected,Corrected names,Noms corrigés
+export_col_metadata,Match metadata (method score synonyms),Métadonnées d'appariement (méthode score synonymes)
+traits_title,Enrich with Traits,Enrichir avec traits
+traits_agg_mode,Most frequent value (mode),Valeur la plus fréquente (mode)
+traits_agg_concat,All values (concatenated),Toutes les valeurs (concaténées)
+traits_agg_help,How to aggregate categorical traits when multiple values exist,Comment agréger les traits catégoriels lorsque plusieurs valeurs existent
+traits_col_original,Original input names,Noms saisis d'origine
+traits_col_corrected,Corrected names,Noms corrigés
+traits_col_ids,Taxonomic IDs,IDs taxonomiques
+traits_col_metadata,Match metadata,Métadonnées d'appariement

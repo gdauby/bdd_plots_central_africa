@@ -1,0 +1,5 @@
+translation_csvs_path: .
+translation_csv_sep: ','
+translation_csv_config:
+  en: en.csv
+  fr: fr.csv

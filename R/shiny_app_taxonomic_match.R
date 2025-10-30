@@ -174,29 +174,69 @@ app_taxonomic_match <- function(
     })
 
     # Initialize shiny.i18n Translator
-    # Handle both development (inst/translations) and installed (translations) paths
-    trans_path <- system.file("translations", package = "plotsdatabase")
+    # Find translation files - works in both installed and development mode
+    trans_path <- NULL
 
-    # Fallback for development mode
-    if (trans_path == "" || !dir.exists(trans_path)) {
-      # Try development path
-      pkg_path <- find.package("plotsdatabase", quiet = TRUE)
-      if (length(pkg_path) > 0) {
-        dev_path <- file.path(dirname(pkg_path), "plotsdatabase", "inst", "translations")
-        if (dir.exists(dev_path)) {
-          trans_path <- dev_path
+    # 1. Try installed package location (after devtools::install())
+    installed_path <- system.file("translations", package = "plotsdatabase")
+    if (installed_path != "" && dir.exists(installed_path)) {
+      trans_path <- installed_path
+    }
+
+    # 2. Try development location (with devtools::load_all())
+    if (is.null(trans_path)) {
+      # Look for inst/translations relative to package source
+      dev_paths <- c(
+        file.path(getwd(), "inst", "translations"),
+        file.path(system.file(package = "plotsdatabase"), "..", "..", "inst", "translations")
+      )
+
+      for (p in dev_paths) {
+        if (dir.exists(p)) {
+          trans_path <- normalizePath(p, winslash = "/", mustWork = FALSE)
+          if (dir.exists(trans_path)) {
+            break
+          }
         }
       }
     }
 
-    if (!dir.exists(trans_path)) {
-      stop("Translation files not found. Please install the package with devtools::install()")
+    if (is.null(trans_path) || !dir.exists(trans_path)) {
+      stop(
+        "Translation files not found!\n",
+        "Searched in:\n",
+        "  - Installed: ", installed_path, "\n",
+        "  - Development: ", file.path(getwd(), "inst", "translations"), "\n",
+        "\nPlease ensure translations exist in inst/translations/ and run:\n",
+        "  devtools::install()"
+      )
     }
 
-    i18n <- shiny.i18n::Translator$new(
-      translation_json_path = trans_path
-    )
-    i18n$set_translation_language(language)
+    # Initialize translator
+    # Try shiny.i18n first, but fall back to custom translator if it fails
+    i18n <- tryCatch({
+      translator <- shiny.i18n::Translator$new(
+        translation_csvs_path = trans_path,
+        separator_csv = ","
+      )
+      translator$set_translation_language(language)
+      message("Using shiny.i18n translator")
+      translator
+    }, error = function(e) {
+      # Fallback: use custom translator with combined CSV
+      message("shiny.i18n initialization failed, using custom translator: ", e$message)
+
+      # Read combined translations file
+      all_trans <- read.csv(
+        file.path(trans_path, "translations.csv"),
+        stringsAsFactors = FALSE,
+        encoding = "UTF-8"
+      )
+
+      # Create custom translator
+      translator <- create_custom_translator(all_trans, default_language = language)
+      translator
+    })
 
     # Language management
     current_language <- mod_language_toggle_server("language", initial = language)
