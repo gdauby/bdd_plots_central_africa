@@ -120,13 +120,13 @@
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/get_password_secure.html</loc></url>
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/get_plot_rel_xy.html</loc></url>
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/get_ref_specimen_ind.html</loc></url>
+<url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/get_translations.html</loc></url>
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/get_updates_diconame.html</loc></url>
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/get_username_secure.html</loc></url>
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/grapes-or-or-grapes.html</loc></url>
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/growth_computing.html</loc></url>
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/index.html</loc></url>
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/latlong2UTM.html</loc></url>
-<url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/launch_stand_tax_app.html</loc></url>
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/launch_taxonomic_match_app.html</loc></url>
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/list_individual_features.html</loc></url>
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/list_user_policies.html</loc></url>
@@ -155,6 +155,7 @@
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/model_wd_1.html</loc></url>
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/model_wd_2.html</loc></url>
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/parse_taxonomic_name.html</loc></url>
+<url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/phylo_tree.html</loc></url>
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/pipe.html</loc></url>
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/pivot_categorical_traits_generic.html</loc></url>
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/pivot_character_traits.html</loc></url>
@@ -193,6 +194,7 @@
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/standardize_taxonomic_batch.html</loc></url>
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/subplot_list.html</loc></url>
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/summarize_feature.html</loc></url>
+<url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/t_.html</loc></url>
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/table_taxa_tb.html</loc></url>
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/test.order.subplot.html</loc></url>
 <url><loc>https://gdauby.github.io/bdd_plots_central_africa/reference/test_connection.html</loc></url>
