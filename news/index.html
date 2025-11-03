@@ -49,6 +49,25 @@
 <div class="section level4">
 <h4 id="new-features-1-5">New Features<a class="anchor" aria-label="anchor" href="#new-features-1-5"></a></h4>
 <ul><li>
+<strong>Census selection strategy for multi-census plots</strong>
+<ul><li>New <code>census_strategy</code> parameter in <code><a href="../reference/query_plots.html">query_plots()</a></code> with three options:
+<ul><li>
+<code>"last"</code> (default): Extract data from most recent census only</li>
+<li>
+<code>"first"</code>: Extract data from earliest census only</li>
+<li>
+<code>"mean"</code>: Average across all censuses (previous default behavior)</li>
+</ul></li>
+<li>When using “first” or “last” strategy:
+<ul><li>Individuals recruited after first census show NA values (biologically correct)</li>
+<li>Individuals dead before last census show NA values (biologically correct)</li>
+<li>Single <code>census_date</code> column shows the date of the selected census (instead of <code>date_census_1</code>, <code>date_census_2</code>, etc.)</li>
+</ul></li>
+<li>Census selection based on actual census dates using proper date computation</li>
+<li>Applies to individual-level features (stem diameter, tree height, etc.)</li>
+<li>When <code>show_multiple_census = TRUE</code>, all census data shown regardless of strategy</li>
+</ul></li>
+<li>
 <strong>Configurable output styles system for <code><a href="../reference/query_plots.html">query_plots()</a></code></strong>
 <ul><li>6 predefined output styles: <code>minimal</code>, <code>standard</code>, <code>permanent_plot</code>, <code>permanent_plot_multi_census</code>, <code>transect</code>, <code>full</code>
 </li>
